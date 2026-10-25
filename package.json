@@ -1,0 +1,30 @@
+{
+  "name": "@liarmttt/xz-battle-engine",
+  "version": "1.0.1",
+  "description": "天元录战斗数值内核 · 独立可调用版（一行 import，window.XZBattle 就绪）",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./core": "./src/core.js"
+  },
+  "files": [
+    "index.js",
+    "src/core.js",
+    "README.md"
+  ],
+  "keywords": [
+    "sillytavern",
+    "tavern",
+    "battle",
+    "rpg"
+  ],
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "test": "node test/parity.mjs",
+    "extract": "node ../工具/_extract_battle.mjs",
+    "check": "node ../工具/_extract_battle.mjs --check"
+  }
+}

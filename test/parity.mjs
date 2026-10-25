@@ -22,7 +22,31 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
-const SRC04 = path.join(ROOT, '脚本/04-核心脚本.js');
+/* ★★★ v394：源改成「内联实现那一版 04」。
+   ─────────────────────────────────────────────────────────────────────────────
+   为什么不再用 脚本/04-核心脚本.js：
+     04 现在已经是 **CDN 调用形态** —— 那 43 个函数在卡里只剩一行转发外壳
+     （`return __XZ_B_SAFE().mechVal.apply(null, arguments)`），25 张表只剩
+     `var X = __XZ_B_CONST("X")`。拿它进沙箱「双跑」，跑的是空壳：
+     壳里没有 __XZ_B，结果全是 undefined ⇒ 1896 格全红，而**引擎其实是对的**。
+     那种红是最坏的红：看着像引擎崩了，实际是测试自己量错了对象。
+   ⇒ 真正的对照物是「改造前的内联实现」（= .bak-v394-CDN改造前）。
+     拿它跟引擎逐格比，验的仍然是那件最要紧的事：
+     **抽出来的引擎，跟当初写在卡里的算式算得一模一样。**
+   ⚠ 备份不在时直接报错，不许静默降级 —— 静默跳过就等于这道测试没了。 */
+const SRC04_RAW = path.join(ROOT, '脚本/04-核心脚本.js');
+const SRC04_BAK = path.join(ROOT, '脚本/04-核心脚本.js.bak-v394-CDN改造前');
+const IS_SHELL_MODE = /__XZ_BATTLE_URL\s*=\s*'https:\/\/cdn\.jsdelivr\.net/.test(
+  fs.readFileSync(SRC04_RAW, 'utf8')
+);
+const SRC04 = IS_SHELL_MODE ? SRC04_BAK : SRC04_RAW;
+if (!fs.existsSync(SRC04)) {
+  console.error('✗ 04 已是 CDN 调用形态，但找不到内联实现备份：');
+  console.error('  ' + SRC04_BAK);
+  console.error('  这份备份是双跑比对的对照物（引擎必须和它算得一样）。');
+  console.error('  拿现在的 04 去跑只会量到空壳，1280 格全红且毫无意义 —— 所以这里直接停。');
+  process.exit(1);
+}
 const CORE = path.join(ROOT, '战斗引擎/src/core.js');
 
 /* ══════════ ① 把 04 装进沙箱 ══════════
@@ -419,7 +443,9 @@ both('xzAtomNameOf', ['伤害 +5%'], '原子名');
 /* ══════════ ⑤ 报告 ══════════ */
 console.log('─'.repeat(70));
 if (bad === 0) {
-  console.log('✔ 双跑一致：' + total + ' 格全部相同（' + NAMES.length + ' 个导出，卡内 04 vs 独立内核）');
+  console.log('✔ 双跑一致：' + total + ' 格全部相同（' + NAMES.length + ' 个导出，'
+    + (IS_SHELL_MODE ? '对照物 = 04 改造前的内联实现，引擎与它逐格相同' : '卡内 04 vs 独立内核')
+    + '）');
   process.exit(0);
 } else {
   console.log('✗ 双跑不一致：' + bad + ' / ' + total + ' 格不同');

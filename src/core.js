@@ -1420,7 +1420,14 @@ function xzAtomNameOf(t) {
 /* ══════════ 统一出口 ══════════
    卡内不需要这一段（04 里这些是裸的全局函数，互相直呼）。
    这一段只给「独立调用」用：任何地方 import 进来就能拿到这张表，
-   不污染全局、不依赖加载顺序。 */
+   不污染全局、不依赖加载顺序。
+
+   ⚠⚠ v394 补的：**常量也必须导出**。
+     上一版只导函数。而 04 改成 CDN 调用以后，REALM_COEFFS / QUALITY_POWER
+     这些表在 04 里要写成「var 表名 = __XZ_B.表名」——
+     引擎不导出，那 25 个 var 全是 undefined，整个数值层静默失效
+     （不报错、不是 NaN，是"表不存在"，比 NaN 更难查）。
+     漏的原因很朴素：抽的时候常量跟着函数一起进来了，导出时只照着函数列表写。 */
 export {
   setTransStore,
   xzLevelCoeffOf,
@@ -1466,4 +1473,29 @@ export {
   xzDrOf,
   xzVulnOf,
   xzAtomNameOf,
+  TRACK_MAX_DISTANCE,
+  REALM_COEFFS,
+  XZ_LEVEL_COEFF,
+  XZ_LEVEL_SUBSTEP,
+  REALM_ALIAS,
+  XZ_SKILL_MP_BY_QUALITY,
+  QUALITY_POWER,
+  XZ_PEAK_COEFF,
+  XZ_UPGRADE_HEADROOM,
+  XZ_HEAL_RATIO,
+  XZ_SHIELD_RATIO,
+  V81_EFFECT_CAP,
+  REALM_TIER_KEYS,
+  XINFA_TABLE,
+  V2_STATES,
+  BLOOD_EFFECT_KEYS,
+  XZ_ATOM_TYPES,
+  XZ_ATOM_RETIRED,
+  XZ_ATOM_LINE_RE,
+  XZ_ATTR_CAP_BY_BIG,
+  XZ_ATTR_TOTAL_CAP_BY_BIG,
+  XZ_HIT_BONUS,
+  XZ_SUB_LABEL,
+  XZ_KIND_LABEL,
+  XZ_PERM_KEYS,
 };

@@ -9963,7 +9963,15 @@ var XZ_ATOM_TYPES = {
   /* ── 持续伤害（每手跳伤，不属于减益）── */
   '灼烧': { kind: 'dot' }, '中毒': { kind: 'dot' }, '流血': { kind: 'dot' }, '腐蚀': { kind: 'dot' },
   /* ── 控制（目标无法行动）── */
-  '定身': { kind: 'control' }, '眩晕': { kind: 'control' }, '禁锢': { kind: 'control' },
+  /* ★★★ v401：`眩晕` **已下架**（用户 2026-10-26：「眩晕技能根本没用，
+     但眩晕不好做平衡，所以眩晕干脆不修了，直接下架眩晕效果」）★★★
+     ⇒ 从这张表里**删除**，`xzEffMechOf('眩晕')` 现在返回 `''`
+       ⇒ 写 `眩晕:1` 不再被认成机制，落 narrative（不生效、也不假装生效）。
+     ⚠ 不要加进 `XZ_ATOM_RETIRED`（那是「旧名→新名」映射表，眩晕没有对应新机制，
+       映射到任何一条都会变成另一种效果，比不生效更糟）。
+     ⚠ 世界书《招式字段》第 19 行也同步删掉了它，闸 `_v401_no_stun.mjs` 钉住两边。
+     ⚠ `定身` / `禁锢` 保留 —— 用户只点名眩晕。 */
+  '定身': { kind: 'control' }, '禁锢': { kind: 'control' },
   /* ── 增益：落在自己身上 ── */
   '增伤': { kind: 'buff', sub: 'dmg' },        // 自己出手更疼（最终伤害乘区）
   '减伤': { kind: 'buff', sub: 'dr' },         // 自己挨打更轻（承伤乘区）
@@ -12811,6 +12819,36 @@ function calcDamage(attacker, defender, skill, isAoe) {
       });
     } catch (eAtomP) {}
   }
+  /* ★★★ v401：招式 `效果` 里写的「穿防」= **本击穿透**，在这一层算进 skillPierce ★★★
+     用户 2026-10-26：「玄技里面有穿防，我本意是想这一下攻击穿防」
+     —— 修之前它走 `applyV75Effects` 的 pierce 分支，被永久累加进 `heartPierce`
+        （三次出招 20→40→60，且永不回退），而**本击反而没吃到**（那一支在 calcDamage 之后才跑）。
+     ⇒ 语义归位：
+        · 招式（`skill.效果` / 翻译原子）里的穿防 → 只作用于**这一击** → 并进 `skillPierce`
+        · 玄诀 / 武器 / 血脉里的穿防（常驻，dur=9999）→ 仍走 `heartPierce`（建卡期算好）
+     ⚠ 防双算：`mechSumField(attacker,'pierce')` 读的是 artifactBuffs / bloodBuffs / heartBuffs
+       （常驻三源），**不含** `skill.效果`；`applyV75Effects` 那边非 perm 已经不写字段了
+       （见 14300 一带）。所以这条是唯一来源，一加一次。
+     ⚠ 只认 sub==='pierce'：`破甲` 走 `skill.effects.indexOf('破甲')` 那条老路（12774），
+       两者语义不同（破甲是必带穿防的词条，穿防是显式数值），不要合并。 */
+  try {
+    if (isSkill) {
+      var _v401Eff = xzSkillEffFieldOf(skill);
+      var _v401List = Array.isArray(_v401Eff) ? _v401Eff
+        : (typeof _v401Eff === 'string' && _v401Eff ? [_v401Eff] : []);
+      for (var _v401i = 0; _v401i < _v401List.length; _v401i++) {
+        var _v401Raw = String(_v401List[_v401i] || '');
+        if (!_v401Raw) continue;
+        var _v401P = null;
+        try { _v401P = _v75ParseEffect(_v401Raw); } catch (eV401a) { _v401P = null; }
+        if (!_v401P || _v401P.sub !== 'pierce') continue;
+        /* 穿透值在解析器里落在 dmgPct（`穿防:20` ⇒ 0.20）；兜底再读一次 flat */
+        var _v401v = Number(_v401P.dmgPct) || 0;
+        if (!_v401v && Number(_v401P.dmgFlat) > 0) _v401v = Number(_v401P.dmgFlat) / 100;
+        if (_v401v > 0) skillPierce += Math.min(0.70, _v401v);
+      }
+    }
+  } catch (eV401b) {}
   var totalPierce = Math.min(0.70, (attacker.heartPierce || 0) + skillPierce);
   effDef = Math.round(effDef * Math.max(0.30, 1 - totalPierce));
   /* ══════════════════════════════════════════════════════════════════════════
@@ -14293,11 +14331,39 @@ function applyV75Effects(attacker, target, skill) {
                 + '，' + xzDurText(dur) + '）');
             }
           } else if (_bsub === 'pierce') {
-            /* 破甲/穿防：自己的穿防能力，直接进 pierce 乘区（calcDamage 的 totalPierce 读它），
-               跟 `自带破甲` 建卡时算出来的 heartPierce 是同一个加数。 */
-            bHolder.heartPierce = Math.min(0.70, (bHolder.heartPierce || 0) + _bpct);
-            BattleState.logs.push((bHolder === attacker ? an : tn) + ' 的攻势更利（穿防 +'
-              + Math.round(_bpct * 100) + '%' + (xzDurText(dur) ? ('，' + xzDurText(dur)) : '') + '）');
+            /* ★★★ v401：**招式自带的穿防不许再累加到 heartPierce** ★★★
+               用户 2026-10-26 原话：
+                 「玄技里面有穿防，我本意是想这一下攻击穿防，
+                   但是他妈的，他一直在叠加自己的穿防，整场的穿防从20到40到60」
+               真引擎复现（`工具/_v401_diag3.mjs` ③）：同一招 `{伤害:32, 穿防:20}` 连出三次
+                 heartPierce: 0 → 0.2 → 0.4 → 0.6
+                 面板穿防：0.4 → 0.6 → 0.7（封顶）
+               ⇒ 打三次，穿防永久涨到 60% —— 而且**永不回退**（heartPierce 是建卡期字段，
+                 没有 rounds、不进 `processHandBuffs` 的递减表）。
+
+               ── 根因：这一支是**唯一**没写 `_isPerm` 判断的分支 ──
+                 上面 evade / haste / dr / crit / critDmg 全部是
+                   `if (_isPerm) { 常驻通道 } else { 临时字段 + rounds }`
+                 唯独 pierce 直接一句 `heartPierce += _bpct`，把「这一招的穿防」
+                 当成了「我这个人的永久穿防」。
+                 `heartPierce` 的语义是**建卡期**定的常驻穿透（玄诀/武器「自带破甲」），
+                 详见 6628 行 `heartPierce: pierceBonus` —— 那是整个战斗只算一次的东西。
+
+               ── 现在的口径（与用户本意一致）──
+                 · `_isPerm`（玄诀 / 武器 / 血脉，dur = 9999）：进 heartPierce，整场有效
+                 · 招式（非 perm）：**本击有效**，在 `calcDamage` 里直接并进 `skillPierce`
+                   （见 12772 一带 `_v401SkillPierce`），这里**一个字段都不写**
+                 ⚠ 所以这一支非 perm 时只打战报，不落值 —— 别在这里补 `else` 分支，
+                   补了就是第二次数值来源，又会变成「同一招穿两次」。 */
+            if (_isPerm) {
+              bHolder.heartPierce = Math.min(0.70, (bHolder.heartPierce || 0) + _bpct);
+              BattleState.logs.push((bHolder === attacker ? an : tn) + ' 的攻势更利（穿防 +'
+                + Math.round(_bpct * 100) + '%，整场）');
+            } else {
+              /* 本击已由 calcDamage 计入；这里只报一句，让玩家知道这一下穿了多少 */
+              BattleState.logs.push((bHolder === attacker ? an : tn) + ' 这一击破开护体（穿防 +'
+                + Math.round(_bpct * 100) + '%，只此一击）');
+            }
           } else if (_bsub === 'dr') {
             if (_isPerm) {
               xzPermAdd(bHolder, 'dr', _bpct, 0.75);
@@ -14828,11 +14894,31 @@ function processHandDots(fighter) {
 function processTurnStartBuffs(fighter) {
   if (!fighter) return;
   try {
-    /* 战斗结束/角色退场时的兜底清零（正常递减已在手级完成） */
-    if ((fighter.v75HastePct || fighter.v75HasteFlat) && fighter.baseSpd) {
-      fighter.v75HastePct = 0; fighter.v75HasteFlat = 0;   /* ★ v108：两个通道一起清 */
-      fighter.spd = fighter.baseSpd;
-    }
+    /* ★★★ v401：这里原来有一段「每回合开始把提速清零」——**已删** ★★★
+       原文：
+         if ((fighter.v75HastePct || fighter.v75HasteFlat) && fighter.baseSpd) {
+           fighter.v75HastePct = 0; fighter.v75HasteFlat = 0;
+           fighter.spd = fighter.baseSpd;
+         }
+       它是 v77「回合级递减」时代的兜底，而 v86 起持续效果**全部改成手级**
+       （`processHandBuffs`：谁出手谁扣一手，到期才清零）。改手级时这一段没删，
+       于是变成一颗定时炸弹：
+
+       用户 2026-10-26 实测（原话）：
+         「提速加30根本没用，也可能生效了，因为提速数字变了一瞬间，
+           从127变成157，然后又变回127」
+       —— 真引擎复现（`工具/_v401_diag3.mjs`）：
+           出手后   spd=157  v75HasteFlat=30  rounds=3   ← 施加那一刻是对的
+           第1手后  spd=127  v75HasteFlat=0   rounds=3   ← **被这里清零**
+       注意 `rounds` 还是 3、`flat` 却变 0 —— 只有本函数会做出这种「清值不清手数」的
+       形状（`processHandBuffs` 清值时是连 rounds 一起到 0 的）。
+       调用链：`processTurnStartDots` → 本函数，**每个回合开始都跑**。
+
+       ⇒ 提速的生命周期现在只有**一处**说了算：`processHandBuffs`（手数递减 / 到期清零）。
+         本函数不再碰任何增益数值，只保留下面 v77 遗留的收尾语义。
+       ⚠ 别以「兜底清残留」为理由加回来：真需要收尾的地方是战斗结束，
+         那里有独立的清理（见 `xzJJSettleOnly` 附近），不该挂在每回合开始。 */
+    void 0;
   } catch (eB2) {}
 }
 
@@ -15646,6 +15732,125 @@ function playBuffTone(element) {
 }
 
 // ===== 八属性专属伤害大范围粒子视觉特效（表现层）=====
+/* ★★★ v401：界面音效（用户 2026-10-26：「所有战斗脚本里的所有可交互按钮都要加入触碰音效，
+   也就是点击的音效。触发战斗时也要有触发音，也就是识别到标签时」）★★★
+
+   ── 为什么用 WebAudio 现场合成，不放音频文件 ──
+     这个引擎是**通过 CDN 被别的卡引用**的独立包，加 mp3 就意味着要么打包进卡
+     （体积 + 每个镜像都要带）、要么再挂一个 CDN 域名（多一个断链点）。
+     而 UI 点击音只是一个 60ms 的短促音，合成比加载更省事、也永远不会有跨域/404。
+
+   ── 两道闸必须留 ──
+     ① `fxOff()` —— 玩家在设置里把特效调成「关闭」时，音效也一起关。
+        这条与 `playAttack`/`playElementHitFx` 第一行同口径：
+        「一个开关管两处」是 v375 定下的，别再让某个音效绕过去。
+     ② 限流 90ms —— 战斗里一次出手会连带触发好几个点击（选招 → 确认 → 结算），
+        不限流会叠成一段噪音。与 `playBuffTone` 共用同一道闸 `_fxSoundGate`。 */
+var _uiClickGate = 0;
+function playUiClick() {
+  try {
+    if (typeof fxOff === 'function' && fxOff()) return;
+    var nowMs = Date.now();
+    if (nowMs - _uiClickGate < 90) return;
+    _uiClickGate = nowMs;
+    var ctx = getBattleAudio();
+    if (!ctx) return;                       /* 浏览器还没解锁音频（首次必须先有一次交互） */
+    var now = ctx.currentTime;
+    /* 三角波下行 1180→720Hz：比正弦「脆」，又不像方波那么刺耳 ——
+       木鱼/玉磬那种"嗒"的质感，符合修真界面。 */
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(1180, now);
+    o.frequency.exponentialRampToValueAtTime(720, now + 0.055);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.085, now + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0006, now + 0.075);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(now); o.stop(now + 0.09);
+  } catch (e) {}
+}
+
+/* 开战音：三音上行（G4 → C5 → E5）+ 一层低频垫底。
+   为什么是"上行"：上行 = 事情开始/变强，下行 = 挨打（与 playBuffTone 同一条乐理口径）。
+   时长约 0.5s，比点击音响得多，但不至于盖掉第一手战报。 */
+function playBattleStart() {
+  try {
+    if (typeof fxOff === 'function' && fxOff()) return;
+    var ctx = getBattleAudio();
+    if (!ctx) return;
+    var now = ctx.currentTime;
+    var notes = [392.00, 523.25, 659.25];
+    for (var i = 0; i < notes.length; i++) {
+      (function (f, k) {
+        var t0 = now + k * 0.085;
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(f, t0);
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.15, t0 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.30);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(t0); o.stop(t0 + 0.32);
+      })(notes[i], i);
+    }
+    /* 垫底：低八度长音，给"钟磬开场"的厚度 */
+    var ob = ctx.createOscillator(), gb = ctx.createGain();
+    ob.type = 'sine';
+    ob.frequency.setValueAtTime(196.00, now);
+    gb.gain.setValueAtTime(0.0001, now);
+    gb.gain.exponentialRampToValueAtTime(0.10, now + 0.05);
+    gb.gain.exponentialRampToValueAtTime(0.0006, now + 0.52);
+    ob.connect(gb); gb.connect(ctx.destination);
+    ob.start(now); ob.stop(now + 0.55);
+  } catch (e) {}
+}
+
+/* ── 「所有可交互按钮」的**唯一**挂载点：根节点捕获，不是逐个按钮绑 ──
+   为什么不用「每个 addEventListener 里补一句 playUiClick()」：
+   全仓有 30+ 处按钮监听（技能卡 / 战术球 / 确认 / 分页 / 立绘 / 战报展开…），
+   逐个补必然漏，而且**以后新增的按钮一定不会记得加**。
+   捕获阶段（第三个参数 true）在冒泡之前跑，任何 `stopPropagation` 都挡不住它。
+
+   判据刻意放宽到「长得像可点」：
+     · 原生 button / a / [role=button]
+     · 类名里带 -btn / -card / -tab / -pill / -pick / -item / -lg（战报可展开条）
+   宁可多响一声，也不能「点了没声」—— 后者玩家会以为是卡了。 */
+var _uiClickBound = false;
+function bindUiClickSound() {
+  if (_uiClickBound) return;
+  try {
+    var docs = [];
+    /* 战斗界面可能挂在宿主文档，也可能挂进父窗口（酒馆是 iframe 结构）——
+       两边都绑上，跨域会在 getter 处抛错，被 try 吞掉即可。 */
+    try { if (typeof document !== 'undefined' && document) docs.push(document); } catch (eD1) {}
+    try {
+      if (typeof window !== 'undefined' && window.parent && window.parent !== window && window.parent.document) {
+        if (docs.indexOf(window.parent.document) < 0) docs.push(window.parent.document);
+      }
+    } catch (eD2) {}
+    if (!docs.length) return;
+    _uiClickBound = true;
+    docs.forEach(function (d) {
+      if (!d || !d.addEventListener) return;
+      d.addEventListener('click', function (e) {
+        try {
+          var el = e && e.target;
+          for (var i = 0; i < 6 && el && el !== d.body; i++) {
+            var tn = String(el.tagName || '').toUpperCase();
+            if (tn === 'BUTTON' || tn === 'A') { playUiClick(); return; }
+            var role = el.getAttribute && el.getAttribute('role');
+            if (role === 'button') { playUiClick(); return; }
+            var cn = String((el.className && el.className.baseVal !== undefined)
+              ? el.className.baseVal : (el.className || ''));
+            if (/-btn|-card|-tab|-pill|-pick|-item|-lg\b/.test(cn)) { playUiClick(); return; }
+            el = el.parentElement || el.parentNode;
+          }
+        } catch (eIn) {}
+      }, true);
+    });
+  } catch (eB) {}
+}
+
 function playElementHitFx(targetId, element, isAoe, tier) {
   try {
     if (fxOff()) return;                                     // 关闭档：什么都不画（淡化档照画，只是很淡）
@@ -18122,6 +18327,9 @@ try { if (window.parent && window.parent !== window) window.parent.xzOpenSkillAt
 try { if (window.parent && window.parent !== window) window.parent.xzOpenAtomModal = showAtomModal; } catch (eWP) {}
 
 function bindActionEvents() {
+  /* ★ v401：界面点击音 —— 每次 render 后都会调到这里，函数内部自己幂等（只真绑一次）。
+     放在最前：后面那几十个按钮监听无论怎么改，音效都不用跟着改。 */
+  try { bindUiClickSound(); } catch (eUic) {}
 
   /* ★ v392：`skill-effect` 的监听已删（用户「清吧」）。
      这条分支从 v282 起就没有发送方：`data-xz-act="skill-effect"` 全库 0 处生产，
@@ -20444,7 +20652,12 @@ var XZJJ = (function () {
     var _hpPart = _isBuffSk ? ''
       : ('，' + ((out.dodge && !_dmgShown)
           ? '被闪避，'
-          : ('造成 ' + _nbBox(_dmgShown, 'dmg') + ' 伤害 🩸')));
+          /* ★ v401：**去掉「伤害」两个字**。
+             用户 2026-10-26（截图，指着「造成 45 伤害 🩸」）：
+               「这是什么鸡巴表述，把伤害两个字给老子去掉。」
+             ⇒ `造成 [45] 🩸` —— 数字本身带血滴图标，语境已经说明是伤害，
+               再写一遍是废话。 */
+          : ('造成 ' + _nbBox(_dmgShown, 'dmg') + ' 🩸')));
     /* ★★ v241（玩家实测：「计算机用赤霄枪攻击了剑修·萧决，造成46伤害…获得了破防 整场破防 整场状态，
        「破防是对方的破甲效果，本来就是常驻的效果就不可能获得」）：
        三个错叠在一起 ——
@@ -23131,38 +23344,51 @@ function jjbLogRest(t) {
       + 'border:1px solid rgba(240,215,155,.35) !important;border-radius:12px !important;'
       + 'box-shadow:0 0 0 1px rgba(0,0,0,.80),0 22px 60px rgba(0,0,0,.90),'
       + '0 0 40px rgba(226,180,96,.12) !important;}'
-      /* ⑪ 背景八卦阵：**同心阵盘 + 细放射刻度**（不是一束放射线）
-         原版只有两道环 + 每 45° 一道粗扇 ⇒ 看起来像「爆炸放射线」，且右上那片空区没内容。
-         现在补成 5 道同心环（22/34/48/62/76%）+ 极细的方位刻度，
-         让阵盘正好铺满卡片与战报之间的空白，读成「脚下有一座阵」。 */
+      /* ★★★ v401：背景从「八卦阵盘」换成「云海 + 星尘」★★★
+         用户 2026-10-26：「顺便把战斗界面的背景的动态时针换了，换成更好看的符合场景的美化」。
+         原实现（v162）是两圈 conic-gradient 刻度盘反向旋转（180s/300s）——
+         玩家读出来是「一个走得极慢的钟」，而不是「战斗中该有的气象」。
+
+         ⇒ 新背景拆成两层，**都不旋转**：
+           ::before = 云海柔光：两团异色雾气（冷青 / 暖金）在上下错位，46s 缓慢呼吸
+                      （scale 1→1.06 + 轻微上浮），像站在半山云上、脚下有光在动
+           ::after  = 星尘缓浮：点阵星子按 260×220 平铺，90s 斜向平移一格
+                      （background-position 位移，**不是旋转**），像灵气在飘
+
+         ⚠ 三条硬约束（改之前先读）：
+           ① **不许旋转** —— 视角一转就回到「钟面」，这正是用户要换掉的东西
+           ② 亮度必须低于战报文字：色调一律走 rgba(…,.06~.12)，
+              叠在 #0b1017 的战报底上仍然能一眼读字（战报区有自己的实色底，不受影响）
+           ③ 只动 transform / background-position（GPU 合成），不动 filter / box-shadow
+              —— 那两项每个动画帧都要重绘整块面板，手机端会掉帧
+           ④ `prefers-reduced-motion` 那条媒体查询里已经关掉了 before/after 的动画，保持有效 */
       + '#' + PFX + '-frame::before{'
       + 'background:'
-      + 'repeating-conic-gradient(from 0deg,rgba(240,215,155,.10) 0deg 1.1deg,transparent 1deg 45deg),'
-      + 'repeating-conic-gradient(from 22.5deg,rgba(224,97,90,.06) 0deg .7deg,transparent .6deg 22.5deg),'
-      + 'radial-gradient(circle at 50% 50%,transparent 21.7%,rgba(240,215,155,.20) 22%,'
-      + 'rgba(240,215,155,.20) 22.25%,transparent 22.55%),'
-      + 'radial-gradient(circle at 50% 50%,transparent 33.7%,rgba(240,215,155,.13) 34%,'
-      + 'transparent 34.3%),'
-      + 'radial-gradient(circle at 50% 50%,transparent 47.7%,rgba(240,215,155,.13) 48%,'
-      + 'transparent 48.3%),'
-      + 'radial-gradient(circle at 50% 50%,transparent 61.7%,rgba(224,97,90,.12) 62%,'
-      + 'transparent 62.3%),'
-      + 'radial-gradient(circle at 50% 50%,transparent 75.7%,rgba(240,215,155,.09) 76%,'
-      + 'transparent 76.3%) !important;}'
+      + 'radial-gradient(ellipse 62% 42% at 18% 76%,rgba(116,178,220,.11),transparent 72%),'
+      + 'radial-gradient(ellipse 55% 38% at 82% 84%,rgba(226,180,96,.10),transparent 72%),'
+      + 'radial-gradient(ellipse 48% 30% at 62% 16%,rgba(150,198,232,.07),transparent 70%),'
+      + 'radial-gradient(ellipse 80% 60% at 50% 50%,transparent 46%,rgba(0,0,0,.16) 100%) !important;'
+      + 'transform-origin:50% 55%;'
+      + 'animation:' + PFX + '-cloudm 46s ease-in-out infinite alternate !important;}'
+      + '@keyframes ' + PFX + '-cloudm{'
+      + 'from{transform:scale(1) translateY(0);opacity:.82;}'
+      + 'to{transform:scale(1.06) translateY(-1.6%);opacity:1;}}'
       + '#' + PFX + '-frame::after{'
-      + 'background:repeating-conic-gradient(from 0deg,rgba(255,238,196,.07) 0deg .5deg,'
-      + 'transparent .45deg 7.5deg) !important;}'
-      /* ★★ v162（用户：「和我们的动态时钟叠加的」）★★
-         阵盘原来**是静止的**（只有背景，没有动画），只是看着像钟面。
-         现在让它真的走起来：主盘 180s 顺时针、细刻度盘 300s 逆时针，
-         两盘反向 ⇒ 有「星轨相对运动」的错位感，且极慢，不会抢战斗注意力。
-         只动 transform（GPU 合成），不碰 background-position，开销可忽略。 */
-      + '#' + PFX + '-frame::before{transform-origin:50% 50%;'
-      + 'animation:' + PFX + '-disk 180s linear infinite !important;}'
-      + '#' + PFX + '-frame::after{transform-origin:50% 50%;'
-      + 'animation:' + PFX + '-diskR 300s linear infinite !important;}'
-      + '@keyframes ' + PFX + '-disk{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}'
-      + '@keyframes ' + PFX + '-diskR{from{transform:rotate(0deg);}to{transform:rotate(-360deg);}}'
+      /* 星点用 background-image 的多个 radial-gradient 平铺 ——
+         单点尺寸给 1~1.6px，透明到底，不会在深色底上结成白斑。 */
+      + 'background-image:'
+      + 'radial-gradient(1.6px 1.6px at 18% 24%,rgba(255,238,196,.50),transparent 100%),'
+      + 'radial-gradient(1.2px 1.2px at 44% 62%,rgba(198,226,255,.42),transparent 100%),'
+      + 'radial-gradient(1.4px 1.4px at 71% 31%,rgba(255,238,196,.38),transparent 100%),'
+      + 'radial-gradient(1px 1px at 88% 74%,rgba(198,226,255,.34),transparent 100%),'
+      + 'radial-gradient(1.3px 1.3px at 29% 87%,rgba(255,238,196,.30),transparent 100%),'
+      + 'radial-gradient(1px 1px at 59% 12%,rgba(198,226,255,.28),transparent 100%) !important;'
+      + 'background-size:260px 220px !important;background-repeat:repeat !important;'
+      + 'opacity:.62 !important;'
+      + 'animation:' + PFX + '-dust 90s linear infinite !important;}'
+      + '@keyframes ' + PFX + '-dust{'
+      + 'from{background-position:0 0;}'
+      + 'to{background-position:-260px -220px;}}'
       /* ⑫ 增益徽标：玄底金边小牌 */
       + '.' + PFX + '-bf{border:1px solid rgba(198,164,102,.30) !important;'
       + 'background:rgba(226,180,96,.08) !important;color:#cbbb96 !important;}'
@@ -24169,6 +24395,12 @@ function build() {
               ? (' +' + (Math.round(_mSum * 10) / 10))
               : (' ' + (Math.round(_mSum * 1000) / 10) + '%');
           out.push({ t: _mNm + _mVal, k: 'good', nm: _mNm, n: 9999 });
+          /* ★ v401：**push 完必须回写 `_usedNm`**。
+             这段原来是"只读不写"：它按 `_usedNm` 跳过重复，但自己印过的名字不回填，
+             于是下游（玄诀/兵器段）查 `_usedNm` 一律查不到 ⇒ 同一样东西印第二遍。
+             实测（`工具/_v401_diag3.mjs` ①）：修完玄诀原文后仍多出一条
+             「玄诀·减伤/抗暴·整场」，而「减伤 18%」「抗暴 30%」就在它上面两行。 */
+          _usedNm[_mNm] = 1;
         }
       } catch (eMechDisp) {}
       /* ★ v77：v75 DOT（_v75Dots）逐条显示 —— 灼烧/中毒是玩家看得见的状态，
@@ -24246,10 +24478,50 @@ function build() {
                 return false;
               };
               var _heartOk = _heartOnes.filter(_mechNameOk);
-              if (_heartOk.length) {
-                var _shown = _heartOk.slice(0, 4);
+              /* ★★★ v401：**把「整句原文」换成「机制名」再显示** ★★★
+                 用户 2026-10-26 截图（萧诀的玄诀）：
+                   「增益 / 状态（4）」里挂着一条
+                   `减伤:12｜心若止水，万念不生，出手不被杂念所扰·抗暴:30｜心念澄澈，不被外物所乘`
+                 原话：「这个是萧诀的玄诀，为什么给他妈效果原文都显示在这了」。
+
+                 ── v282 的判据本身没错，**但只做了一半** ──
+                   v282 加了 `_mechNameOk` 过滤，本意是「不是机制的整句修辞不许摆出来」。
+                   可它的判据是 `_v75ParseEffect(n).kind !== 'narrative'`——
+                   而 `减伤:12｜心若止水…` **是规范串**，解析器当然认（kind='buff'）
+                   ⇒ 放行 ⇒ 然后 `t` 直接用**原字符串**拼
+                   ⇒ 面板上出现的就是带数值带描写的整句原文。
+
+                 ── 正确做法 ──
+                   放行之后，从串里只取**机制名**（`减伤` / `抗暴` / `穿防`），
+                   数值交给上面 v324 那段 `mechBuffsOf` 统一摊（它已经按机制名合并去重）。
+                   若该机制名已被那段印过（`_usedNm`）⇒ 这枚**整条不印** —— 同一样东西不印两遍。
+                   没印过的（例如某个冷门机制 mechBuffsOf 不管）⇒ 印「玄诀·名字」，**不带原文**。
+
+                 ⚠ 判据取 `xzEffMechOf`（机制名总表 + 退役名映射），不是自己写正则：
+                   `破甲`/`防御`/`攻击` 这些退役名必须能认（它们是 v94 二合一后的合法写法）。 */
+              var _mechNameOnly = function (s0) {
+                var head = String(s0 || '').split(/[｜|]/)[0].trim();   /* 去掉「｜描写」那半 */
+                var nm = head.split(/[:：]/)[0].trim();                  /* 取冒号前的词 */
+                if (!nm) return '';
+                try {
+                  if (typeof xzEffMechOf === 'function') {
+                    var _mm = xzEffMechOf(nm);
+                    if (_mm) return _mm;
+                  }
+                } catch (eM1) {}
+                return '';
+              };
+              var _heartMechs = [];
+              for (var _ho = 0; _ho < _heartOk.length; _ho++) {
+                var _hn = _mechNameOnly(_heartOk[_ho]);
+                if (!_hn) continue;
+                if (_usedNm[_hn]) continue;      /* 数值已在 mechBuffsOf 那段印过，不重复 */
+                if (_heartMechs.indexOf(_hn) < 0) _heartMechs.push(_hn);
+              }
+              if (_heartMechs.length) {
+                var _shown = _heartMechs.slice(0, 4);
                 out.push({
-                  t: _shown.join('·') + (_heartOk.length > 4 ? ('…+' + (_heartOk.length - 4)) : ''),
+                  t: '玄诀·' + _shown.join('/') + (_heartMechs.length > 4 ? ('…+' + (_heartMechs.length - 4)) : ''),
                   k: 'good', nm: '玄诀', n: 9999
                 });
               }
@@ -24263,9 +24535,16 @@ function build() {
                 while ((_artM = _artRe.exec(_artRaw))) _artPcts.push(Number(_artM[1]));
               } catch (eAp) {}
               for (var _ai = 0; _ai < _artOnes.length; _ai++) {
+                /* ★ v401：与玄诀同病 —— 这里原来直接把 `_artOnes[_ai]`（可能是
+                   `穿防:20｜松纹剑脊，刃口泛青自带破甲` 这种**整句原文**）当词条名印。
+                   现在只印机制名；该机制已由 mechBuffsOf 段印过 ⇒ 不重复印。 */
+                var _anm = _mechNameOnly(_artOnes[_ai]);
+                if (!_anm) continue;
+                if (_usedNm[_anm]) continue;      /* 数值已在 mechBuffsOf 段印过 */
                 var _pv = (_ai < _artPcts.length) ? _artPcts[_ai] : null;
                 var _pn = _pv != null ? (' ' + _pv + '%') : '';
-                out.push({ t: '兵器·' + _artOnes[_ai] + _pn, k: 'good', nm: _artOnes[_ai], n: 9999 });
+                out.push({ t: '兵器·' + _anm + _pn, k: 'good', nm: _anm, n: 9999 });
+                _usedNm[_anm] = 1;                /* 同一条兵器别印两枚 */
               }
               /* ★ v246（用户：「查看弹层里上面的血脉去掉，就留下面的」）：
                  六源·血脉段已经把原文、品阶、纯度、机制都摆全了，
@@ -25859,26 +26138,36 @@ function build() {
          「换个颜色」不叫两套，玩家一眼分不出来。 */
       if (o.isSword) {
         var _ang = Math.atan2(b.y - (a ? a.y : b.y - 1), b.x - (a ? a.x : b.x - 1));
-        for (var _mi = 0; _mi < _blades; _mi++) {
-          objs.push({
-            type: 'slashmark', x: b.x, y: b.y,
-            /* 角度间隔 0.62 时七道会绕成风车（总的 3.7 弧度）。0.34 更像「连着几刀劈在同一处」。 */
-            ang: _ang + (_mi - (_blades - 1) / 2) * 0.34,
-            dur: 0.40,
-            delay: D + _mi * 0.045,
-            len: 0.85 + _blades * 0.14,
-            w: 1 + _blades * 0.06,
-            color: col, t: 0, life: D + 0.50 + _mi * 0.045
-          });
-        }
-        objs.push({ type: 'bladeRing', x: b.x, y: b.y, ang: _ang, sx: 1.9,
-          r0: 16 + _blades * 7, r1: (o.isAoe ? 240 : 196) + _blades * 16,
-          dur: 0.44, delay: D, w: 1 + _blades * 0.12, color: col, t: 0, life: D + 0.50 });
-        if (o.isCrit) {
-          objs.push({ type: 'bladeRing', x: b.x, y: b.y, ang: _ang + 0.6, sx: 2.2,
-            r0: 26 + _blades * 8, r1: (o.isAoe ? 300 : 260) + _blades * 20,
-            dur: 0.58, delay: D + 0.04, w: 1.3, color: '#ffd27a', t: 0, life: D + 0.64 });
-        }
+        /* ★★★ v401：剑痕**时间与尺寸全面加大**（用户 2026-10-26：
+             「剑系攻击特效打到人身上的斩击太短太短了，根本看不出来有特效，要大幅度延长」）
+           原来：dur 0.40s / life D+0.50s / len 0.85+b*0.14 / w 1+b*0.06
+           现在：dur 1.05s（≈2.6×）/ life D+1.20s / len 1.35+b*0.22（≈1.6×）/ w 1.6+b*0.10
+           ⚠ 三道参数一起动的原因：
+             · 只延长 dur 不动 life ⇒ 对象在动画播完前就被回收，等于白改
+             · 只延长时长不加长 ⇒ 屏幕上是一条「慢慢淡出的短痕」，还是看不清
+             · `life` 必须 ≥ `delay + dur`，否则最后一道剑痕播到一半消失
+               最坏情况：delay = D + (b-1)*0.045，b 最大 7 ⇒ D+0.27，加 dur 1.05 = D+1.32
+               ⇒ life 取 D + 1.35 + _mi*0.045 留余量。 */
+          for (var _mi = 0; _mi < _blades; _mi++) {
+            objs.push({
+              type: 'slashmark', x: b.x, y: b.y,
+              /* 角度间隔 0.62 时七道会绕成风车（总的 3.7 弧度）。0.34 更像「连着几刀劈在同一处」。 */
+              ang: _ang + (_mi - (_blades - 1) / 2) * 0.34,
+              dur: 1.05,
+              delay: D + _mi * 0.045,
+              len: 1.35 + _blades * 0.22,
+              w: 1.6 + _blades * 0.10,
+              color: col, t: 0, life: D + 1.35 + _mi * 0.045
+            });
+          }
+          objs.push({ type: 'bladeRing', x: b.x, y: b.y, ang: _ang, sx: 1.9,
+            r0: 16 + _blades * 7, r1: (o.isAoe ? 240 : 196) + _blades * 16,
+            dur: 0.95, delay: D, w: 1 + _blades * 0.12, color: col, t: 0, life: D + 1.02 });
+          if (o.isCrit) {
+            objs.push({ type: 'bladeRing', x: b.x, y: b.y, ang: _ang + 0.6, sx: 2.2,
+              r0: 26 + _blades * 8, r1: (o.isAoe ? 300 : 260) + _blades * 20,
+              dur: 1.15, delay: D + 0.04, w: 1.3, color: '#ffd27a', t: 0, life: D + 1.24 });
+          }
         /* 剑屑：凡 11 条 → 神 26 条。原来 10+blades*5（神阶 45 条）会把剑痕整个盖住。 */
         var _nS = 8 + _blades * 3;
         for (var _si = 0; _si < _nS; _si++) {
@@ -29361,6 +29650,15 @@ function xzJJSniffInner(force) {
       return;
     }
     xzJJDiag('名单已解析，进入编队/列阵', { tag: true, closed: _tag.closed, enemies: parsedEnemies });
+
+    /* ★ v401：**开战音** —— 放在「名单已解析、确实要列阵」这一行之后。
+       用户 2026-10-26：「触发战斗时也要有触发音，也就是识别到标签时」。
+       ⚠ 位置刻意**不放在识别到 `<战斗开始>` 的最上面**：那条路上还有
+         境界压制（差 ≥2 大境界直接不列阵）、已处理过本楼、正在打 等一堆早退分支 ——
+         放太早就会出现「响了一声但根本没开打」。这里已经过了那些闸，一定进列阵。
+       ⚠ 也别放在 ⑪ beginBattleFromRoster：那条路要等玩家点完「点将出阵」，
+         中间可能隔几分钟，音效与画面就对不上了。 */
+    try { if (typeof playBattleStart === 'function') playBattleStart(); } catch (eSndStart) {}
 
     /* ★ v53：本楼名单**先**落进 XZ_PENDING_ROSTER，再进 ⑨ 编队。
        旧写法要等到 ⑪ beginBattleFromRoster 才落，于是 ⑨ 里 xzTeamCandidates()

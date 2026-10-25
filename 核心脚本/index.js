@@ -16894,6 +16894,41 @@ function exposeSharedRegistry() {
     if (typeof globalThis !== 'undefined') globalThis.__XZ_SHARED__ = XZ_SHARED_FNS;
     if (typeof window !== 'undefined') window.__XZ_SHARED__ = XZ_SHARED_FNS;
   } catch (e) {}
+  /* ★★★ v395：必须往 parent / top 也挂一份，否则 05 永远取不到。
+     为什么（这是本次「一行 import」改造暴露出来的第二个问题，与 import 本身无关）：
+       酒馆助手（JS-Slash-Runner）是**一个脚本一个隐藏 iframe**
+       （src/panel/Script.vue 的 `v-for="script in runtimes"` → 一个 `<Iframe>`）。
+       所以 04 和 05 跑在**两个不同的 window** 里：
+         · 04 只挂自己 window → 05 的 globalThis 上看不到；
+         · 05 的 XZ_SHARED 只读 `globalThis.__XZ_SHARED__`，不扫 iframe；
+         · 05 的 HOST 又是取 `window.top`（见 05 第 540 行），不是 04 那个 iframe。
+       ⇒ 两边各说各话，10 个取用点全部拿到 null，而且是**静默**的
+         （05 的写法是「取不到就少一行」）。玩家只看到面板缺几行数值。
+     为什么改这边而不是改 05：
+       ① 04 是提供方，往上层窗口多挂一份是「广播」，改一处覆盖 07（已扫 iframe）和
+          将来任何新脚本；改 05 得逐个脚本改，漏一个就还是空。
+       ② 05 的 XZ_SHARED 是 10 处取用共用的入口，但 07 已经有自己那套扫 iframe 的实现，
+          两套都改 = 同一件事两处实现，下次必漂。
+     为什么用 try 包着每一句：跨域 iframe 读 parent 会抛 SecurityError，
+       不能因为「挂不上 parent」就跳过自己这个 window 的挂载（上面两句已先执行）。
+     ⚠ 挂 parent 只是**补一条路**，不是替代：同窗口直读仍是最快的那条。 */
+  var _bcast = [typeof window !== 'undefined' ? window : null];
+  try { if (typeof window !== 'undefined' && window.parent && window.parent !== window) _bcast.push(window.parent); } catch (eP) {}
+  try { if (typeof window !== 'undefined' && window.top && window.top !== window) _bcast.push(window.top); } catch (eT) {}
+  for (var _bi = 0; _bi < _bcast.length; _bi++) {
+    try {
+      var _bw = _bcast[_bi];
+      if (_bw && !_bw.__XZ_SHARED__) _bw.__XZ_SHARED__ = XZ_SHARED_FNS;
+    } catch (eB) {}
+  }
+  /* ★ 就绪信号：05/07 的首帧可能比这里早（04 要先下载 2.19MB，05 并行加载）。
+     挂一个时间戳给下游判断「表是不是已经到齐」，而不是让它去猜。
+     ⚠ 只有**本窗口真的挂上了**才写 —— 写成一个"总是 true"的旗标等于自欺。 */
+  try {
+    if (typeof window !== 'undefined' && window.__XZ_SHARED__ === XZ_SHARED_FNS) {
+      window.__XZ_SHARED_READY__ = { at: (typeof Date !== 'undefined' ? Date.now() : 0), keys: 58 };
+    }
+  } catch (eR) {}
   return XZ_SHARED_FNS;
 }
 exposeSharedRegistry();

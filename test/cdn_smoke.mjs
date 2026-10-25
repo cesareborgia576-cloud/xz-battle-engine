@@ -128,14 +128,66 @@ leftover.length === 0
      · `await` 现在**允许** —— 多镜像回退链靠它逐个试，它不再意味着"算法在卡里"。
      · `function` 也**允许** —— 加载逻辑里有个 `function host()`（找 window.top）。
        卡它的话，只能把 5 行代码改写成箭头函数来糊弄判据，纯属自欺。
-     · 真正要守的是「**去注释后的代码量**」：算法 2MB、加载逻辑 1.2KB，差三个数量级。
+     · 真正要守的是「**去注释后的代码量**」：算法 2MB、加载逻辑几 KB，差三个数量级。
        这条比数关键字硬得多 —— 关键字可以绕，体量绕不过去。
-     阈值 3000 字节 ≈ 当前 1206 字节的 2.5 倍余量，改动留够了空间。 */
-const CODE_ONLY_MAX = 3000;
+
+   ★★★ v402：阈值 3000 → 16000，而且**不是为了让闸变绿** ★★★
+     涨的原因是可查的：加载器从「逐个 try await import」改成了
+       fetch 预取（带 AbortController 超时）→ 完整性校验（结尾标记 + 字节数）
+       → 两轮重试 → 记录每次失败原因 → 兜底裸 import
+     这些都是**为真实故障写的**，不是实现搬回卡里：
+       ① 新 tag 是冷资源，实测冷 8.2~10.2 秒 / 热 0.5~0.8 秒；
+       ② 镜像会卡住（不是失败），裸 import 没有超时 ⇒ 玩家看到的是长时间空白；
+       ③ `cdn` 镜像实测返回过 **HTTP 200 但只有 928768 字节** 的截断体。
+     ⇒ 4367 字节，与 2.25MB 的真身仍差 **2.7 个数量级**，判别力没有下降。
+
+     ⚠ 但"放宽阈值"这个动作本身是危险的 —— 它会让以后的人可以顺手塞实现进来。
+       所以同时补了下面那条「增长必须有出处」的断言：
+       体量涨了，就必须在代码里看得到对应的保护。只涨体积不长功能 ⇒ 红。 */
+const CODE_ONLY_MAX = 16000;
 const codeBytes = Buffer.byteLength(codeOnly, 'utf8');
 codeBytes < CODE_ONLY_MAX
   ? ok('去注释后的代码 ' + codeBytes + ' 字节（< ' + CODE_ONLY_MAX + '），只有加载逻辑')
   : bad('去注释后的代码 ' + codeBytes + ' 字节 —— 超了，说明有实现搬回卡里了');
+
+/* ★ v402：体积增长的**出处**必须看得见。
+   四条一起验，缺一条就说明"代码变多了但保护没跟上"（或者反过来，保护被删了但注释还在）。
+   为什么用这四条当代理：它们正好对应 v402 修的三类真实故障，
+   而且都是**加载逻辑专有**的写法，算法里不会出现。 */
+{
+  const PROT = [
+    [/AbortController|signal\s*:/, '按镜像超时（防"卡住但不失败"的镜像让玩家无限等）'],
+    [/ROUNDS|for\s*\(\s*var\s+round/, '多轮重试（防回源未就绪的一次性失败）'],
+    [/__XZ_CORE_SRC__/, '记录用的哪个镜像 + 耗时 + 每次失败原因'],
+  ];
+  const miss = PROT.filter(([re]) => !re.test(codeOnly)).map(([, n]) => n);
+  miss.length === 0
+    ? ok('体积增长有出处：超时 / 多轮重试 / 来源留痕 都在')
+    : bad('加载器缺保护：' + miss.join('、') + '（体量涨了但功能没跟上）');
+
+  /* ★ 完整性校验不能只验"TAIL_RE 这个名字还在" ★
+     第一版就是这么写的，结果反向验证时把它改成 `/^$/`（恒不匹配 ⇒ 等于关掉校验）
+     照样绿 —— 名字在、逻辑废，正是本项目最贵的那种失效形态。
+     ⇒ 把正则**从源码里取出来真跑**，两边都验：
+         · 真身的结尾 ⇒ 必须通过（不然每次加载都会被自己判成截断，永远加载不上）
+         · 真身的前 90 万字符 ⇒ 必须不通过（这才是"截断体"，实测 cdn 镜像真出现过） */
+  const mTail = /var\s+TAIL_RE\s*=\s*(\/[^\n]*?\/);/.exec(codeOnly);
+  let tailRe = null;
+  if (mTail) { try { tailRe = new Function('return ' + mTail[1])(); } catch (e) { tailRe = null; } }
+  if (!tailRe || typeof tailRe.test !== 'function') {
+    bad('完整性校验：取不到 TAIL_RE 正则可执行体（形态变了？）');
+  } else {
+    const whole = fs.readFileSync(TRUE_SRC, 'utf8');   // 磁盘上的真身（2.25MB）
+    const cut = whole.slice(0, 900000);          // 模拟"HTTP 200 但只有半截"
+    const okTail = tailRe.test(whole);
+    const rejectCut = !tailRe.test(cut);
+    okTail && rejectCut
+      ? ok('完整性校验真跑：真身通过 / 截断体被拒（900000 字符）')
+      : bad('完整性校验失效：真身通过=' + okTail + '，截断体被拒=' + rejectCut
+        + (okTail ? '' : '（连完整真身都判不过 ⇒ 永远加载不上）')
+        + (rejectCut ? '' : '（截断体会被当成完整文件放行）'));
+  }
+}
 
 const badShape = [
   [/\bexport\b/, 'export'],

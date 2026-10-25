@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -36,9 +37,15 @@ const ROOT = path.resolve(HERE, '../..');
    ⚠ 备份不在时直接报错，不许静默降级 —— 静默跳过就等于这道测试没了。 */
 const SRC04_RAW = path.join(ROOT, '脚本/04-核心脚本.js');
 const SRC04_BAK = path.join(ROOT, '脚本/04-核心脚本.js.bak-v394-CDN改造前');
-const IS_SHELL_MODE = /__XZ_BATTLE_URL\s*=\s*'https:\/\/cdn\.jsdelivr\.net/.test(
-  fs.readFileSync(SRC04_RAW, 'utf8')
-);
+/* ⚠ 判据收口到 工具/_xz_shellmode.cjs，别再自己写正则。
+   v395 实测：04 的 URL 从「直写 @main」改成「tag 拼接」后，这里那份正则静默失效，
+   IS_SHELL_MODE=false ⇒ 拿外壳进沙箱双跑 ⇒ 量到一堆空壳，1896 格全红，
+   而引擎其实完全正确。那种红最费时间：看着像引擎崩了，其实是测试自己量错对象。
+   ⚠ 读现役要走后门：跑闸.sh 带 preload 时，普通 readFileSync 已被重定向到备份。 */
+const { isShellMode: _isShell } = createRequire(import.meta.url)(
+  path.join(ROOT, '工具/_xz_shellmode.cjs'));
+const _liveRead = fs.__readLive ? fs.__readLive.bind(fs) : fs.readFileSync.bind(fs);
+const IS_SHELL_MODE = _isShell(_liveRead(SRC04_RAW, 'utf8'));
 const SRC04 = IS_SHELL_MODE ? SRC04_BAK : SRC04_RAW;
 if (!fs.existsSync(SRC04)) {
   console.error('✗ 04 已是 CDN 调用形态，但找不到内联实现备份：');

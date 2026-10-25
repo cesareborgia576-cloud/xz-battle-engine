@@ -3,8 +3,10 @@
 《天元录》战斗数值内核的**独立可调用版本**。一行 import，`window.XZBattle` 就绪。
 
 ```js
-import 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/xz-battle-engine@main/index.js'
+import 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/xz-battle-engine@v1.1.0/index.js'
 ```
+
+⚠ 用 **tag** 不用 `@main`，原因见下面「缓存那一节」——`@main` 出过一次真事故。
 
 然后直接用：
 
@@ -170,8 +172,10 @@ ST 的「脚本」支持顶层 `await` 和动态 `import`，CSP 在 v1.14.0 已�
 新建一个脚本，内容就一行：
 
 ```js
-import 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/xz-battle-engine@main/index.js'
+import 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/xz-battle-engine@v1.1.0/index.js'
 ```
+
+⚠ 用 **tag** 不用 `@main`，原因见下面「缓存那一节」——`@main` 出过一次真事故。
 
 加载后 `window.XZBattle` 就在了，后面所有脚本都能用。
 
@@ -208,14 +212,99 @@ window.XZBattle.setTransStore(() => ({
 
 ## 和卡内 04 的关系
 
-```
-脚本/04-核心脚本.js  ──── 抽取 ────→  战斗引擎/src/core.js
-      （卡内真身）                        （独立副本）
-           │                                   │
-           │                                   └─ import → window.XZBattle
-           │
-           └─ 卡内直接用裸函数，不需要 export
+**不是两份实现，是一份。** 卡里只留转发外壳，实现只在这个仓库。
 
-改数值：改 04 → 跑发布脚本 → 卡内和 CDN 同时更新。
-两边永远是同一份字节，`--check` 能验。
+```
+           ┌─ 唯一实现 ────────────────────────┐
+           │  战斗引擎/src/core.js（本仓库）    │
+           └───────────────┬───────────────────┘
+                           │  await import(CDN)
+   脚本/04-核心脚本.js ─────┘
+   ├─ __XZ_BATTLE_VER = 'v1.1.0'     ← 版本在这里锁
+   ├─ await import(URL)              ← 头部第 52 行，早于一切数值使用
+   ├─ function mechVal(f,k){ return __XZ_B_SAFE().mechVal.apply(null, arguments) }
+   ├─ function qualityPowerOf(q){ return … }        ← 43 个这样的一行外壳
+   └─ var REALM_COEFFS = __XZ_B_CONST("REALM_COEFFS") ← 25 个这样的一行指向
+```
+
+改数值的正确姿势：
+
+1. 改 `工具/_cdn_callify.mjs` 的改造源 / 或直接改 `战斗引擎/src/core.js`（推荐，因为它是唯一实现）
+2. `sh 工具/发布战斗引擎.sh` —— 会自动提版本、推、打 tag、**把 04 的 `__XZ_BATTLE_VER` 改过去**、并真拉 CDN 校验
+3. `node 工具/pack.js` 重新打包（卡里才会带上新 tag）
+
+⚠ 第 2 步里「把 04 的 tag 改过去」是最容易漏的一环：漏了的话引擎已经 v1.2.0，而卡还在拉 v1.1.0 —— 玩家跑的仍是旧内核，**而所有发布日志都显示成功**。所以这一步写进了脚本，不靠人记。
+
+### 卡里为什么是「原地转发外壳」而不是「开头覆写」
+
+这两个方案差得很远，踩过才知道：
+
+- `var` 声明会提升，但**赋值不会**。04 里 66 个数值名字中有 **65 个在最后一条声明（第 13836 行）之前就已被使用**，最早的 `REALM_COEFFS` 在第 342 行。
+- 所以「在文件开头写 `REALM_COEFFS = 引擎的`」完全无效——前面早就吃到 `undefined` 了。
+- 正确做法是**在原位置把函数体换成一行转发**，位置、签名、调用点一个都不动。
+
+另外「把内联兜底包进 `if (!ok) { function f(){} }`」也不可行：块级 function 不外泄，严格模式下外层看不见。
+
+### 引擎取不到时会怎样（刻意设计成不崩卡）
+
+| 类别 | 降级值 | 理由 |
+|---|---|---|
+| 判定类（命中/暴击/闪避/减伤） | 返回「不触发」的保守值 | 不冤枉玩家 |
+| 加权类（境界系数/品质威力） | `1.0` | 等于无加成，不至于算出天文数字 |
+| 查表类 | 空表 | 下游读不到键就吃自己的默认值 |
+| 计数类 | `0` | |
+
+同时：控制台打红字、`window.__XZ_BATTLE_FAILED__` 留原因、`window.__XZ_BATTLE_VERSION__` 留版本。
+
+为什么不抛错：04 是整卡主脚本，一个数值模块取不到就把存档/界面/秘境一起带走，那是「为一个零件报废整台机器」。
+为什么不保留内联兜底：那等于两份实现，改仓库不改卡 = 卡还在跑旧的，而你以为改了。那不叫兜底，叫悄悄分叉。
+
+---
+
+## 缓存那一节（v395 真事故，务必读）
+
+`@main` 是「跟随分支走」，**各 CDN 节点缓存进度不同步**。实测同一时刻：
+
+| 节点 | `@main/index.js` 拿到的版本 |
+|---|---|
+| cdn.jsdelivr.net | **v1.0.0（旧）** |
+| fastly.jsdelivr.net | **v1.0.0（旧）** |
+| gcore.jsdelivr.net | **v1.0.0（旧）** |
+| testingcf.jsdelivr.net | v1.1.0 |
+
+而 v1.0.0 那份 `core.js` 只导出函数、**不导出 25 张常量表**。后果：
+
+- import 成功 ✅
+- `VERSION` 显示 1.1.0 或 1.0.0，看起来正常 ✅
+- 控制台日志照打「已就绪（44 个函数）」✅
+- 但 `QUALITY_POWER` / `REALM_COEFFS` 全是 `undefined` ❌
+- ⇒ 卡里 25 张表全是 `{}`，**所有数值静默失效，零报错**
+
+本地 `md5` 对比、`git status`、GitHub 上的文件——**全都查不出来**（本地是对的）。唯一查得出来的办法：像玩家那样从 CDN 把文件拉下来跑一遍。
+
+所以现在：
+
+- 卡里锁 **tag**（tag = 固定 commit，内容永久、不分裂）
+- 闸里有 `工具/_cdn_verify.mjs` 真拉真跑（12 项）
+- 发布脚本第 ⑨ 步会重试 6 次等回源
+
+### 拉不到 ≠ 线上是错的
+
+`工具/_cdn_verify.mjs` 用退出码区分两种情况，别混：
+
+| 退出码 | 含义 | 闸怎么处理 |
+|---|---|---|
+| `0` | 线上与本地逐字节一致 | 绿 |
+| `1` | **内容**不对（旧内核 / 缺表 / 数值不符） | **红，必须修** |
+| `2` | 拉不到（网络/代理/SSL 抖动） | 只提示，不判红 |
+
+分成两类是刻意的：网络抖一下就判红，闸就会教人「无视红灯」，那比不加这条闸更糟。
+
+### 国内网络提示
+
+`cdn.jsdelivr.net` 在大陆常有 SSL 握手失败（`curl: (35) schannel: failed to receive handshake`），同内容换镜像域名即可：
+
+```js
+https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/xz-battle-engine@v1.1.0/index.js
+https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/xz-battle-engine@v1.1.0/index.js
 ```

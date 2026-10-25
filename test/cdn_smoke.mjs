@@ -169,18 +169,44 @@ if (!fs.existsSync(TRUE_SRC)) {
     ? ok('8 个关键实现在真身里全部就位')
     : bad('真身缺实现：' + miss.map((x) => x[1]).join('、'));
 
-  /* 版本三处必须一致：04 的 tag / 真身的 XZ_BUILD / 工具/版本号.txt
-     ⚠ 卡里的 tag 是 vX.Y.Z，XZ_BUILD 是 vNNN，两者不同源，不能直接比。
-       能干的是：XZ_BUILD === 版本号.txt（打包时 pack.js 会强制对齐）。 */
-  const buildM = /var XZ_BUILD = '([^']+)'/.exec(trueSrc);
+  /* ★★★ v396 改了判据：卡版本号不再烧在引擎里 ★★★
+     旧判据是「真身的 XZ_BUILD === 工具/版本号.txt」。
+     那条判据在「04 是一行 import」之后是**有害的**：它把卡版本号钉进了按 tag 锁内容的
+     CDN 文件里 ⇒ 每发一版卡都得重推 2.19 MB 引擎。现在引擎改成
+     `XZ_BUILD = (读 window.__XZ_CARD_VER__) || '自带号'`，卡版本号由 05 注入。
+     所以这里该验的变成了下面三件事（顺序 = 出错时的排查顺序）：
+       ① 引擎确实支持注入（不是硬编码常量）
+       ② 05 里确实留了占位，且**磁盘上必须是占位原文**（打包器靠它替换）
+       ③ 引擎自带号是个合法版本号（不是 dev/undefined，那是回落时的最后一道） */
   const verNow = fs.existsSync(VER_FILE) ? fs.readFileSync(VER_FILE, 'utf8').trim() : '';
-  if (!buildM) {
-    bad('真身里找不到 XZ_BUILD');
-  } else if (buildM[1] === verNow) {
-    ok('真身 XZ_BUILD=' + buildM[1] + ' 与 工具/版本号.txt 一致');
+
+  const supportsInject = /__XZ_CARD_VER__/.test(trueSrc);
+  supportsInject
+    ? ok('引擎支持 __XZ_CARD_VER__ 注入（卡版本号不再烧死在 CDN 文件里）')
+    : bad('引擎还在硬编码 XZ_BUILD —— 发一版卡就得重推 2.19 MB 引擎，徽章还会假红');
+
+  /* 自带号：必须存在且合法（注入失败时的最后一道） */
+  const fallbackM = /return '(v\d+(?:\.\d+)*)';/.exec(trueSrc);
+  fallbackM
+    ? ok('引擎自带回落号 ' + fallbackM[1] + '（注入没到时用它，不会印出 undefined）')
+    : bad('引擎里找不到合法的 XZ_BUILD 回落号');
+
+  /* 05 的占位：磁盘上必须是原文，否则说明有人"顺手"把它改成了真号 */
+  const S05 = path.join(ROOT, '脚本', '05-界面脚本.js');
+  if (!fs.existsSync(S05)) {
+    bad('找不到 05-界面脚本.js');
   } else {
-    bad('XZ_BUILD=' + buildM[1] + ' ≠ 版本号.txt ' + verNow + '（跑 node 工具/pack.js 对齐）');
+    const s5 = fs.readFileSync(S05, 'utf8');
+    s5.includes("'__XZ_CARD_VER__'")
+      ? ok('05 留着版本号占位 __XZ_CARD_VER__（打包时替换成本版号）')
+      : bad('05 的占位被改掉了 —— 打包器将无法注入，且下一版会静默用旧号');
+    /* 反向：05 里不许出现「已经写成真号」的 CARD_VER —— 那是上一个坑的形态 */
+    const burned = /var CARD_VER = '(v\d+)';/.exec(s5);
+    burned
+      ? bad('05 的 CARD_VER 被写成了真号 ' + burned[1] + ' —— 必须留占位 __XZ_CARD_VER__')
+      : ok('05 没有把版本号烧死（仍是占位）');
   }
+  if (verNow) ok('当前卡版本号（工具/版本号.txt）=' + verNow);
 
   /* 语法检查。⚠ 临时文件名必须带 .mjs —— `node --check` 按扩展名选解析器，
      叫 .tmp-xxx 会报 ERR_UNKNOWN_FILE_EXTENSION，那不是语法错，是选错解析器。 */

@@ -12842,6 +12842,8 @@ function calcDamage(attacker, defender, skill, isAoe) {
        两者语义不同（破甲是必带穿防的词条，穿防是显式数值），不要合并。 */
   try {
     if (isSkill) {
+      /* ① **本击自带**的穿防（招式 `效果` / 翻译原子里写的那个数）*/
+      var _v401SkillOwn = 0;
       var _v401Eff = xzSkillEffFieldOf(skill);
       var _v401List = Array.isArray(_v401Eff) ? _v401Eff
         : (typeof _v401Eff === 'string' && _v401Eff ? [_v401Eff] : []);
@@ -12854,7 +12856,27 @@ function calcDamage(attacker, defender, skill, isAoe) {
         /* 穿透值在解析器里落在 dmgPct（`穿防:20` ⇒ 0.20）；兜底再读一次 flat */
         var _v401v = Number(_v401P.dmgPct) || 0;
         if (!_v401v && Number(_v401P.dmgFlat) > 0) _v401v = Number(_v401P.dmgFlat) / 100;
-        if (_v401v > 0) skillPierce += Math.min(0.70, _v401v);
+        if (_v401v > _v401SkillOwn) _v401SkillOwn = _v401v;
+      }
+      /* ② 之前某手挂上的**手数型**穿透（`穿防:40:3` 的第二、三手）*/
+      var _v401Dur = (Number(attacker._pierceRounds) > 0) ? (Number(attacker._piercePct) || 0) : 0;
+      /* ③ 两者取 **max**，绝不相加 ——
+         同一招连打时 ①② 是同一件事（skill 里写的 20% 就是这一招的穿透），
+         相加会变成 40%→60%，正是用户报的「穿防一直叠加」的另一种形状。
+         实测锚点：`工具/_v401_user8_guard.mjs` ③「连出三次 heartPierce 仍是 0」
+         + `_v283_mech_live_matrix`「穿防:40:3 要真的让伤害变高」两条同时要绿。 */
+      var _v401Take = Math.max(_v401SkillOwn, _v401Dur);
+      if (_v401Take > 0) {
+        /* ⚠ **必须两个通道都加** —— 第一版只加了 `skillPierce`，结果一条都不生效：
+             · `skillPierce` 唯一的落点是 `effDef *= (1 - totalPierce)`，
+               而 v94 改了伤害模型之后 **effDef 根本不在最终乘区里**（见 12830 那段 v283 注释）
+             · 真正进伤害的是 `_atomPierceVuln` → `v75VulnPct`（破防乘区）
+           ⇒ 与 `mechSumField(attacker,'pierce')` 那条**逐字同构**：
+             两边都 `skillPierce += x; _atomPierceVuln += x;`
+           实测锚点：`_v283_mech_live_matrix` 的「穿防:40:3 打完伤害要变高」，
+           只加一边时它报 `48 → 48（没变）`。 */
+        skillPierce += Math.min(0.70, _v401Take);
+        _atomPierceVuln += Math.min(0.30, _v401Take);
       }
     }
   } catch (eV401b) {}
@@ -14369,9 +14391,19 @@ function applyV75Effects(attacker, target, skill) {
               BattleState.logs.push((bHolder === attacker ? an : tn) + ' 的攻势更利（穿防 +'
                 + Math.round(_bpct * 100) + '%，整场）');
             } else {
-              /* 本击已由 calcDamage 计入；这里只报一句，让玩家知道这一下穿了多少 */
-              BattleState.logs.push((bHolder === attacker ? an : tn) + ' 这一击破开护体（穿防 +'
-                + Math.round(_bpct * 100) + '%，只此一击）');
+              /* ★ v401 补：**带手数的穿防**（`穿防:40:3` = 三手内都能穿透 40%）。
+                 第一版我只写了「本击有效、不落字段」，结果 `_v283_mech_live_matrix`
+                 立刻红：`穿防:40:3` 打完伤害 48 → 48（一点没变）——
+                 因为那一版把「本击」交给 calcDamage 算，而这一支**连后续手数也不记**
+                 ⇒ 三手的持续穿透整个消失。
+                 ⇒ 现在：写 `_pierceRounds` / `_piercePct`（手数型临时穿透），
+                   由 `processHandBuffs` 递减，`calcDamage` 与「本击自带」取 **max**（见那边注释）。
+                 ⚠ 取 max 不取加：同一招连打时，skill 自带 20% 与这个 20% 是**同一件事**，
+                   加起来会变成 40%（就是用户报的那个 bug 的另一种形状）。 */
+              bHolder._piercePct = Math.min(0.70, Math.max(Number(bHolder._piercePct) || 0, _bpct));
+              bHolder._pierceRounds = Math.max(Number(bHolder._pierceRounds) || 0, dur);
+              BattleState.logs.push((bHolder === attacker ? an : tn) + ' 破开护体（穿防 +'
+                + Math.round(_bpct * 100) + '%，' + xzDurText(dur) + '）');
             }
           } else if (_bsub === 'dr') {
             if (_isPerm) {
@@ -14755,6 +14787,17 @@ function processHandBuffs(fighter) {
     if (_bkR > 0) {
       _bkR = (_bkR >= XZ_TRANS_DUR) ? XZ_TRANS_DUR : (_bkR - 1);
       fighter._v94BreakShieldRounds = Math.max(0, _bkR);
+    }
+    /* ★ v401：手数型「穿防」的递减（`穿防:40:3` = 三手内穿透 40%）。
+       与破盾/提速/减速同一节奏：**谁出手谁减一手**，到期清零。
+       ⚠ 这个字段是 v401 新加的（`_pierceRounds` / `_piercePct`），
+         原来招式穿防走 `heartPierce` 永久累加 —— 那条已经废弃，
+         现在只有 `_isPerm`（玄诀/兵器/血脉）才许写 `heartPierce`。 */
+    var _prR = (fighter._pierceRounds || 0);
+    if (_prR > 0) {
+      _prR -= 1;
+      fighter._pierceRounds = Math.max(0, _prR);
+      if (_prR <= 0) fighter._piercePct = 0;
     }
     var _hR = (fighter.v75HasteRounds || 0);
     if (_hR > 0) {

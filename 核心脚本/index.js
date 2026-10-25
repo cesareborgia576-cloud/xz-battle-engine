@@ -11064,10 +11064,24 @@ function xzRecEffects(rec, name) {
      但 `装备武器·无：效果：无` 和 `玄元属性：土` 也拼进了 passive，
      这两条当然找不到「机制:数字」⇒ 整位角色被打上「待翻译」，白等一次模型调用。 */
   var passiveEff = [];
-  /* ★ v298：`skillEffs` = 每个招式**逐条效果的原文值**（不含槽位键名）。
+  /* ★ v298：`skillEffs` = 每个招式**逐条效果**（一人一条，不拼整串）。
      为什么不能拿拼好的整串去判：整串里既有槽位（主击/增益），又有下一条的键名，
      还有可能落在描写里的中文分号 —— 三种东西混在一个字符串里，靠切分永远切不准。
-     拼接串是给 AI 看的；**判定必须回到原始的「一条效果一个值」**。 */
+     拼接串是给 AI 看的；**判定必须回到原始的「一条效果一个值」**。
+     ★★★ v399【用户实测：「玩家格式也是对的，怎么也他妈要翻译」】★★★
+     v298 这里只放 `vv`（值本身），注释写的是「不带槽位键名」——
+     初衷是别把 `主击 / 增益 / 身法` 这些**槽位名**当成机制，那部分是对的；
+     但它连带把「**键就是机制名**」这种《招式字段》规定的正式格式也一起废掉了：
+         效果: { "伤害": "32｜剑光横铺…" }        ← 世界书第 7 行明文就是这个
+     值里只有 `32｜…`，`_canonVal` 剥掉竖线右边只剩 `32`，永远找不到「机制:数字」
+     ⇒ 完全合规的招式被判「待翻译」，玩家战前白等一次模型调用，还多一次翻错的机会。
+     修法：补键**复用引擎唯一的权威实现 `xzEffLineOf`**（见其定义处「全仓只许有这一份」），
+     绝不在这里另写一套判据。三种输入各归各位：
+       · 键是机制名（伤害/减伤/穿防…）⇒ 补成 `伤害:32｜…` ⇒ 判规范，不翻译 ✅
+       · 键是槽位名（主击/增益/身法）⇒ `xzEffMechOf` 返回 '' ⇒ 原样 ⇒ 仍逐条判
+         （v298 防「幽灵 buff」的意图**完整保留**）
+       · 值是叙述句（「造成 240 点伤害」）⇒ 不是数字开头，一个字节都不加 ⇒ 仍判要翻译 ✅
+       · 值里已写两遍机制名（旧存档）⇒ 原样返回，绝不叠第二个机制名 ✅ */
   var skillEffs = {};
   if (!rec || typeof rec !== 'object') return { skills: skills, passive: passive, passiveEff: passiveEff, skillEffs: skillEffs };
   try {
@@ -11101,7 +11115,9 @@ function xzRecEffects(rec, name) {
             else if (v && typeof v === 'object') vv = (v.value !== undefined ? String(v.value) : JSON.stringify(v));
             if (!vv) return;
             parts.push(ek + '：' + vv);
-            vals.push(vv);          /* ★ v298：**只放值**，不带槽位键名 —— 判定要逐条判 */
+            /* ★ v399：交给 `xzEffLineOf` 还原成 `机制:数值[:手数]｜描写` 再判 ——
+               它内部只对「键是机制名 + 值以数字开头」这两种情况补键，其余原样。 */
+            vals.push((typeof xzEffLineOf === 'function') ? xzEffLineOf(ek, vv) : vv);
           });
           if (parts.length) { skills[kind + '·' + nm] = parts.join('；'); skillEffs[kind + '·' + nm] = vals; }
         } else if (typeof fx === 'string' && fx) {

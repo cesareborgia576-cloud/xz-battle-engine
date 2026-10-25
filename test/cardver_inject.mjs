@@ -123,12 +123,48 @@ console.log('\n【④ 打包器注入（找不到占位必须硬失败，不能�
     ? ok('pack.js 里有 __XZ_CARD_VER__ 的替换逻辑')
     : bad('pack.js 不认占位 —— 卡里会留着字面量，05 直接 return，引擎永远用回落号');
 
-  /* 硬失败：匹配不到就 process.exit，不能只是 console.log 然后继续 */
-  const block = packSrc.slice(packSrc.indexOf('__XZ_CARD_VER__') - 1200,
-    packSrc.indexOf('__XZ_CARD_VER__') + 1200);
-  /indexOf\(NEEDLE\)\s*<\s*0[\s\S]{0,400}?process\.exit\(/.test(block)
-    ? ok('找不到占位时 process.exit 硬失败（不静默）')
+  /* 硬失败：匹配不到就 process.exit，不能只是 console.log 然后继续。
+     ★ v396 判据换了：不再盯 `indexOf(NEEDLE) < 0` 那种写法 —— 那种写法**恰恰是 bug 本身**
+       （见下面那条新断言）。现在只要求"注入函数里对"找不到"和"多处"都硬失败"。 */
+  /function injectCardVer\(/.test(packSrc)
+    ? ok('注入逻辑抽成了 injectCardVer（可被单测直接验）')
+    : bad('注入逻辑还是内联的 —— 没法单独验，只能靠"打包没报错"来猜');
+  const injM = /function injectCardVer\([\s\S]*?\n\}/.exec(packSrc);
+  const injBody = injM ? injM[0] : '';
+  ((injBody.match(/ok:\s*false/g) || []).length >= 2)
+    ? ok('「找不到占位」和「多处赋值」都返回 ok:false（调用方据此 exit 9）')
+    : bad('injectCardVer 没有覆盖两种失败（找不到 / 多处），会把错卡发出去');
+  /process\.exit\(9\)/.test(packSrc)
+    ? ok('注入失败时 process.exit 硬失败（不静默）')
     : bad('找不到占位只打日志不退出 —— 会把一张「引擎用回落号」的卡发出去');
+
+  /* ★★★ v396 这条是**真事故的回归锁** ★★★
+     事故：注入用 `txt.replace("'__XZ_CARD_VER__'", 真号)`，只换第一处；
+     而 05 里第一处占位在**注释**里（用法说明），真正的 `var CARD_VER = '...'` 在注释后面。
+     ⇒ 注释被改了、赋值没改 ⇒ 卡里 05 的 CARD_VER 仍是字面量 ⇒ 注入 IIFE 正则不过 ⇒
+       直接 return ⇒ 引擎回落旧号 ⇒ 徽章永久报「世界书没同步」。全程打包器输出 ✔。
+     ⇒ 判据两条：① 必须用赋值语句的正则定位；② 不许对裸字符串做 replace。
+     ⚠⚠ 这两条**必须只看 injectCardVer 的函数体、且剥掉注释**。
+       我第一版扫的是整个 pack.js，结果两条都红：因为失败写法的**原文就写在
+       那段解释事故的注释里**（"事故：注入用 `txt.replace(...)`"）。
+       判据扫注释 = 把"记录错误"读成"犯了错误" —— 和本项目之前踩过的
+       「剥注释后 PLACE_DICT 被判零读」是同一类错，方向相反。 */
+  const injNoCmt = injBody
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  /* 只看锚点：函数体里有没有一个以 `var CARD_VER = '` 开头的匹配模式。
+     ⚠ 不在这里重写那个完整正则 —— 判据自己抄一遍正则再判一遍，
+       抄错了就是"判据比实现严"⇒ 假红（第一次就栽在这：`\\d\+` 在 JS 正则字面量里
+       匹配的是字面反斜杠+加号，永远 false）。判"用的是赋值语句锚点"就够了。 */
+  /var CARD_VER = '/.test(injNoCmt)
+    ? ok('注入按「赋值语句」定位（不是裸字符串，注释里那处不会被误改）')
+    : bad('注入还在按裸字符串 `\'__XZ_CARD_VER__\'` 找 —— 会命中注释里的用法说明，静默失效');
+  /\.replace\(\s*NEEDLE\b/.test(injNoCmt)
+    ? bad('还在对裸字符串做 replace —— 只换第一处（注释），赋值语句原样留着占位')
+    : ok('不对裸字符串做 replace（这类替换换掉的是注释，不是代码）');
+  /hits\.length > 1[\s\S]{0,200}?ok:\s*false/.test(injBody) || /hits\.length > 1/.test(injBody)
+    ? ok('多处赋值时拒绝注入（改哪一处都可能是错的）')
+    : bad('多处赋值时不报错 —— 会挑一个改掉，另一半留占位');
 
   /* ★ 关键：只能改**装进卡那份**，不能改磁盘。
      改磁盘 ⇒ 「脚本与磁盘逐字一致」那条闸假红，且下次会把上一版的号当占位再替换 */

@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -36,7 +37,12 @@ const TRUE_SRC = path.join(ROOT, '战斗引擎/核心脚本/index.js');
 const ENGINE_ENTRY = path.join(ROOT, '战斗引擎/index.js');
 const VER_FILE = path.join(ROOT, '工具/版本号.txt');
 
-const MAX_CARD_BYTES = 8192;   // 一行 import + 注释 ≈ 1.5KB；超过这个数就是在往回长
+/* ⚠ v397 上限从 8192 放宽到 16384。
+   原因是 04 从「一行裸 import」变成「多镜像回退链」——多了 for + try/catch + 错误上报，
+   去注释后约 1.2KB、带注释约 5.4KB。上限的意义是**挡住算法回流**（那是 2MB 量级），
+   不是把注释也算成实现。8KB 和 16KB 在「2MB vs 16KB」这个量级差面前没有区别，
+   但 8KB 会逼着以后的人删注释来凑数 —— 那才是真的损失。 */
+const MAX_CARD_BYTES = 16384;
 
 let pass = 0, fail = 0;
 const ok = (n) => { pass++; console.log('  ✓ ' + n); };
@@ -65,18 +71,40 @@ if (cardBytes < MAX_CARD_BYTES) {
   bad('04 体积 ' + cardBytes + ' 字节，超过 ' + MAX_CARD_BYTES + ' —— 说明实现又抄回卡里了');
 }
 
-/* 去掉注释后应当**恰好剩一条 import 语句**。
-   不数行：注释掉了也不算实现。 */
+/* 去掉注释后应当**只剩一小段加载逻辑**，且里边没有算法。
+   ⚠ v397 改了判据：原来硬判「恰好 1 条 import 语句」。
+     v397 把一行裸 import 换成多镜像回退链（20 行，带 for + try/catch）之后，
+     这条判据过期 ⇒ 恒红。而它排在 跑闸.sh 很前面，一红后面 290 多条闸全跑不到
+     ⇒ 等于**失去全部保护**。这类"判据过期"比真 bug 更危险：它训练人忽略红灯。
+   新判据表达的是**意图**而不是写法：
+     卡里可以有权重试逻辑，但**绝不能有算法**（见下面 ALGO_SIGNS），
+     且**必须有一条真的 import**（否则实现根本不会被加载）。 */
 const codeOnly = cardSrc
   .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+  .replace(/(^|[^:\\])\/\/[^\n]*/g, '$1')
   .trim();
-const importLines = codeOnly.split('\n').map((s) => s.trim()).filter(Boolean);
-if (importLines.length === 1 && /^import\s+['"]https?:\/\//.test(importLines[0])) {
-  ok('去掉注释后只剩 1 条语句，且是 https import');
-} else {
-  bad('去掉注释后有 ' + importLines.length + ' 条语句（应为 1 条 import）',
-    importLines.slice(0, 5).join('\n'));
+
+/* 地址类判据统一走 工具/_xz_shellmode.cjs —— 它已经会剥注释，
+   否则文件头注释里那句示例 `import 'https://…'` 会被当成真地址。 */
+const SM = createRequire(import.meta.url)(ROOT + '/工具/_xz_shellmode.cjs');
+const MIRRORS = SM.mirrorsOf(cardSrc);
+const URLS = (() => {
+  const a = [];
+  const u = SM.urlOf(cardSrc);
+  if (u) a.push(u);
+  for (const x of MIRRORS) if (a.indexOf(x) < 0) a.push(x);
+  return a;
+})();
+
+const hasImport = /\bimport\s*[('"]/.test(codeOnly);
+hasImport
+  ? ok('卡里有真的 import（实现会被加载）' + (MIRRORS.length > 1 ? '，' + MIRRORS.length + ' 个镜像候选' : ''))
+  : bad('卡里没有任何 import —— 实现不会被加载');
+
+if (MIRRORS.length > 1) {
+  /* 多镜像：顺序即优先级，必须和「实测成功率降序」这个约定一致。
+     这里只提醒不判红 —— 成功率要靠 工具/检查CDN.sh 现测，写死在闸里就成了化石。 */
+  ok('镜像回退链形态（' + MIRRORS.length + ' 个镜像）。顺序请用 sh 工具/检查CDN.sh 复核');
 }
 
 /* 算法特征：抽这几个「一旦回流就说明抄回来了」的锚点。
@@ -95,50 +123,69 @@ leftover.length === 0
   ? ok('算法残留 0 处（7 个特征锚点全部不在卡里）')
   : bad('卡里还有算法：' + leftover.map((x) => x[1]).join('、'));
 
-/* 卡里不该有任何 await / 函数定义 / 变量声明。
-   比「体积小」更硬：体积可以靠少写注释骗过，语句形态骗不过。 */
+/* 卡里不该有函数定义 / 变量声明（aside from 加载逻辑本身），更不能有 await 之外的算法。
+   ⚠ v397 连续踩了两次「判据比规则更宽/更窄」的坑，这里把口径定清楚：
+     · `await` 现在**允许** —— 多镜像回退链靠它逐个试，它不再意味着"算法在卡里"。
+     · `function` 也**允许** —— 加载逻辑里有个 `function host()`（找 window.top）。
+       卡它的话，只能把 5 行代码改写成箭头函数来糊弄判据，纯属自欺。
+     · 真正要守的是「**去注释后的代码量**」：算法 2MB、加载逻辑 1.2KB，差三个数量级。
+       这条比数关键字硬得多 —— 关键字可以绕，体量绕不过去。
+     阈值 3000 字节 ≈ 当前 1206 字节的 2.5 倍余量，改动留够了空间。 */
+const CODE_ONLY_MAX = 3000;
+const codeBytes = Buffer.byteLength(codeOnly, 'utf8');
+codeBytes < CODE_ONLY_MAX
+  ? ok('去注释后的代码 ' + codeBytes + ' 字节（< ' + CODE_ONLY_MAX + '），只有加载逻辑')
+  : bad('去注释后的代码 ' + codeBytes + ' 字节 —— 超了，说明有实现搬回卡里了');
+
 const badShape = [
-  [/\bawait\b/, 'await'],
-  [/\bfunction\b/, 'function'],
-  [/^\s*var\s/m, 'var 声明'],
   [/\bexport\b/, 'export'],
 ].filter(([re]) => re.test(codeOnly));
 badShape.length === 0
-  ? ok('语句形态干净（无 await / function / var / export）')
+  ? ok('没有 export 声明（不是模块，不该有导出）')
   : bad('卡里出现不该有的关键字：' + badShape.map((x) => x[1]).join('、'));
 
-/* ══════════ ② 那一行指向的东西真的存在 ══════════ */
+/* ══════════ ② 那些地址指向的东西真的存在 ══════════ */
 console.log('\n【② 指向的真身存在且版本对得上】');
 
-const urlM = /import\s+['"](https?:\/\/[^'"]+)['"]/.exec(cardSrc);
-const URL = urlM ? urlM[1] : '';
-if (!URL) {
-  bad('找不到 import 的地址');
+/* ⚠ v397：地址统一从 工具/_xz_shellmode.cjs 取，不在本文件里写正则。
+   历史上 04 的形态改过三次（直写 @main → tag 拼接 → 一行 import → 多镜像），
+   每次都让散落各处的正则**静默失效**。这里取到的 URLS 可能是 1 个（旧形态）
+   也可能是 4 个（多镜像）。 */
+if (!URLS.length) {
+  bad('一条 import 地址都取不到 —— 卡里的加载块结构又变了');
 } else {
-  ok('import 地址：' + URL);
+  URLS.forEach((u, i) => ok('地址[' + i + ']：' + u));
 
   /* ⚠ 锁 tag 不锁 @main —— 这是 v394 的真实事故，不是洁癖。
      实测同一时刻 cdn / fastly / gcore 还在发 v1.0.0（少导出 25 张常量表），
      只有 testingcf 是 v1.1.0。结果是「import 成功、日志正常、所有数值静默失效」。
      @main 每次解析都跟着分支走，各节点缓存进度不同步 ⇒ 必然再出一次。 */
-  const tagM = /@(v[\d.]+)\//.exec(URL);
-  if (tagM) {
-    ok('锁的是 tag（@' + tagM[1] + '），不是 @main');
-  } else if (/@main\b/.test(URL)) {
-    bad('用的是 @main —— 各节点缓存不同步，玩家会拿到旧版且零报错');
+  const tags = URLS.map((u) => (/@(v[\d.]+)\//.exec(u) || [])[1]);
+  const mainOnes = URLS.filter((u) => /@main\b/.test(u));
+  if (mainOnes.length) {
+    bad('有 ' + mainOnes.length + ' 个地址用 @main —— 各节点缓存不同步，玩家会拿到旧版且零报错');
+  } else if (tags.every(Boolean)) {
+    /* 全部地址必须用**同一个** tag。不一致意味着玩家可能拉到两个版本。 */
+    const uniq = [...new Set(tags)];
+    uniq.length === 1
+      ? ok('全部 ' + URLS.length + ' 个地址锁同一个 tag（@' + uniq[0] + '），不是 @main')
+      : bad('镜像之间的 tag 不一致：' + uniq.join(' / '));
   } else {
-    bad('地址里既没有 tag 也不是 @main：' + URL);
+    bad('地址里既没有 tag 也不是 @main：' + URLS.filter((u) => !/@v[\d.]+\//.test(u)).join(' , '));
   }
 
-  /* URL 必须指向仓库里的 核心脚本/index.js —— 路径写错就是线上 404。 */
-  /\/核心脚本\/index\.js$/.test(URL)
-    ? ok('路径指向 /核心脚本/index.js')
-    : bad('路径不是 /核心脚本/index.js：' + URL);
+  /* 路径必须真的指向仓库里的 核心脚本/index.js —— 写错就是线上 404。
+     ⚠ 这条同时守住了"地址被截断"：截断的地址（少了 tag/路径）必然在这里红。 */
+  const wrongPath = URLS.filter((u) => !/\/核心脚本\/index\.js$/.test(u));
+  wrongPath.length === 0
+    ? ok('全部地址都指向 /核心脚本/index.js')
+    : bad('有地址路径不是 /核心脚本/index.js（多半是 BASE 拼接被截断了）：' + wrongPath.join(' , '));
 
   /* 仓库名要对：用户名 cesareborgia576-cloud（用户明确纠正过一次，别搞错） */
-  /cdn\.jsdelivr\.net\/gh\/cesareborgia576-cloud\/xz-battle-engine@/.test(URL)
-    ? ok('仓库为 cesareborgia576-cloud/xz-battle-engine')
-    : bad('仓库名不对：' + URL);
+  const wrongRepo = URLS.filter((u) => !/jsdelivr\.net\/gh\/cesareborgia576-cloud\/xz-battle-engine@/.test(u));
+  wrongRepo.length === 0
+    ? ok('全部地址的仓库为 cesareborgia576-cloud/xz-battle-engine')
+    : bad('仓库名不对：' + wrongRepo.join(' , '));
 }
 
 /* 本地真身：存在 / 够大 / 语法通过 / 含关键实现 */

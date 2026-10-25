@@ -162,19 +162,45 @@ console.log('\n【③ 取不到时可见 + 定时器不重复挂】');
     ? ok('重复调用不会重复挂定时器（有 _depTimer 早退）')
     : bad('没有早退 ⇒ 一屏 10 门招式会挂 10 个轮询');
 
-  /* 就绪判据必须看「能力」，不是看时间戳 */
-  mark && /XZ_SHARED\('xzSkillMpOf'\)/.test(mark)
-    ? ok('就绪判据用的是能力本身（能取到函数），不是时间戳')
-    : bad('判据可疑 ⇒ 可能只要 04「跑到了」就重画，即使它挂的是空表');
+  /* 就绪判据必须看「能力」，不是看时间戳。
+     ⚠⚠ v397b：这条判据原来是「`_xzMarkDepPending` 的函数体里必须出现
+        `XZ_SHARED('xzSkillMpOf')`」—— 那是**按写法判**，不是按意图判。
+        v397 把能力探测抽成了独立的 `_xzDepReady()`（因为除它之外还有两处要用：
+        首帧探测、以及 `_xzDepHint()` 的状态判断），函数体里于是只剩 `_xzDepReady()`。
+        于是这条闸红了，而代码**比原来更好**。典型的「判据绑死了实现细节」。
+     ⇒ 改成：在整个 05 里，必须存在一个**只做能力探测**的函数，
+       且 `_xzMarkDepPending` 确实调它。这样重构不会假红，而"退回去看时间戳"仍会红。 */
+  {
+    const ready = fnBody(S05, 'function _xzDepReady()');
+    const usesCap = ready && /XZ_SHARED\('xzSkillMpOf'\)/.test(ready);
+    const callsIt = mark && /_xzDepReady\(\)/.test(mark);
+    usesCap && callsIt
+      ? ok('就绪判据用的是能力本身（能取到函数），不是时间戳')
+      : bad('判据可疑 ⇒ 可能只要 04「跑到了」就重画，即使它挂的是空表'
+        + (usesCap ? '' : '（_xzDepReady 里没有能力探测）')
+        + (callsIt ? '' : '（_xzMarkDepPending 没调 _xzDepReady）'));
+    /* 反向：不许退回"看时间戳/看执行标志"那种判据。
+       为什么单独一条：这两种写法**都能让上面的判据绿**，但语义完全不同 ——
+       04 跑到最后一行不等于它成功挂上了表（CDN 404 时它可能被 try 兜住后照常收尾）。 */
+    ready && /(Date\.now|__XZ_CORE_AT__|performance\.now)/.test(ready)
+      ? bad('_xzDepReady 里出现了时间戳判据 —— 那只证明 04「跑到了」，不证明它挂了表')
+      : ok('_xzDepReady 不看时间戳（只看能力）');
+  }
 
   /* 必须只重画一次就停，不能无限重画 */
   mark && /clearInterval/.test(mark)
     ? ok('拿到就 clearInterval，不会无限重画')
     : bad('没有 clearInterval ⇒ 无限重画');
 
-  /* 渲染处：取不到时要写出来，不是少一行 */
-  /数值模块加载中/.test(S05)
-    ? ok('面板上有"数值模块加载中"的明文（不是静默少一行）')
+  /* 渲染处：取不到时要写出来，不是少一行。
+     ⚠ v397b：原来是逐字匹配「数值模块加载中」。v397 把文案拆成三态
+       （加载中 / 加载失败 / 没响应）各走 `_xzDepHint()`，于是逐字匹配失效。
+       这里要守的是**「有可见降级文案」**，不是某个具体句子。
+       ⇒ 认三个锚点任一：_xzDepHint 被调用 / 三态文案 / 旧的单句。 */
+  const hasHint = /_xzDepHint\(\)/.test(S05)
+    || /数值模块(加载中|\*\*加载失败)|没有响应/.test(S05);
+  hasHint
+    ? ok('面板上有可见降级明文（加载中/加载失败/没响应，不是静默少一行）')
     : bad('取不到时仍是静默少一行');
 
   /* 反向：本来就有值的招式（_rec.消耗 写了数）不该被挂上"加载中"提示 */

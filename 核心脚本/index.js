@@ -330,14 +330,14 @@ var PORTRAIT_URLS = {
      ⚠ 与 05 的 XZ_PORTRAITS 必须同步 —— 不一致就是「战斗里有立绘、状态栏没有」。
      ⚠ 只收 DLC 里真有的 8 个；唐舞桐/朱竹清/胡列娜/萧萧/蓝佛子/许小言/魔皇/唐雅
        在世界书里查不到，没加（加了也永远匹配不上人设）。 */
-  '千仞雪': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/千仞雪.jpg',
-  '古月娜': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/古月娜.jpg',
-  '小舞': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/小舞.jpg',
-  '宁荣荣': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/宁荣荣.jpg',
-  '比比东': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/比比东.jpg',
-  '白沉香': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/白沉香.jpg',
-  '阿银': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/阿银.jpg',
-  '马小桃': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/马小桃.jpg',
+  '千仞雪': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/千仞雪.jpg',
+  '古月娜': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/古月娜.jpg',
+  '小舞': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/小舞.jpg',
+  '宁荣荣': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/宁荣荣.jpg',
+  '比比东': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/比比东.jpg',
+  '白沉香': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/白沉香.jpg',
+  '阿银': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/阿银.jpg',
+  '马小桃': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/马小桃.jpg',
 };
 
 function portraitUrlOf(name) {

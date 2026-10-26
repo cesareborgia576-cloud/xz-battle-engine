@@ -9574,7 +9574,7 @@ function popupDamageNumber(targetId, dmg, isCrit, isDodge, attackerSide, cut) {
     var sideCol = '#ef4444';
     var sideGlow = 'rgba(239,68,68,';
     /* 名字同款字体（衬线 + 700；--xz-font 没定义时用同名兜底栈） */
-    var NAME_FONT = 'font-family:var(--xz-font,"幼圆","YouYuan","Microsoft YaHei",sans-serif);font-weight:700;letter-spacing:.5px;';
+    var NAME_FONT = 'font-family:var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);font-weight:700;letter-spacing:.5px;';
 
     if (isDodge) {
       pop.innerText = '残影闪避';
@@ -9813,7 +9813,7 @@ function showDivineFx(actor, skill, target) {
   var inner = '';
   for (var ci = 0; ci < chars.length; ci++) {
     var sep = (chars[ci] === '·' || chars[ci] === '·');
-    inner += '<span style="display:block;font-family:"幼圆","YouYuan","Microsoft YaHei",sans-serif;font-size:' + (sep ? 24 : (isMobile ? 34 : 52)) + 'px;font-weight:' + (sep ? 700 : 900) + ';line-height:1.06;letter-spacing:2px;color:#f1ede4;text-shadow:' + nameGlow + ';animation:' + nameIn + ' .5s cubic-bezier(.2,.9,.3,1.2) ' + (0.18 + ci * 0.075).toFixed(3) + 's both;">' + (sep ? '◆' : esc(chars[ci])) + '</span>';
+    inner += '<span style="display:block;font-family:var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);font-size:' + (sep ? 24 : (isMobile ? 34 : 52)) + 'px;font-weight:' + (sep ? 700 : 900) + ';line-height:1.06;letter-spacing:2px;color:#f1ede4;text-shadow:' + nameGlow + ';animation:' + nameIn + ' .5s cubic-bezier(.2,.9,.3,1.2) ' + (0.18 + ci * 0.075).toFixed(3) + 's both;">' + (sep ? '◆' : esc(chars[ci])) + '</span>';
   }
   nameBox += inner + '</div>';
   nameBox += '<div style="position:absolute;left:50%;top:calc(44% + ' + (isMobile ? 150 : 210) + 'px);transform:translateX(-50%);font-size:calc(16px * var(--xz-fs, 1));letter-spacing:6px;color:' + color + ';white-space:nowrap;' + (lite ? '' : ('text-shadow:0 0 10px ' + color + ';')) + 'animation:' + nameIn + ' .5s ease-out .48s both;">S H E N &#183; T O N G</div>';
@@ -17426,7 +17426,7 @@ var styles = '<style id="' + P + '-styles">' +
 '  border-radius: 12px; border: 2px solid var(--xz-line-strong);' +
 '  box-shadow: 0 22px 60px rgba(0,4,8,0.78);' +
 '  display: flex; flex-direction: column; overflow: hidden;' +
-'  font-family: var(--xz-font, "幼圆", "YouYuan", "Microsoft YaHei", sans-serif); color: #f1ede4;' +
+'  font-family: var(--xz-font, "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif); color: #f1ede4;' +
 '}' +
 '.' + P + '-header {' +
 '  position: relative; height: 46px; display: flex; align-items: center; padding: 0 12px;' +
@@ -17493,7 +17493,7 @@ var styles = '<style id="' + P + '-styles">' +
 '.' + P + '-runner-node.active-actor.is-enemy { transform: scale(1.2); border-color: #ef4444 !important; box-shadow: 0 0 8px #ef4444; z-index: 20; }' +
 
 /* 第 5 条：战报区做成「楚河汉界」——上下两条硬边框把敌我两块隔开，不再生硬拼接 */
-'.' + P + '-log-box { flex: none; font-weight: 400; font-family: var(--xz-font, "幼圆", "YouYuan", "Microsoft YaHei", sans-serif);' +
+'.' + P + '-log-box { flex: none; font-weight: 400; font-family: var(--xz-font, "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);' +
   ' position: relative; background: linear-gradient(180deg, rgba(4,15,22,0.95) 0%, rgba(16,37,45,0.94) 100%);' +
   ' border: 1px solid var(--xz-border, rgba(201,168,106,0.22));' +
   ' border-top: 2px solid var(--xz-line-strong, rgba(201,168,106,0.45));' +
@@ -22337,7 +22337,7 @@ var XZJJ = (function () {
       + 'padding:11px 13px;border-radius:10px;box-sizing:border-box;'
       + 'background:linear-gradient(180deg,rgba(14,27,32,.985),rgba(3,13,20,.99));'
       + 'border:1px solid rgba(242,194,111,.62);box-shadow:0 14px 34px rgba(0,4,8,.8);'
-      + 'color:#e8e3d3;font:13px/1.55 var(--xz-font,"幼圆","YouYuan","Microsoft YaHei",sans-serif);';
+      + 'color:#e8e3d3;font:13px/1.55 var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);';
     /* ★ v43：**不给了 —— 玄技详情不再放 ✕**。
        用户原话：「x 取消了，点又点不了，我还不如重新再点一遍查看关上就行了」。
        那个 ✕ 是纯字形（不是按钮），命中框小、藏在标题行右边，实测点不中；
@@ -22389,7 +22389,7 @@ var XZJJ = (function () {
       + 'box-sizing:border-box;display:flex;flex-direction:column;gap:1px;'
       + 'background:linear-gradient(180deg,rgba(14,27,32,.98),rgba(3,13,20,.985));'
       + 'border:1px solid rgba(242,194,111,.62);box-shadow:0 14px 34px rgba(0,4,8,.8);'
-      + 'color:#e8e3d3;font:12.5px/1.5 "幼圆","YouYuan","Microsoft YaHei",sans-serif;';
+      + 'color:#e8e3d3;font:12.5px/1.5 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;';
     box.innerHTML = unitPopHtml(f);
     /* ★ v60：点里面的原子 / 势种 → 就地点开说明 */
     box.addEventListener('click', function (e) { e.stopPropagation(); onAtomChipClick(e); });
@@ -22518,7 +22518,7 @@ function jjbLogRest(t) {
       + '--xz-gold:#c9a86a;--xz-gold-bright:#e8c98f;--xz-gold-glow:rgba(201, 168, 106, 0.16);'
       + '--xz-jade:#6fbfae;--xz-cyan:#7fd4c1;--xz-purple:#c58fa0;--xz-crimson:#b5545c;'
       + '--xz-text:#eef2f4;--xz-text-2:#a8b6bc;--xz-muted:#6f8188;'
-      + '--xz-font:"幼圆","YouYuan","Microsoft YaHei",sans-serif;'
+      + '--xz-font:"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
       + '--dhl-stage:radial-gradient(circle at 78% 10%, rgba(127, 212, 193, 0.07), transparent 26%), linear-gradient(180deg, #0a1016 0%, #05080c 100%);'
       + '--dhl-reading:linear-gradient(180deg, rgba(12, 19, 26, 0.96), rgba(6, 10, 14, 0.98));'
       + '--dhl-card:linear-gradient(145deg, rgba(18, 26, 33, 0.97) 0%, rgba(10, 15, 20, 0.95) 100%);'
@@ -22804,7 +22804,7 @@ function jjbLogRest(t) {
          现在与我方／敌方**名字同款配色**：ally = --xz-gold-bright #e8c98f，
          enemy = #f0a6a0；字号一并放大（13 → 16.5px），字体沿用 --xz-font（衬线）。 */
       + '.' + PFX + '-fly{position:absolute;right:7px;top:2px;font-size:16.5px;font-weight:700;color:#f0d98a;'
-      + 'font-family:var(--xz-font,"幼圆","YouYuan","Microsoft YaHei",sans-serif);'
+      + 'font-family:var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);'
       + 'letter-spacing:.5px;text-shadow:0 1px 3px #000, 0 0 10px rgba(0,4,8,.85);'
       + 'pointer-events:none;animation:' + PFX + '-fly .95s ease-out forwards;}'
       + '.' + PFX + '-fly.ally{color:#4ade80;text-shadow:0 1px 3px #000, 0 0 12px rgba(74,222,128,.55);}'
@@ -23001,7 +23001,7 @@ function jjbLogRest(t) {
          这样底色是中性的，彩色只出现在「该看的地方」，不会再显得发脏。 */
       + '--xz-gold:#c9a86a;--xz-gold-bright:#e8c98f;--xz-gold-glow:rgba(201,168,106,0.16);'
       + '--xz-text:#eef2f4;--xz-text-2:#a8b6bc;--xz-muted:#6f8188;'
-      + '--xz-font:"幼圆","YouYuan","Microsoft YaHei",sans-serif;'
+      + '--xz-font:"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
       /* 舞台光：原来右上角那团橙色会让整块面板发黄发脏 ⇒ 换成极淡的青，且更小 */
       + '--dhl-stage:radial-gradient(circle at 78% 10%, rgba(127,212,193,0.07), transparent 26%), linear-gradient(180deg,#0a1016 0%,#05080c 100%);'
       + '--dhl-reading:linear-gradient(180deg, rgba(12,19,26,0.96), rgba(6,10,14,0.98));'
@@ -26492,7 +26492,7 @@ function build() {
           + 'width:46px;height:46px;padding:0;box-sizing:border-box;border-radius:50%;'
           + 'display:flex;align-items:center;justify-content:center;'
           + 'cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;'
-          + 'font:700 17px/1 "幼圆","YouYuan","Microsoft YaHei",sans-serif;'
+          + 'font:700 17px/1 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
           + 'color:#e8c98f;background:linear-gradient(180deg,rgba(126,78,42,.92) 0%,rgba(14,27,32,.96) 100%);'
           + 'border:1px solid rgba(242,194,111,.72);'
           + 'box-shadow:0 0 16px rgba(201,168,106,.30),0 10px 30px rgba(0,4,8,.75);';
@@ -27686,7 +27686,7 @@ function build() {
           + 'width:40px;height:40px;padding:0;box-sizing:border-box;border-radius:50%;'
           + 'display:flex;align-items:center;justify-content:center;'
           + 'cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;'
-          + 'font:700 15px/1 "幼圆","YouYuan","Microsoft YaHei",sans-serif;'
+          + 'font:700 15px/1 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
           + 'color:#ffe9b8;background:linear-gradient(180deg,rgba(96,78,32,.96) 0%,rgba(24,20,10,.98) 100%);'
           + 'border:1px solid rgba(240,215,155,.85);'
           + 'box-shadow:0 0 14px rgba(201,168,106,.34),0 8px 24px rgba(0,4,8,.7);';

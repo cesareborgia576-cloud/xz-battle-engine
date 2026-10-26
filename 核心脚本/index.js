@@ -14,11 +14,21 @@
    ⚠ 版本号 `XZ_BUILD` 由 工具/pack.js 在**打包时**对齐到 工具/版本号.txt
      （它改的是本文件，因为卡里那一行没有版本号可改）。
    ============================================================================ */
-/* CORE-4 · 骰子战斗系统模块（酒馆助手脚本）
+/* CORE-4 · 脚本战斗系统模块（酒馆助手脚本）
    读：战斗状态 / 主角信息 / 人物列表 / 背包 / 正文标签
    写：伤势·经验·境界·四维点·天骄、灵宠成长值、战斗状态（均为少数指定字段）
    触发：正文 <战斗开始> 标签、面板按钮、状态栏跨窗口桥调用
-   字段与规则清单见项目文档，不随卡导出。 */
+   字段与规则清单见项目文档，不随卡导出。
+
+   ★★★ v405（用户 2026-10-26）：「核心脚本里什么死妈描述？骰子战斗模块你妈啊，
+   哪来的骰子战斗，这他妈不是脚本战斗的吗？还有开始全方面下架骰子战斗，现在已经不用了。」
+   这个模块**一直是脚本战斗**，却把自己写成了「骰子战斗系统模块」—— 名字来自它当年
+   要替代的那套旧规则（正文 AI 自己掷骰、自己写六块战斗面板），那套已经下架：
+     · 世界书《骰子战斗系统》`disable = true`，v405 起连正文源（同名 md）都移走了
+     · 战斗只走这一条：正文写 `<战斗开始>` → 本模块接管结算 → 战报写回变量
+   ⚠ 下面注释里那些「《骰子战斗系统》第 N 行怎么写」全是**历史依据**
+     （说明"为什么现在这条公式长这样"），不是"现在还要照它办"。
+     别再据此往回加规则 —— 那套规则已经不进上下文了。 */
 (async function() {
 'use strict';
 
@@ -2341,6 +2351,27 @@ var XZ_BUILD = (function () {
     /* 只收形如 v396 的号：宿主被别的东西写脏了也不至于把乱码印进战报 */
     if (typeof v === 'string' && /^v?\d+(?:\.\d+)*$/i.test(v.trim())) return v.trim();
   } catch (e) {}
+  /* ★★★ v405：**必须再往上找一层**。
+     酒馆助手（JS-Slash-Runner）是「一个脚本一个隐藏 iframe」，
+     04 和 05 跑在**两个不同的 window** 里（这条 v395 就在
+     exposeSharedRegistry 的注释里写过，但版本号这条路当时漏了）。
+     05 写 `window.__XZ_CARD_VER__` 写的是**它自己那个 window**，
+     这里读自己的永远读不到 ⇒ 恒落回下面的 `v1.3.0` ⇒
+     状态栏徽章永久报「世界书 v405 ｜ 脚本 v1.3.0（没同步）」，
+     而玩家手里的卡其实是最新的。用户 2026-10-26：「没同步是几把意思？
+     到底啥情况，这是最新卡，别质疑我」—— 卡没问题，是这条注入链断了。
+     ⚠ 跨域 iframe 读 parent 会抛 SecurityError，所以每层单独 try。 */
+  try {
+    var _ups = [];
+    try { if (window.parent && window.parent !== window) _ups.push(window.parent); } catch (eP) {}
+    try { if (window.top && window.top !== window) _ups.push(window.top); } catch (eT) {}
+    for (var _ui = 0; _ui < _ups.length; _ui++) {
+      try {
+        var _uv = _ups[_ui].__XZ_CARD_VER__;
+        if (typeof _uv === 'string' && /^v?\d+(?:\.\d+)*$/i.test(_uv.trim())) return _uv.trim();
+      } catch (eU) {}
+    }
+  } catch (e2) {}
   return 'v1.3.0';
 })();
 /* 让 05 之后能改写（04 可能比 05 先跑完 —— 谁先谁后不保证）。
@@ -17127,7 +17158,12 @@ var XZ_SHARED_FNS = {
        装备台还 1.5 秒轮询一遍。这不是性能洁癖：读得越多次，"两次读之间变量被
        改写（AI 正好在同一个 tick 更新楼层）"的窗口就越多，面板会出现前后不一致。 */
   xzTemperInfoIn: (typeof xzTemperInfoIn === 'function') ? xzTemperInfoIn : null,
-  xzTemperHaveIn: (typeof xzTemperHaveIn === 'function') ? xzTemperHaveIn : null
+  xzTemperHaveIn: (typeof xzTemperHaveIn === 'function') ? xzTemperHaveIn : null,
+  /* ★ v405：让 05 能把卡版本号**跨 iframe**推过来改 `XZ_BUILD`。
+     没有这一条，上面那段「往上找 parent/top」只解决了"05 先跑"的时序；
+     04 先跑完时仍然是 v1.3.0，而 05 拿不到本窗口的 `__XZ_SET_BUILD__`。 */
+  xzSetBuild: (typeof window !== 'undefined' && typeof window.__XZ_SET_BUILD__ === 'function')
+    ? window.__XZ_SET_BUILD__ : null
 };
 function exposeSharedRegistry() {
   try {
@@ -19177,6 +19213,17 @@ var XZJJ = (function () {
         if (rec) {
           out.hp = Number(rec.气血); out.hpMax = Number(rec.气血上限);
           out.mp = Number(rec.灵力); out.mpMax = Number(rec.灵力上限);
+          /* ★★★ v405：老存档「灵力上限」是旧口径算出来的（基数×3、乘数×4）⇒ **蓝比血还多**。
+             新口径下灵力与气血同构、只差乘数（血×8 / 蓝×4），蓝恒为血的一半。
+             这里做**读取时自愈**：一旦 mpMax 超过 hpMax —— 那不可能是合法配置
+             （任何效果都不可能把蓝抬到超过血），只能是旧档 —— 按「血的一半」压回去。
+             ⚠ 只压不放：新档本来就 ≤ 半血，不会被动到；玩家自己压低的蓝也不会被抬。
+             ⚠ 变量的值不在这里改（引擎没有写状态栏变量的通道），所以状态栏那一条
+               要靠 05 的自愈；这里保证的是**战斗里用的是对数**。 */
+          if (out.hpMax > 0 && out.mpMax > out.hpMax) {
+            out.mpMax = Math.round(out.hpMax * 0.5);
+            if (!(out.mp >= 0) || out.mp > out.mpMax) out.mp = out.mpMax;
+          }
         }
       } catch (eHpMp) {}
       return out;
@@ -29036,7 +29083,15 @@ function build() {
   try { if (getDoc().body) ensureFloat(); } catch (e0) {}
   try { setTimeout(ensureFloat, 1500); } catch (e1) {}
   /* v170：战斗模式球（脚本 / 骰子 一键切世界书）。与「战」字球同时挂、各自独立拖动。 */
-  try { if (getDoc().body) ensureModeFloat(); } catch (e0m) {}
+  /* ★★★ v405（用户 2026-10-26）：「记得骰子战斗相关全部删除下架之后，
+     一键开关切换模式的悬浮球就不用了。」
+     ⇒ 不再创建那个球。它唯一的作用是切「《脚本战斗》/《骰子战斗》谁开」，
+        而骰子那套已经下架（条目 disable + 正文源移走），只剩一种战斗方式，没有可切的东西。
+     ⚠ 不建球**不会让开战失效**：`__XZ_BATTLE_MODE__` 只在球里被写成 'dice'，
+        没人写它 ⇒ 三处 `=== 'dice'` 恒 false ⇒ 走脚本战斗那条路，正好是正确默认。
+     ⚠ 恢复骰子战斗要一起改回来：条目搬回 + disable 改 false + 放开下面这行。
+        只恢复球不恢复条目的话，球会显示「无」（找不到条目），点了也没用。 */
+  // try { if (getDoc().body) ensureModeFloat(); } catch (e0m) {}
   try { setTimeout(ensureModeFloat, 1600); } catch (e1m) {}
 
   /* 导出：逐条赋值，不用对象字面量 —— 悬空引用扫描器会把 { open: xxx } 的键名

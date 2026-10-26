@@ -13013,7 +13013,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
   } catch (eStyleAttr) {}
   /* ★★★ v376：四维**总量**上限在算伤害这一侧再确认一遍 ★★★
      为什么不能只靠 `buildFighterFromData` 里那一处（职责不同，两处都得留；~~`makeFighter`~~ 是它的旧名，已不存在）：
-       · `makeFighter` = 数据**进门时**洗干净（AI 刚写进变量的那一份）；
+       · `buildFighterFromData`（旧名 ~~`makeFighter`~~，已不存在）= 数据**进门时**洗干净（AI 刚写进变量的那一份）；
        · 这里 = 每次算伤害**再确认**——战斗中 `attrFix` / 状态 / 外部脚本都可能把
          `attacker.str` 之类改写掉，入口钳管不了后续。这正是本项目最高频的病：
          「同一件事两处实现只改一处」，所以两侧都要读同一张表、用同一个削减函数。
@@ -30981,7 +30981,7 @@ xzJJSniff();
          我方名单仍然传空：主角由 `readHeroFromVars` 自动进队，
          但玩家在选人面板里勾了同伴就会走 `XZ_TEAM_PICK` 覆盖（接口本来就支持）。
          ⚠ 返回值语义变了：`true` = **流程已开始**，不等于「战斗已开」。
-           所以下面不能再 `mjWatchBattle` 等结果 —— 改由 `mjWaitBattleStart`（31053 行）等
+           所以下面不能再 `mjWatchBattle` 等结果 —— 改由 `mjWaitBattleStart`（31053 那个函数，都在本模块里）等
            `state()` 真的出现，出现之后再转给 mjWatchBattle。 */
       if (typeof JJ.startMijingBattle === 'function') {
         ok = JJ.startMijingBattle([], [foe]);
@@ -31047,7 +31047,7 @@ xzJJSniff();
      玩家在选人面板里挑三秒钟，宽限期一到就被判「打完了」，然后按 `result=''`（战败）
      结算 —— 面前那只怪白打一场，玩家的血还被扣成输。
      ⇒ 分两段等：
-       · `waitingStart`：还没见过 state()。一直等到它出现，或者**确认玩家真放弃了**
+       · `waitingStart`（这是**分段的名字**，不是函数名；实现是下面的 `mjWaitBattleStart`）：还没见过 state()。一直等到它出现，或者**确认玩家真放弃了**
          （面板都关了、闸也放完了）；
        · 见过 state() 之后才交给 mjWatchBattle 走原有的「等结果」逻辑。 */
   function mjWaitBattleStart(e) {

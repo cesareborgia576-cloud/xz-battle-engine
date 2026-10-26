@@ -321,7 +321,23 @@ var PORTRAIT_URLS = {
   '沈清颜': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/TW_QQv2%E8%84%B8%E9%83%A8%E5%8F%82%E8%80%83_00020_.png',
   '凌星遥': '',
   '言清漪': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/Ab3qJJDgRKZTAAAAAElFTkSuQmCC.png',
-  '阿依莎': 'https://a.imgckr.com/2026/10/14/XDkl5.png',
+  '阿依莎': 'https://a.imgckr.com/2026/10/14/XDkl5.png',
+
+  /* ★★★ v406：斗罗 DLC 旗袍立绘（8 个角色）。源图 832×1216 / 1.5MB 太大，
+     直接当立绘会让面板加载卡死 ⇒ 压成 512 宽 JPEG（约 90KB），放在仓库 small/ 下。
+     仓库 cesareborgia576-cloud/douluo-qipao：原图在各角色目录，小图在 small/。
+     全部图已清掉元数据（tEXt/iTXt/zTXt/eXIf/tIME/pHYs），残留 0。
+     ⚠ 与 05 的 XZ_PORTRAITS 必须同步 —— 不一致就是「战斗里有立绘、状态栏没有」。
+     ⚠ 只收 DLC 里真有的 8 个；唐舞桐/朱竹清/胡列娜/萧萧/蓝佛子/许小言/魔皇/唐雅
+       在世界书里查不到，没加（加了也永远匹配不上人设）。 */
+  '千仞雪': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/千仞雪.jpg',
+  '古月娜': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/古月娜.jpg',
+  '小舞': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/小舞.jpg',
+  '宁荣荣': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/宁荣荣.jpg',
+  '比比东': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/比比东.jpg',
+  '白沉香': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/白沉香.jpg',
+  '阿银': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/阿银.jpg',
+  '马小桃': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/马小桃.jpg',
 };
 
 function portraitUrlOf(name) {

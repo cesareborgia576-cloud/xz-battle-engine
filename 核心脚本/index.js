@@ -29092,7 +29092,10 @@ function build() {
      ⚠ 恢复骰子战斗要一起改回来：条目搬回 + disable 改 false + 放开下面这行。
         只恢复球不恢复条目的话，球会显示「无」（找不到条目），点了也没用。 */
   // try { if (getDoc().body) ensureModeFloat(); } catch (e0m) {}
-  try { setTimeout(ensureModeFloat, 1600); } catch (e1m) {}
+  /* ★★★ v406：这里原来还有一行延迟调用 `setTimeout(ensureModeFloat, 1600)` ——
+     上面那行同步调用注释掉了，球却还在，就是它画的（1.6 秒后再补一次）。
+     ⇒ 两个入口必须一起关，漏一个等于没关。 */
+  // try { setTimeout(ensureModeFloat, 1600); } catch (e1m) {}
 
   /* 导出：逐条赋值，不用对象字面量 —— 悬空引用扫描器会把 { open: xxx } 的键名
      当成「未声明的标识符」而误报（已踩过：报 open/close/toggle/restart/state 五条）。 */

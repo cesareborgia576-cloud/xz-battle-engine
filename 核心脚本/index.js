@@ -2377,47 +2377,6 @@ function xzScrollRestore() {
   } catch (e) {}
 }
 
-/* ===== 浮层几何（与界面脚本 05 的立绘/词条浮窗同一口径）=====
-   position:fixed 的 containing block 不一定是真视口；iframe 里 100dvh 也不等于可见高度。
-   所以能用像素就用像素钳死，别依赖 inset/dvh。 */
-function xzOvPickWin() {
-  var best = window, bestH = -1, tried = [];
-  function consider(w) {
-    if (!w) return;
-    for (var i = 0; i < tried.length; i++) { if (tried[i] === w) return; }
-    var doc = null;
-    try { doc = w.document; } catch (e0) { doc = null; }
-    if (!doc || !doc.body) return;
-    var vh = 0;
-    try { vh = w.innerHeight || (doc.documentElement && doc.documentElement.clientHeight) || 0; } catch (e1) { vh = 0; }
-    tried.push(w);
-    if (vh > bestH) { bestH = vh; best = w; }
-  }
-  consider(window);
-  try { consider(window.parent); } catch (e2) {}
-  try { consider(window.top); } catch (e3) {}
-  return best;
-}
-function xzOvGeom(win, doc) {
-  doc = doc || (win && win.document) || getDoc();
-  var vw = 0, vh = 0, top = 0, left = 0, hostH = 0;
-  try { hostH = win.innerHeight || 0; } catch (e0) {}
-  try {
-    var fe = win.frameElement;
-    if (fe && fe.getBoundingClientRect) {
-      var r = fe.getBoundingClientRect();
-      if (fe.offsetParent) { top = Math.max(0, r.top || 0); left = Math.max(0, r.left || 0); hostH = r.height || hostH; }
-    }
-  } catch (e1) {}
-  var vv = null;
-  try { vv = win.visualViewport || null; } catch (e2) {}
-  if (vv && vv.height) { vh = vv.height; vw = vv.width; top += (vv.offsetTop || 0); left += (vv.offsetLeft || 0); }
-  if (!vh) vh = hostH || 0;
-  if (!vw) { try { vw = win.innerWidth || 0; } catch (e3) {} }
-  if (!vw) vw = (doc && doc.documentElement && doc.documentElement.clientWidth) || 360;
-  if (!vh) vh = (doc && doc.documentElement && doc.documentElement.clientHeight) || 640;
-  return { vw: Math.max(200, Math.round(vw)), vh: Math.max(240, Math.round(vh)), top: Math.round(top), left: Math.round(left) };
-}
 /* ═══════════════════════════════════════════════════════════════════════════
    ★★★ v283：`xzNormTermKeys` 的别名表**整段删除** ★★★
    ───────────────────────────────────────────────────────────────────────────
@@ -2681,50 +2640,9 @@ var XZ_TERM_COMBO = {
     69: { name: '水元', terms: ['水系增伤', '返元', '暴击伤害'] },
     70: { name: '削锋', terms: ['先机', '削锋'] },
 };
-var XZ_COMBO_POOL = ['提升攻击', '提升防御', '提升速度', '提升暴击率', '提升最大生命值', '提升最大灵力值',
-  '吸血', '自带破甲', '灵力汲取', '周天回灵', '返元', '碎甲'];
 function xzCombCount(a, b) {
   if (b < 0 || b > a) return 0; b = Math.min(b, a - b);
   var r = 1; for (var i = 1; i <= b; i++) r = r * (a - b + i) / i; return Math.round(r);
-}
-function xzComboTermsById(id) {
-  var c = XZ_TERM_COMBO[id];
-  if (c) return { name: c.name, terms: c.terms.slice() };
-  var k, idx;
-  if (id >= 1000 && id < 2000) { k = 2; idx = id - 1000; }
-  else if (id >= 2000 && id < 3000) { k = 3; idx = id - 2000; }
-  else return null;
-  var n = XZ_COMBO_POOL.length;
-  if (idx < 0 || idx >= xzCombCount(n, k)) return null;
-  var res = [], start = 0, rest = k, rem = idx;
-  for (var i = 0; i < k; i++) {
-    for (var c2 = start; c2 < n; c2++) {
-      var cnt = xzCombCount(n - c2 - 1, rest - 1);
-      if (rem < cnt) { res.push(XZ_COMBO_POOL[c2]); start = c2 + 1; rest--; break; }
-      rem -= cnt;
-    }
-  }
-  return res.length === k ? { name: '', terms: res } : null;
-}
-/* 词条数组 → 可读明文文本。
-   ★ 组合机制已彻底废除：界面上不再出现「组合」字样（玩家与 NPC 一律明文）。
-   老存档里已写成「组合N」的值，在这里被静默翻译成它代表的那几条明文词条；
-   编号查不到就直接丢弃，不再把编号本身当成一个词条显示出去。 */
-function xzTermText(list, detail) {
-  var out = [];
-  (list || []).forEach(function (x) {
-    var raw = String(x === undefined || x === null ? '' : x).replace(/[\[\]【】\s]/g, '');
-    if (!raw) return;
-    var m = /^组合(\d{1,4})$/i.exec(raw) || /^combo(\d{1,4})$/i.exec(raw);
-    if (!m) { out.push(raw); return; }
-    var c = null;
-    try { c = xzComboTermsById(Number(m[1])); } catch (eC) { c = null; }
-    if (c && c.terms && c.terms.length) {
-      c.terms.forEach(function (t) { if (t && out.indexOf(t) < 0) out.push(t); });
-    }
-    /* 查不到 → 静默丢弃（组合已废除，不把编号当词条显示） */
-  });
-  return out.join('、');
 }
 /* ★ v94：04 自己也要按招式名查位次（xzTypeOf / 骨架兜底都读它），
    而 `xzPosOf` 原本只定义在 05 ⇒ 跨脚本悬空引用，一调就抛、被空 catch 吞掉。
@@ -3757,82 +3675,20 @@ var XZ_TERM_HIT = [// ①击中 · 五行主词条（符箓与武器取用）
 var COMBO_ENUM_POOL = ['提升攻击', '提升防御', '提升速度', '提升暴击率', '提升最大生命值', '提升最大灵力值',
   '吸血', '自带破甲', '灵力汲取', '周天回灵', '返元', '碎甲'];
 
-// ===== 词条「组合编号」表（v3）：变量里只写「组合N」，词条内容只存在于脚本 =====
-// 铁律：**已发布的编号永不改动、永不重排**——只能往后追加，否则老存档会悄悄变效果。
-// 组合一律由白名单数值词条拼成；三件套只给地阶及以上用（引擎仍会按品质封顶兜底）。
-var TERM_COMBO = {
-  1:  { name: '锋锐',   terms: ['提升攻击', '提升暴击率'] },
-  2:  { name: '酣战',   terms: ['提升攻击', '吸血'] },
-  3:  { name: '坚韧',   terms: ['提升防御', '提升最大生命值'] },
-  4:  { name: '养元',   terms: ['提升防御', '返元'] },
-  5:  { name: '疾行',   terms: ['提升速度', '提升暴击率'] },
-  6:  { name: '吸血',   terms: ['吸血', '返元'] },
-  7:  { name: '破坚',   terms: ['提升攻击', '自带破甲'] },
-  8:  { name: '拆甲',   terms: ['自带破甲', '碎甲'] },
-  9:  { name: '猎杀',   terms: ['提升攻击'] },
-  10: { name: '诛邪',   terms: ['提升攻击'] },
-  11: { name: '五行冰', terms: ['提升攻击'] },
-  12: { name: '五行木', terms: ['提升攻击'] },
-  13: { name: '五行水', terms: ['提升攻击'] },
-  14: { name: '五行火', terms: ['提升攻击'] },
-  15: { name: '五行土', terms: ['提升攻击'] },
-  16: { name: '回元',   terms: ['周天回灵', '提升最大灵力值'] },
-  17: { name: '汲灵',   terms: ['灵力汲取', '周天回灵'] },
-  18: { name: '血战',   terms: ['吸血', '提升攻击', '提升暴击率'] },
-  19: { name: '铁壁',   terms: ['提升防御', '返元', '提升最大生命值'] },
-  20: { name: '万全',   terms: ['提升攻击', '提升防御', '提升速度'] },
-  // ---------- v3 追加：21~60（编号只追加、绝不改动）----------
-  21: {  name: '炎爆', terms: ['火系增伤', '提升攻击'] },
-  22: {  name: '沧浪', terms: ['水系增伤', '返元'] },
-  23: {  name: '雷厉', terms: ['雷系增伤', '提升速度'] },
-  24: {  name: '木荣', terms: ['木系增伤', '返元'] },
-  25: {  name: '冰鸣', terms: ['自带破甲'] },
-  26: {  name: '土厚', terms: ['土系增伤', '提升防御'] },
-  27: {  name: '风行', terms: ['风系增伤', '提升速度'] },
-  28: {  name: '冰魄', terms: ['冰系增伤', '提升暴击率'] },
-  29: {  name: '会心', terms: ['暴击伤害', '提升暴击率'] },
-  30: {  name: '穿透', terms: [ '自带破甲'] },
-  31: {  name: '屠兽', terms: [ '吸血'] },
-  32: {  name: '诛修', terms: [ '暴击伤害'] },
-  33: {  name: '破法', terms: ['碎甲'] },
-  34: {  name: '凌波', terms: ['提升速度', '灵力汲取'] },
-  35: {  name: '养神', terms: ['周天回灵', '提升防御'] },
-  36: {  name: '摄魂', terms: ['灵力汲取', '吸血'] },
-  37: {  name: '厚生', terms: ['提升最大生命值', '返元'] },
-  38: {  name: '血食', terms: ['吸血', '提升最大生命值'] },
-  39: {  name: '铁骨', terms: ['提升防御'] },
-  40: {  name: '掠影', terms: ['提升速度', '自带破甲'] },
-  41: {  name: '五雷', terms: ['雷系增伤', '提升暴击率'] },
-  42: {  name: '烈阳', terms: ['火系增伤', '暴击伤害'] },
-  43: {  name: '玄冰', terms: ['冰系增伤', '提升暴击率'] },
-  44: {  name: '厚土', terms: ['土系增伤', '提升防御'] },
-  45: {  name: '青木', terms: ['木系增伤', '返元'] },
-  46: {  name: '锐冰', terms: [ '自带破甲'] },
-  47: {  name: '长风', terms: ['风系增伤', '提升速度'] },
-  48: {  name: '沧溟', terms: ['水系增伤', '灵力汲取'] },
-  49: {  name: '杀伐', terms: ['提升攻击', '暴击伤害'] },
-  50: {  name: '斩修', terms: ['提升攻击'] },
-  51: {  name: '饮血', terms: ['吸血', '提升暴击率', '提升最大生命值'] },
-  52: {  name: '不坏', terms: ['提升防御', '提升最大生命值'] },
-  53: {  name: '迅捷', terms: ['提升速度', '提升暴击率', '灵力汲取'] },
-  54: {  name: '万全', terms: ['提升攻击', '提升防御', '提升最大生命值'] },
-  55: {  name: '破阵', terms: ['自带破甲', '碎甲', '提升攻击'] },
-  56: {  name: '回天', terms: ['周天回灵', '返元', '提升最大生命值'] },
-  57: {  name: '搏命', terms: ['提升攻击', '暴击伤害', '吸血'] },
-  58: {  name: '铁壁', terms: ['提升防御', '提升最大生命值', '碎甲'] },
-  59: {  name: '神速', terms: ['提升速度', '周天回灵', '提升暴击率'] },
-  60: {  name: '五行', terms: ['木系增伤', '水系增伤'] },
-    61: { name: '破甲', terms: ['自带破甲'] },
-    62: { name: '碎甲', terms: ['碎甲'] },
-    63: { name: '迟滞', terms: ['减速'] },
-    64: { name: '先机', terms: ['先机'] },
-    65: { name: '剧毒', terms: ['中毒'] },
-    66: { name: '增攻', terms: ['提升攻击'] },
-    67: { name: '群伤', terms: ['范围增加1', '暴击伤害'] },
-    68: { name: '封脉', terms: ['先机', '封脉'] },
-    69: { name: '水元', terms: ['水系增伤', '返元', '暴击伤害'] },
-    70: { name: '削锋', terms: ['先机', '削锋'] },
-};
+/* ===== 词条「组合编号」表（v3）：变量里只写「组合N」，词条内容只存在于脚本 =====
+   铁律：**已发布的编号永不改动、永不重排**——只能往后追加，否则老存档会悄悄变效果。
+   组合一律由白名单数值词条拼成；三件套只给地阶及以上用（引擎仍会按品质封顶兜底）。
+
+   ★★★ v404：这 70 条原来**有两份字面量**（这里一份、2611 行的 `XZ_TERM_COMBO` 一份），
+   逐条比对过：完全一致（0 处差异），各自被一条路径读 ——
+     · `XZ_TERM_COMBO` ← 3283 行的「组合N 展开」
+     · `TERM_COMBO`     ← 3882 行的另一条展开路
+   同一份数据两个名字各写一遍 = 改一份忘另一份 ⇒ 同一个「组合5」在两条路径上翻出
+   不同效果，而老存档只认编号、看不出哪边对。现合并成**一个真相源**（2611 那份），
+   这里只留别名。要改编号表请改 2611，别在这儿重新长出一份。
+   ⚠ 05 另有一份副本（跨 iframe 无法共享变量），由 `工具/check_combo_tables.js` 核对；
+     本文件合并后，那个工具的抽取源仍是 `XZ_TERM_COMBO`，不受影响。 */
+var TERM_COMBO = XZ_TERM_COMBO;
 // 组合 1000+ / 2000+：自动枚举（基于冻结池，取第 idx 组，字典序）
 /* ⚠ v94：这里原来还有第二份 `function xzCombCount`（与 2625 行那份逐字等价，只是换行不同）。
    同名函数声明会被**后一份静默覆盖**前一份 —— 数值恰好相同所以从没出过错，
@@ -4743,8 +4599,6 @@ function atomSet(f, name, rounds) { }         /* ★ v282 原子层数已废，�
 function atomRoundsFor(actor, name, skill, declared) { return 2; }  /* ★ v282 空壳 */
 function applyAtomBuff(actor, name, skill) { return ''; }           /* ★ v282 空壳：本命式原子已删 */
 function atomsOfSkill(skill) { return []; }        /* ★ v282 空壳：原子不再抽取 */
-function atomRouteOf(name) { return ''; }          /* ★ v282 空壳：无路可归 */
-function xinfaAtomOf(heartName) { return ''; }     /* ★ v282 空壳：玄诀原子已删 */
 function skillHasRangeAtom(atoms) { return false; }/* ★ v282 空壳：范围改由「目标/攻击类型」声明决定 */
 /* ★★★ v282：函数由 `atomBuffsOf` 改名 `mechBuffsOf`，并摘掉「原子」这一源 ★★★
    ──────────────────────────────────────────────────────────────────────
@@ -7388,7 +7242,7 @@ function startCombat() {
   BattleState.logs = [ '周天阵图展开，时序轮转，斗法开启！<span style="color:#7dd3fc">［引擎 ' + BUILD_ID + '］</span>' ];
   // 开局行动条随机偏移：消除「同速先手必胜」，同水平对局才能真正五五开
   try {
-    BattleState.allies.concat(BattleState.enemies).forEach(function (f) {
+    _xzAllFighters().forEach(function (f) {
       /* ★ 必须**叠加**，不许直接覆盖：prepareBattle（④触发）已给带【先机】的单位
          预置了 300 抢跑；原先这里是 `f.trackDistance = Math.random() * ATB_INIT_JITTER`，
          一条赋值把先机整条冲掉 —— 【先机】词条形同虚设（用户报「带了先机照样不先手」的真身）。
@@ -7616,7 +7470,7 @@ var XZTurn = (function () {
 /* ===== 适配层：把纯逻辑内核接到 UI / BattleState 上 ===== */
 /* 把 BattleState 投影成一个纯状态对象给内核用（内核不认识 BattleState） */
 function _xzTurnState() {
-  var fs = BattleState.allies.concat(BattleState.enemies);
+  var fs = _xzAllFighters();
   var alive = fs.filter(function (f) { return f.alive; });
   var maxBudget = 2;
   alive.forEach(function (f) { var b = XZTurn.budgetOf(f); if (b > maxBudget) maxBudget = b; });
@@ -7838,7 +7692,7 @@ function advanceTimelineTick(gen) {
 }
 
 function updateTimelineNodes() {
-  var allFighters = BattleState.allies.concat(BattleState.enemies);
+  var allFighters = _xzAllFighters();
   // 一次查询搞完（原来每个单位一次属性选择器，30ms 一跳就是每秒几百次 DOM 扫描）
   var nodes = {};
   try {
@@ -16685,7 +16539,7 @@ function writeBattleResults() {
     if (BattleState.mode === 'spectate' || !player) {
       var obs = { 模式: '观战', 回合: BattleState.round };
       var roster = {};
-      BattleState.allies.concat(BattleState.enemies).forEach(function (f) {
+      _xzAllFighters().forEach(function (f) {
         roster[f.name] = { 阵营: f.side === 'ally' ? '左阵' : '右阵', 境界: f.realm, 剩余气血: f.hp, 最大气血: f.maxHp, 存活: !!f.alive };
       });
       obs.单位 = roster;
@@ -16709,7 +16563,7 @@ function writeBattleResults() {
        字段本身保留在初始值里，是为了让战报生成那段 `(rw.profGains || [])` 不必改写法；
        真要彻底清，就连那个 forEach 一起删 —— 但那是另一件事，别顺手做。 */
     // 4) 灵宠：成长值（满 1000 晋升下一小境界并归零，只算主角的灵宠）+ 每场战斗结束饱食度 -10（双方灵宠都算）
-    var petFighters = BattleState.allies.concat(BattleState.enemies).filter(function (f) { return f.isPet; });
+    var petFighters = _xzAllFighters().filter(function (f) { return f.isPet; });
     rw.pets = [];
     petFighters.forEach(function (pf) {
       var rec = null;
@@ -17911,7 +17765,7 @@ function renderUI() {
   // 观战中：右下角悬浮【加入战局】；不在观战则收起
   if (BattleState.mode === 'spectate' && BattleState.active && BattleState.phase === 'battle') ensureSpectateJoinButton(); else removeSpectateJoinButton();
 
-  var allFighters = BattleState.allies.concat(BattleState.enemies);
+  var allFighters = _xzAllFighters();
   var curFighter = allFighters.find(function(f) { return f.id === BattleState.currentFighterId; });
   var isPlayerTurn = curFighter && curFighter.isPlayer && curFighter.alive;
   var p = BattleState.allies.find(function(a) { return a.isPlayer; });

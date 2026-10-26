@@ -10124,7 +10124,7 @@ var XZ_ATTR_CAP_BY_BIG = {
      后者会把 20/20/1/1 削成 18/18/1/1（还是并列顶格），玩家的角色手感一点没变；
      按比例削才保住「谁强谁弱」的相对关系，只压总量。
    ⚠ 总量表与单项表**必须成对存在、两处入口同时读**：
-     `makeFighter`（数据进门时洗）与 `calcDamage`（每次算伤害再确认）。
+     `buildFighterFromData`（数据进门时洗；**旧名 `makeFighter` 已不存在**，全文件只剩这句注释还提它）与 `calcDamage`（每次算伤害再确认）。
      只在一处生效就是本项目最高频的病 ——「同一件事两处实现只改一处」。 */
 var XZ_ATTR_TOTAL_CAP_BY_BIG = {
   '引玄': 16, '凝府': 18, '玄枢': 20, '化域': 22, '尊玄': 24, '穹境': 26,
@@ -12933,7 +12933,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
      ★★★ v283：`heartPierce` 接入**真正乘进公式**的破防乘区 ★★★
      —— 本工程第 12 例「算了、声明了，就是没人乘」。
 
-     证据（`工具/_v283_diag_pierce.mjs` 隔离四通道，真引擎量）：
+     证据（~~`工具/_v283_diag_pierce.mjs`~~ **已不存在**；隔离四通道，真引擎量）：
        me.heartPierce = 0.40          ⇒ 伤害 78 → 78   **死**
        artifactBuffs.pierce = 0.40    ⇒ 伤害 78 → 101  活（走 mechSumField）
        bloodBuffs.pierce = 0.40       ⇒ 伤害 78 → 101  活（同上）
@@ -13012,7 +13012,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
     }
   } catch (eStyleAttr) {}
   /* ★★★ v376：四维**总量**上限在算伤害这一侧再确认一遍 ★★★
-     为什么不能只靠 `makeFighter` 里那一处（职责不同，两处都得留）：
+     为什么不能只靠 `buildFighterFromData` 里那一处（职责不同，两处都得留；~~`makeFighter`~~ 是它的旧名，已不存在）：
        · `makeFighter` = 数据**进门时**洗干净（AI 刚写进变量的那一份）；
        · 这里 = 每次算伤害**再确认**——战斗中 `attrFix` / 状态 / 外部脚本都可能把
          `attacker.str` 之类改写掉，入口钳管不了后续。这正是本项目最高频的病：
@@ -14430,7 +14430,7 @@ function applyV75Effects(attacker, target, skill) {
                ── 现在的口径（与用户本意一致）──
                  · `_isPerm`（玄诀 / 武器 / 血脉，dur = 9999）：进 heartPierce，整场有效
                  · 招式（非 perm）：**本击有效**，在 `calcDamage` 里直接并进 `skillPierce`
-                   （见 12772 一带 `_v401SkillPierce`），这里**一个字段都不写**
+                   （见 12857 一带 `skillPierce` / `_atomPierceVuln` 的合并点；**原来这里写的 `_v401SkillPierce` 全文件只有这一句注释提过，不是现役变量**），这里**一个字段都不写**
                  ⚠ 所以这一支非 perm 时只打战报，不落值 —— 别在这里补 `else` 分支，
                    补了就是第二次数值来源，又会变成「同一招穿两次」。 */
             if (_isPerm) {
@@ -14514,7 +14514,7 @@ function applyV75Effects(attacker, target, skill) {
               bHolder._xzBaseMaxHp = Math.max(1, Number(bHolder.maxHp) || 1);   /* 首次施加前的基础值 */
             }
             /* ★★★ v389：累计上限必须是 **30%**，不是 1.0 ★★★
-               现场（2026-10-24 全面检修，工具/_v389_hp_buff_cap.mjs 量出来的）：
+               现场（2026-10-24 全面检修，~~工具/_v389_hp_buff_cap.mjs~~ **该脚本已不存在**，数据是当时量出来的）：
                  玄诀带 `气血上限:30`（装配期，DLC 人物几乎人人有）
                  + 招式《金龙真身·逆鳞》带 `气血上限:"30"`（战斗内，唐舞麟的天阶自身技）
                  ⇒ 同一招连用 5 次，maxHp 走成
@@ -23140,7 +23140,7 @@ function jjbLogRest(t) {
          后注入的那一边会静默用上对方的曲线（本工程「跨模块撞名」事故的第 N 次）。 */
       + '@keyframes ' + PFX + '-lite-fly{0%{opacity:1;transform:scale(0.75);}100%{opacity:0;transform:scale(0.32);}}'
       + '@keyframes ' + PFX + '-particle-fly{0%{opacity:1;transform:translate(-50%,-50%) scale(0.7);}60%{opacity:0.85;}100%{opacity:0;transform:translate(calc(-50% + var(--dx,0px)), calc(-50% + var(--dy,0px))) scale(1.05);}}'
-      /* ★ 2026-10-12 新增：弹道轨迹粒子的行进关键帧（`jjTrailFx` 用）。
+      /* ★ 2026-10-12 新增：弹道轨迹粒子的行进关键帧（原给 `jjTrailFx` 用；该函数 v152 已弃用、**现已不存在**）。
          与主战斗的 `-fx-trail` 同形：**淡入 → 沿 --tx/--ty 飞到落点 → 淡出**。
          必须在本模块自建一份（带 PFX 前缀）——主战斗那份是 P 前缀的，
          而本浮层是独立文档作用域，取不到主战斗的关键帧（会「动画不存在 → 粒子不动」）。 */
@@ -27929,7 +27929,7 @@ function build() {
     /* ══════ 战斗模块总闸（2026-10-14）══════
        XZ_BATTLE_ENABLED === false 时，本卡**不开战**：<战斗开始> 标签、悬浮球、编队确认，
        任何调用链最终都汇到 startJJ 这一行，一律挡回，战斗界面不再出现。
-       战斗改由正文 AI 按「权重口胡流」裁定（见 世界书/正文格式/权重裁定.md）。 */
+       战斗改由正文 AI 按「权重口胡流」裁定（⚠ 原文指向 ~~`世界书/正文格式/权重裁定.md`~~，**该文件从未存在**，现役世界书里也搜不到「权重」二字 —— 这一句只是说明"关掉脚本战斗后由正文人工裁定"，别再去找那个文件）。 */
     if (XZ_BATTLE_ENABLED === false) {
       try { toast('本卡已关闭脚本战斗：胜负由正文按权重裁定。', 'info'); } catch (eTZ) {}
       return;
@@ -29320,7 +29320,7 @@ function build() {
   /* ★★★ v348：**时序本身的只读测试面**（`act` / `pickTarget` / `checkOver` / `step`）。
      为什么必须挂：`_v348_selfhit.mjs` 要复现用户报的「敌人找不到玩家 ⇒ 对着自己出手」，
      而离线沙箱里引擎一到「轮到玩家」就停在 `S.waiting` 上**不再排拍**（队列空）——
-     靠 `drainQueue` 永远走不到 `act`，于是 A/B/C 三条判据全成了假绿
+     靠 ~~`drainQueue`~~（**沙箱脚手架里的排拍函数，引擎里没有这个函数**）永远走不到 `act`，于是 A/B/C 三条判据全成了假绿
      （量的是「引擎没动」，不是「引擎一动就打自己」）。
      ⇒ 把 `step` 里 AI 走的那同一条调用链（18063 `act(f, pickTarget(f))`）原样挂出来。
      ⚠ 只挂真函数引用，**绝不在 API 层包一层「方便版」**：包一层，闸量的就是副本（假绿）。
@@ -30981,7 +30981,7 @@ xzJJSniff();
          我方名单仍然传空：主角由 `readHeroFromVars` 自动进队，
          但玩家在选人面板里勾了同伴就会走 `XZ_TEAM_PICK` 覆盖（接口本来就支持）。
          ⚠ 返回值语义变了：`true` = **流程已开始**，不等于「战斗已开」。
-           所以下面不能再 `mjWatchBattle` 等结果 —— 改由 `waitBattleStart` 等
+           所以下面不能再 `mjWatchBattle` 等结果 —— 改由 `mjWaitBattleStart`（31053 行）等
            `state()` 真的出现，出现之后再转给 mjWatchBattle。 */
       if (typeof JJ.startMijingBattle === 'function') {
         ok = JJ.startMijingBattle([], [foe]);

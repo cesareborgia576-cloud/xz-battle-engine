@@ -309,18 +309,18 @@ function fxMarkBuildCost(ms) {
 var PORTRAIT_URLS = {
   /* 第 4 条：立绘改为在人物框内半透明显示后，本表与状态栏 XZ_PORTRAITS 保持一致，
      否则战斗中绝大多数角色都会是空白。空字符串 = 该角色不出立绘。 */
-  '云疏月': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/TW_QQv3%E5%8A%A0%E9%80%9F_00005_.png',
-  '姜绾绾': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791499913161.png',
-  '白长雪': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791499528667.png',
-  '陆昭华': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791507840285.png',
-  '梵清仪': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791502271286.jpg',
+  '云疏月': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/TW_QQv3%E5%8A%A0%E9%80%9F_00005_.png',
+  '姜绾绾': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791499913161.png',
+  '白长雪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791499528667.png',
+  '陆昭华': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791507840285.png',
+  '梵清仪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791502271286.jpg',
   '药仙儿': '',
   '沈千金': '',
   '洛无尘': '',
   '秦烈': '',
-  '沈清颜': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/TW_QQv2%E8%84%B8%E9%83%A8%E5%8F%82%E8%80%83_00020_.png',
+  '沈清颜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/TW_QQv2%E8%84%B8%E9%83%A8%E5%8F%82%E8%80%83_00020_.png',
   '凌星遥': '',
-  '言清漪': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/Ab3qJJDgRKZTAAAAAElFTkSuQmCC.png',
+  '言清漪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/Ab3qJJDgRKZTAAAAAElFTkSuQmCC.png',
   '阿依莎': 'https://a.imgckr.com/2026/10/14/XDkl5.png',
 
   /* ★★★ v406：斗罗 DLC 旗袍立绘（8 个角色）。源图 832×1216 / 1.5MB 太大，
@@ -329,15 +329,41 @@ var PORTRAIT_URLS = {
      全部图已清掉元数据（tEXt/iTXt/zTXt/eXIf/tIME/pHYs），残留 0。
      ⚠ 与 05 的 XZ_PORTRAITS 必须同步 —— 不一致就是「战斗里有立绘、状态栏没有」。
      ⚠ 只收 DLC 里真有的 8 个；唐舞桐/朱竹清/胡列娜/萧萧/蓝佛子/许小言/魔皇/唐雅
-       在世界书里查不到，没加（加了也永远匹配不上人设）。 */
-  '千仞雪': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/千仞雪.jpg',
-  '古月娜': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/古月娜.jpg',
-  '小舞': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/小舞.jpg',
-  '宁荣荣': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/宁荣荣.jpg',
-  '比比东': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/比比东.jpg',
-  '白沉香': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/白沉香.jpg',
-  '阿银': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/阿银.jpg',
-  '马小桃': 'https://fastly.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/马小桃.jpg',
+       ~~在世界书里查不到，没加（加了也永远匹配不上人设）~~
+       —— 上面这句是 v406 当时的判断，**v440 导入 33 人之后已经不成立**：
+       这 8 个人现在都在世界书里，只是当时还没有图。见下面 v445 那一段。
+
+     ★★★ v445：域名 fastly → gcore，并补上第二批 8 人 ★★★
+     病根一（这批人为什么"显示不了"）：v442 只把 `05-界面脚本.js` 的 16 处域名换成
+     gcore，**这张表漏了**，还是 fastly。实测（--noproxy 直连，模拟国内）：
+       fastly  8/8 → 301 跳 raw.githubusercontent.com（国内必死）
+       gcore   8/8 → 200，81~98KB，1.6~2.2s
+     ⇒ 战斗中这 8 个人一直不出立绘，而代码看着完全正常（静默失效）。
+     病根二（第二批为什么一张都没有）：`XZ_GALLERY` 里那 15 人多图**只在 05 有**，
+     引擎没有多图机制（`grep GALLERY 引擎` = 0 处）。引擎只认这张单图表，
+     而这 8 个人在这张表里**根本没有条**。⇒ 战斗中必然空白。
+     修法：给这 8 人补**首图**（多图第 1 张），走 gcore 原图。为什么明知 1.4~1.6MB 还用：
+       · 他们**没有** small/ 缩略图（实测 404），没有更小的可选；
+       · 有图但慢 >>> 完全没图（后者玩家会以为功能坏了）；
+       · 引擎那边的 <img> 带 `loading="lazy"`，不进场就不下载。
+     ⚠ 将来若往仓库补了 small/ 缩略图，把这 8 条换成 small/ 即可（那是 90KB 级）。 */
+  '千仞雪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/千仞雪.jpg',
+  '古月娜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/古月娜.jpg',
+  '小舞': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/小舞.jpg',
+  '宁荣荣': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/宁荣荣.jpg',
+  '比比东': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/比比东.jpg',
+  '白沉香': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/白沉香.jpg',
+  '阿银': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/阿银.jpg',
+  '马小桃': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/马小桃.jpg',
+  /* v445 第二批 8 人：只有原图，没有 small/ 缩略图（实测 404），取各自首图。 */
+  '唐舞桐': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/唐舞桐/_1792939724703.png',
+  '朱竹清': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/朱竹清/_1792939781034.png',
+  '萧萧': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/萧萧/_1792939714259.png',
+  '魔皇': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/魔皇/_1792939693255.png',
+  '许小言': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/许小言/_1792939677308.png',
+  '胡列娜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/胡列娜/_1792939784783.png',
+  '蓝佛子': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/蓝佛子/_1792939689201.png',
+  '古月': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/古月/_1792939710212.png',
 };
 
 function portraitUrlOf(name) {
@@ -346,8 +372,69 @@ function portraitUrlOf(name) {
   if (PORTRAIT_URLS[n]) return PORTRAIT_URLS[n];
   var tail = n.split('·').pop().trim();
   if (PORTRAIT_URLS[tail]) return PORTRAIT_URLS[tail];
-  for (var k in PORTRAIT_URLS) { if (PORTRAIT_URLS[k] && n.indexOf(k) !== -1) return PORTRAIT_URLS[k]; }
-  return '';
+  /* ★ v445：最长键优先，别用「第一个命中的」。
+     原来的写法是 `for (var k in ...) { if (命中) return }` ——
+     而「古月」是「古月娜」的前缀，只要遍历先碰到「古月」，
+     `古月娜·银龙王` 就会被配上**古月的图**。这是 v431 在 05 侧踩过的同款坑，
+     引擎这份一直没同步。05 已经改成「收集全部命中 → 取最长」，这里照抄。 */
+  var best = '', bestLen = -1;
+  for (var k in PORTRAIT_URLS) {
+    if (!PORTRAIT_URLS[k] || n.indexOf(k) === -1) continue;
+    if (k.length > bestLen) { bestLen = k.length; best = PORTRAIT_URLS[k]; }
+  }
+  return best;
+}
+
+/* ═══ v445 · 立绘的**镜像回退**（引擎侧原本一条都没有）═══════════════════════
+   病根：v442 给 `05-界面脚本.js` 加了 `xzImgAlt`/`xzImgRetry`（失败自动换镜像），
+   但**引擎这份没加**。于是同一张图在状态栏能出来、在战斗中出不来 ——
+   而战斗面板是全卡最显眼的地方，玩家只会说「立绘还是显示不了」。
+   实测（--noproxy 直连，模拟国内）：fastly 8/8 全 301 跳 raw.githubusercontent.com，
+   gcore 8/8 全 200。⇒ 光换域名解决了"这一次"，解决不了"下一次某个镜像挂了"。
+
+   做法与 05 完全一致（**别在这里另发明一套**）：
+     · `src` 先给 gcore 那条；`data-xz-src` 记当前实际用的那条；
+     · `onerror` 里调 `portraitFallback(this)`，按 gcore → testingcf → cdn → fastly 往后找；
+     · 全挂就 `this.remove()`（引擎原来的 `onerror="this.remove()"` 保留，见下面调用点）。
+   ⚠ 为什么用**内联 onerror** 而不是 addEventListener：引擎这两处是拼字符串渲染、
+     渲染完就没有节点钩子了（05 那边有 MutationObserver 兜底，引擎没有）。
+     内联属性在酒馆 CSP 下对本项目一直是可用的（现有代码本来就写了 onerror）。
+   ⚠ 环形只走一圈：`_XZ_PIC_TRIED` 记已试过的 host，防止两个镜像互相踢皮球。 */
+var _XZ_PIC_HOSTS = ['gcore', 'testingcf', 'cdn', 'fastly'];
+
+function portraitFallback(img) {
+  try {
+    if (!img) return;
+    var cur = img.getAttribute('data-xz-src') || img.src || '';
+    var m = /^https:\/\/(gcore|testingcf|cdn|fastly)\.jsdelivr\.net\/(.+)$/.exec(cur);
+    if (!m) { if (img.parentNode) img.parentNode.removeChild(img); return; }
+    var tried = (img.getAttribute('data-xz-tried') || '').split(',');
+    if (tried.indexOf(m[1]) < 0) tried.push(m[1]);
+    var rest = m[2], nxt = '';
+    for (var i = 0; i < _XZ_PIC_HOSTS.length; i++) {
+      var h = _XZ_PIC_HOSTS[i];
+      if (tried.indexOf(h) >= 0) continue;
+      nxt = 'https://' + h + '.jsdelivr.net/' + rest;
+      break;
+    }
+    if (!nxt) { if (img.parentNode) img.parentNode.removeChild(img); return; }
+    img.setAttribute('data-xz-tried', tried.join(','));
+    img.setAttribute('data-xz-src', nxt);
+    img.src = nxt;
+  } catch (e) {
+    try { if (img && img.parentNode) img.parentNode.removeChild(img); } catch (e2) {}
+  }
+}
+
+/* 拼 <img> 的统一入口 —— 两处渲染点都走它，免得将来又只改一处。
+   `onerror` 里同时做两件事：先试镜像，全挂了才 remove。
+   （原来只有 `this.remove()`：镜像一挂就直接留空白，连第二次机会都没有。） */
+function portraitImgTag(url, cls, extra) {
+  if (!url) return '';
+  return '<img class="' + cls + '" src="' + esc(url) + '"'
+    + ' data-xz-src="' + esc(url) + '" alt="" loading="lazy"'
+    + (extra ? (' ' + extra) : '')
+    + ' onerror="portraitFallback(this)">';
 }
 
 /* ═══ v435 · 人名与玄技名的**唯一规范化入口** ═══════════════════════════
@@ -17979,7 +18066,9 @@ function renderUI() {
     /* 第 4 条：立绘放进卡面 —— 半透明垫底，默认显示上半部分（object-position:top） */
     var picUrl = '';
     try { picUrl = portraitUrlOf(f.name) || ''; } catch (ePic) {}
-    var picLayer = picUrl ? ('<div class="' + P + '-card-pic"><img src="' + esc(picUrl) + '" alt=""></div>') : '';
+    /* v445：走统一入口（带镜像回退）。原来这里是手拼 <img> 且 onerror 只 this.remove()，
+       镜像一挂就留白，没有第二次机会。 */
+    var picLayer = picUrl ? ('<div class="' + P + '-card-pic">' + portraitImgTag(picUrl, '') + '</div>') : '';
 
     return '<div class="' + P + '-fighter-card ' + (!f.alive ? 'dead' : '') + ' ' + (canClickForTarget ? 'targetable' : '') + ' ' + (isSelected ? 'is-selected' : '') + ' ' + (isCurrentTurnActor ? ('active-turn ' + roleClass) : '') + '" data-fighter-id="' + f.id + '">' +
       picLayer +
@@ -24387,7 +24476,7 @@ function build() {
     try { if (typeof ELEMENT_COLORS !== 'undefined' && ELEMENT_COLORS[el]) ec = ELEMENT_COLORS[el]; } catch (eEl) {}
     return '<div class="' + cardCls(f) + '" data-name="' + esc(f.name) + '">'
       + '<div class="' + PFX + '-u-art">'
-      + (purl ? ('<img class="' + PFX + '-u-pic" src="' + esc(purl) + '" alt="" loading="lazy" onerror="this.remove()">') : '')
+      + (purl ? portraitImgTag(purl, PFX + '-u-pic') : '')
       + '<div class="' + PFX + '-u-sil"><svg viewBox="0 0 200 260" aria-hidden="true">'
       + '<circle cx="100" cy="72" r="34"/>'
       + '<path d="M100 106c-30 0-52 22-58 50l-6 104h128l-6-104c-6-28-28-50-58-50z"/>'

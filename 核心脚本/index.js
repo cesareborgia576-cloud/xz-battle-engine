@@ -25903,17 +25903,59 @@ function build() {
     if (!vh) vh = 640;
     return { vw: vw, vh: vh, ox: ox, oy: oy };
   }
+  /* ★★★ v441：球的可点尺寸。原来是 46×46，手机上**手指点不到**。
+     为什么 46 不够（用户 2026-10-28：「悬浮球是有的，就是手机点不到」）：
+       · 视觉 46px 在人眼看来是「一个球」，但手指的**有效触点**只有指尖那 7~9mm，
+         落在 46px 圆内还需要命中圆心附近 —— 玩家瞄着球边缘按，就落空；
+       · 球贴在右下，正好压在手机浏览器地址栏/手势条那一带（iOS 底部 34px 安全区），
+         goodix 的点击要么被浏览器吃掉，要么被判成「返回手势」；
+       · 它还在酒馆消息的 iframe 里，iframe 自身若比球小，球有一半是**画在 iframe 外**——
+         看得见（overflow 可见）但**收不到事件**（事件不会越过 iframe 边界）。
+     做法：视觉维持 46，外面套一圈 56 的**透明热区**（button 本体 56、::before 画 46 的球）。
+     56 是 Material/iOS 两边共同的最低可点尺寸；透明热区不改变长相，只扩大命中范围。 */
+  var XZ_FLOAT_HIT = 56;
+  var XZ_FLOAT_BALL = 46;
+  function xzFloatSize() { return XZ_FLOAT_HIT; }
   function xzFloatPlace(w, el, r, b) {
     var g = xzFloatGeom(w);
-    var ww = el.offsetWidth || 46, hh = el.offsetHeight || 46;
-    var left = Math.max(4, Math.min(Math.max(4, g.vw - ww - 4), g.vw - ww - r));
-    var top = Math.max(4, Math.min(Math.max(4, g.vh - hh - 4), g.vh - hh - b));
+    var s = xzFloatSize();
+    var ww = el.offsetWidth || s, hh = el.offsetHeight || s;
+    /* ★ v441：安全区。底部要让开系统手势条/地址栏，否则点了被判成「返回」。
+       取 CSS env(safe-area-inset-*) —— 拿不到就当 0（老安卓/桌面）。 */
+    var gap = xzFloatSafeGap();
+    var left = Math.max(gap.l, Math.min(Math.max(gap.l, g.vw - ww - gap.r), g.vw - ww - r));
+    var top = Math.max(gap.t, Math.min(Math.max(gap.t, g.vh - hh - gap.b), g.vh - hh - b));
     el.style.left = (g.ox + left) + 'px';
     el.style.top = (g.oy + top) + 'px';
     el.style.right = 'auto';
     el.style.bottom = 'auto';
     el.setAttribute('data-r', String(r));
     el.setAttribute('data-b', String(b));
+  }
+  /* 安全区读数：CSS env() 只能通过 getComputedStyle 拿到，拿不到就全 0。
+     ⚠ 不要写死 iOS 的 34px：安卓没有手势条，写死等于把球顶高一截。 */
+  function xzFloatSafeGap() {
+    var g = { t: 4, r: 4, b: 4, l: 4 };
+    try {
+      var w = xzFloatWin(), d = w.document;
+      var probe = d.getElementById(PFX + '-safe-probe');
+      if (!probe) {
+        probe = d.createElement('div');
+        probe.id = PFX + '-safe-probe';
+        probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;'
+          + 'pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) '
+          + 'env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);';
+        d.body.appendChild(probe);
+      }
+      var cs = (w.getComputedStyle ? w.getComputedStyle(probe) : null) || null;
+      if (cs) {
+        var pt = parseFloat(cs.paddingTop) || 0, pr = parseFloat(cs.paddingRight) || 0;
+        var pb = parseFloat(cs.paddingBottom) || 0, pl = parseFloat(cs.paddingLeft) || 0;
+        /* 基础留白 6 + 系统安全区（手机上更贴边、也更让开手势条） */
+        g.t = 6 + pt; g.r = 6 + pr; g.b = 6 + pb; g.l = 6 + pl;
+      }
+    } catch (e0) {}
+    return g;
   }
   function xzFloatBind(w, el, r, b, key) {
     function re() {
@@ -25923,23 +25965,40 @@ function build() {
     if (el._xzBound) { re(); return; }
     el._xzBound = true;
     var dragging = false, moved = false, sx = 0, sy = 0, baseR = r, baseB = b;
+    /* ★★★ v441：这一组 `_sx/_sy/_downAt` 是给「pointer 点击判定」用的（见下方 upAt）。 */
+    var lastDownX = 0, lastDownY = 0, lastDownT = 0;
     function down(x, y) {
       dragging = true; moved = false; sx = x; sy = y;
+      lastDownX = x; lastDownY = y; lastDownT = Date.now();
       baseR = parseFloat(el.getAttribute('data-r')) || r;
       baseB = parseFloat(el.getAttribute('data-b')) || b;
     }
     function move(x, y) {
       if (!dragging) return;
       var dx = x - sx, dy = y - sy;
-      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
+      /* ★ v441：抬到 10px。原来是 6px —— 手指按下去必然有几像素抖动，
+         6px 太容易把「想点一下」判成「拖了一下」，于是 click 被吞、球像死了。 */
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) moved = true;
       if (!moved) return;
-      var g = xzFloatGeom(w), ww = el.offsetWidth || 46, hh = el.offsetHeight || 46;
-      var nr = Math.max(4, Math.min(Math.max(4, g.vw - ww - 4), baseR - dx));
-      var nb = Math.max(4, Math.min(Math.max(4, g.vh - hh - 4), baseB + dy));
+      var g = xzFloatGeom(w), s = xzFloatSize();
+      var ww = el.offsetWidth || s, hh = el.offsetHeight || s;
+      var gap = xzFloatSafeGap();
+      var nr = Math.max(gap.l, Math.min(Math.max(gap.l, g.vw - ww - gap.r), baseR - dx));
+      /* ★★★ v441c【真根因，不是手感问题】
+         这里原来是 `baseB + dy` —— **方向是反的**。
+         `bottom` 越大球越靠上；手指向上拖 dy 是**负**，`baseB + dy` 让 bottom 变小
+         ⇒ 球反而往下走。往上拖、球往下掉，玩家越拖越贴近屏幕底缘（手势区），
+         松手又弹回原位 —— 表现就是「球根本拖不动」，而且**怎么使劲都拖不上去**。
+         实测证据（v441 真机事件流）：起点 top=608，向上拖 32px 后 top=648（下移 40px），
+         data-b 从 180 变成 140。
+         ⇒ 改成 `baseB - dy`：向上拖 dy<0 ⇒ bottom 变大 ⇒ 球上移。
+         鼠标那套走同一个 `move()`，一起修好（桌面拖动原本也是反的，只是没人细究）。 */
+      var nb = Math.max(gap.t, Math.min(Math.max(gap.t, g.vh - hh - gap.b), baseB - dy));
       xzFloatPlace(w, el, nr, nb);
     }
-    function up() {
-      if (!dragging) return;
+    /* 返回 true = 这一次抬指/抬鼠标应当算「点了一下」 */
+    function up(x, y) {
+      if (!dragging) return false;
       dragging = false;
       if (moved) {
         try {
@@ -25948,19 +26007,68 @@ function build() {
             bottom: parseFloat(el.getAttribute('data-b')) || b
           }));
         } catch (eW) {}
+        return false;
       }
+      /* 再判一次位移（用终点 - 起点，而不是只靠 move 里的 moved 标记）：
+         `touchmove` 若一次都没触发（轻点常见），moved 会一直是 false，
+         但手指其实可能滑了十几像素 —— 这一次到底是点还是拖，只有起终点能回答。 */
+      if (x != null && y != null) {
+        if (Math.abs(x - lastDownX) > 10 || Math.abs(y - lastDownY) > 10) return false;
+      }
+      return true;
     }
     el.addEventListener('mousedown', function (e) { down(e.clientX, e.clientY); });
     w.addEventListener('mousemove', function (e) { move(e.clientX, e.clientY); });
-    w.addEventListener('mouseup', up);
+    w.addEventListener('mouseup', function (e) { up(e.clientX, e.clientY); });
     el.addEventListener('touchstart', function (e) {
       var t = e.touches && e.touches[0]; if (t) down(t.clientX, t.clientY);
     }, { passive: true });
-    el.addEventListener('touchmove', function (e) {
+    /* ★★★ v441：touchmove 必须绑在**窗口**上，不能只绑球上。
+       病根：球只有 56px，手指一拖动就必然移出球外 —— 事件不再发给球，
+       `move()` 收不到 ⇒ 表现就是「球能按下去但拖不走、一松手又弹回原位」。
+       鼠标那套一直绑在 w 上（mousemove），触摸这套却绑在 el 上，两边不一致。
+       ⚠ 绑到 w 上以后必须自己能分辨「这次拖动是从球开始的」—— 靠 `dragging` 标记，
+         它只在球的 touchstart 里置 true，别处不会。 */
+    w.addEventListener('touchmove', function (e) {
+      if (!dragging) return;
       var t = e.touches && e.touches[0];
       if (t) { move(t.clientX, t.clientY); if (moved && e.cancelable) e.preventDefault(); }
     }, { passive: false });
-    el.addEventListener('touchend', up);
+    /* ★★★ v441：**点不到的总根因** —— 原来只监听 `click`。
+       手机浏览器上 `click` 会被下列任一情况吞掉，而且**没有任何报错**：
+         · touchstart 里 `passive:true` 且后续有 touchmove ⇒ 浏览器视角的「滚动意图」，click 取消；
+         · 球在消息 iframe 里，iframe 边界外的部分能看见但事件到不了；
+         · 宿主（酒馆 App / 浏览器手势）把右下角的短按当成「唤出工具栏」；
+         · 拖动结束那一下，浏览器会**故意不发 click**（规范如此，防止误触）。
+       ⇒ 现在以 **touchend / pointerup 自己判**为准：位移 ≤10px 且按下→抬起 <600ms，
+         就当成一次点击，主动调 onTap。`click` 只留作桌面兜底，并加去重。
+       ★ 为什么是 `<600ms`：手指长按球是「诊断」（见 ensureFloat 里 900ms 的长按），
+         拖到 600ms 以上就不算点击了，避免和长按撞车。 */
+    var _lastTap = 0;
+    function fireTap() {
+      var t = Date.now();
+      if (t - _lastTap < 400) return;   /* 去重：touchend 与 click 会连着来 */
+      _lastTap = t;
+      try { el._xzOnTap && el._xzOnTap(); } catch (eT) {}
+    }
+    /* 把去重后的触发口暴露给元素自己 —— `click` 监听要靠它，
+       否则手机上 touchend 与 click 会各开一次编队面板（两个面板叠在一起）。 */
+    el._xzFireTap = fireTap;
+    function upAt(x, y) {
+      var dt = Date.now() - lastDownT;
+      if (up(x, y) && dt < 600) fireTap();
+    }
+    el.addEventListener('touchend', function (e) {
+      var t = (e.changedTouches && e.changedTouches[0]) || null;
+      upAt(t ? t.clientX : null, t ? t.clientY : null);
+    });
+    el.addEventListener('touchcancel', function () { dragging = false; moved = false; });
+    /* pointer 事件：现代 Chrome/Safari 都会发，桌面鼠标也走这条（mouse 那套保留做老浏览器兜底）。
+       ⚠ 只在 pointerType 不是 mouse 时接管 —— 鼠标已经有 click，重复触发会被 _lastTap 去重。 */
+    el.addEventListener('pointerup', function (e) {
+      if (e.pointerType === 'mouse') return;
+      upAt(e.clientX, e.clientY);
+    });
     try { w.addEventListener('resize', re); w.addEventListener('orientationchange', re); } catch (e1) {}
     try {
       if (w.visualViewport) {
@@ -26003,19 +26111,44 @@ function build() {
         el.id = PFX + '-float';
         var _saved = null;
         try { _saved = JSON.parse((w.localStorage || window.localStorage).getItem('xz_jjb_float_pos') || 'null'); } catch (eS) {}
-        var _r = (_saved && typeof _saved.right === 'number') ? _saved.right : 10;
-        var _b = (_saved && typeof _saved.bottom === 'number') ? _saved.bottom : 132;
+        /* ★★★ v441b（用户 2026-10-28：「你参考战斗脚本的悬浮球的位置再往上一点不就他妈行了」）
+           默认位置从 bottom:132 抬到 bottom:180。这就是「手指够得着」的最直接解法：
+             · 手机上 bottom:132 正好落在**拇指自然垂落区**靠近屏幕底缘，
+               再往下一点就是浏览器手势条 / 地址栏，短按极容易被判成「返回」或「唤出工具栏」；
+             · 抬到 180 后，球中心离底约 208px，是单手持机时拇指最容易够到、
+               又完全避开系统手势热区的位置；
+             · 右边距 10 → 14，让开手机圆角与曲面边缘（曲屏机型按边缘会被吃掉）。
+           ⚠ 只改**默认值**：玩家自己拖过球的话，localStorage 里有他存的坐标，
+             尊重玩家的位置，不强行搬走（否则「我明明拖好了，更新完又跑回去了」）。 */
+        var _r = (_saved && typeof _saved.right === 'number') ? _saved.right : 14;
+        var _b = (_saved && typeof _saved.bottom === 'number') ? _saved.bottom : 180;
+        /* ★★★ v441：46 → 56。用户 2026-10-28：「悬浮球是有的，就是手机点不到」。
+           46px 低于 Material/iOS 共同的最低可点尺寸（48 / 44），而手指的有效触点
+           只有指尖那 7~9mm、还必须落在圆心附近 —— 玩家瞄着球边缘按就落空，而且
+           **一点反馈都没有**（没报错、球也没动），看起来就是「球是死的」。
+           56px = 标准 FAB 尺寸，圆看起来更明显、命中率高得多，视觉上也不突兀。
+           ⚠ 尺寸改了必须同步 xzFloatSize()（XZ_FLOAT_HIT 也是 56），
+             否则 xzFloatPlace 的 offsetWidth 兜底值与真实 DOM 不一致，首次定位会偏 10px。 */
         el.style.cssText = 'position:fixed;left:0;top:0;right:auto;bottom:auto;z-index:2147483647;'
-          + 'width:46px;height:46px;padding:0;box-sizing:border-box;border-radius:50%;'
+          + 'width:56px;height:56px;padding:0;box-sizing:border-box;border-radius:50%;'
           + 'display:flex;align-items:center;justify-content:center;'
           + 'cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;'
-          + 'font:700 17px/1 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
+          + 'user-select:none;-webkit-user-select:none;'
+          + 'font:700 19px/1 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
           + 'color:#e8c98f;background:linear-gradient(180deg,rgba(126,78,42,.92) 0%,rgba(14,27,32,.96) 100%);'
           + 'border:1px solid rgba(242,194,111,.72);'
           + 'box-shadow:0 0 16px rgba(201,168,106,.30),0 10px 30px rgba(0,4,8,.75);';
         el.textContent = '战';
-        el.title = '战前编队（可拖动；双击看战斗检测诊断）';
-        el.addEventListener('click', function (ev) { ev.stopPropagation(); openTeamPick(); });
+        el.title = '战前编队（可拖动；长按看战斗检测诊断）';
+        /* ★ v441：点击动作统一走 `_xzOnTap`，由 xzFloatBind 里的 touchend/pointerup 触发。
+           这里保留 `click` 只作桌面兜底，并且**必须去重** —— 否则手机上会双开面板
+           （touchend 先触发一次、click 再触发一次，两个编队面板叠在一起）。 */
+        el._xzOnTap = function () { openTeamPick(); };
+        el.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (typeof el._xzFireTap === 'function') el._xzFireTap();
+          else openTeamPick();
+        });
         /* ★ v204：双击 / 长按 = 诊断（见 xzJJDiagShow） */
         el.addEventListener('dblclick', function (ev) {
           try { ev.stopPropagation(); ev.preventDefault(); } catch (eDD) {}
@@ -26035,7 +26168,55 @@ function build() {
         d.body.appendChild(el);
         xzFloatBind(w, el, _r, _b, 'xz_jjb_float_pos');
       } else {
-        xzFloatBind(w, el, 10, 132, 'xz_jjb_float_pos');
+        /* ★★★ v441：**已经存在的旧球也要修** —— 这是真正生效的那条路。
+           为什么（本项目的老病，专记在这里免得下次又漏）：
+             `el` 存在意味着球是**上一次脚本执行时建的**，它的 cssText 是那一版的
+             46px + 只绑了 click。只改上面 `if (!el)` 那段，玩家手机上那颗球
+             **一个像素都不会变**，症状原样保留 —— 看起来像「改了没打包」，
+             其实是「改的分支根本没走到」。
+           ⇒ 这里对已存在的球做一次幂等修复：尺寸补到 56、点法补成 _xzOnTap。
+             幂等：每次都覆盖同样三个属性，重复执行不会累积，也不会重建 DOM。 */
+        try {
+          el.style.width = XZ_FLOAT_HIT + 'px';
+          el.style.height = XZ_FLOAT_HIT + 'px';
+          el.style.font = '700 19px/1 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif';
+          el.style.userSelect = 'none';
+          el._xzOnTap = function () { openTeamPick(); };
+          if (!el._xzClickFixed) {
+            el._xzClickFixed = true;
+            /* 旧的 click 监听还在（匿名函数，摘不掉），但它调的是 openTeamPick ——
+               新加的这条 click 走去重口径。两条同时命中时靠 _lastTap 挡住第二次。 */
+            el.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              if (typeof el._xzFireTap === 'function') el._xzFireTap();
+            });
+          }
+        } catch (eFix) {}
+        /* ★★★ v441b：已存在的球也要抬高。
+           为什么必须单独处理：`xzFloatBind` 的 r/b 参数只在**首次建球**时被当作默认值，
+           之后每次都从 `data-r` / `data-b` 属性里读（那是上一版写进去的 132），
+           所以光改上面的默认值，老球纹丝不动 —— 症状原样保留。
+           ⇒ 这里做一次性迁移：把 bottom < 180 的老位置抬到 180，并标记已迁移，
+             之后玩家再自己拖到别处就不会被反复搬回去。
+           ⚠ 迁移条件是 `bottom < 180`，不是 `=== 132`：玩家可能拖到 150，
+             那个位置同样压手势区，一起抬。已经拖到 200 以上的不动。 */
+        try {
+          if (!el._xzLifted441) {
+            var _rNow = parseFloat(el.getAttribute('data-r'));
+            var _bNow = parseFloat(el.getAttribute('data-b'));
+            if (!(isFinite(_bNow)) || _bNow < 180) el.setAttribute('data-b', '180');
+            if (!(isFinite(_rNow)) || _rNow < 14) el.setAttribute('data-r', '14');
+            el._xzLifted441 = true;
+            /* 同步到 localStorage，否则下一次 ensureFloat 又读到老的 132 */
+            try {
+              w.localStorage.setItem('xz_jjb_float_pos', JSON.stringify({
+                right: parseFloat(el.getAttribute('data-r')) || 14,
+                bottom: parseFloat(el.getAttribute('data-b')) || 180
+              }));
+            } catch (eLS2) {}
+          }
+        } catch (eLift) {}
+        xzFloatBind(w, el, 14, 180, 'xz_jjb_float_pos');
       }
       /* ★ v205：挂上就按「有没有读到标签」上色（默认淡，读到才亮） */
       try { xzFloatPaintWake(); } catch (ePF) {}

@@ -25878,20 +25878,76 @@ function build() {
      position:fixed 的 containing block 可能是那块小盒子或布局视口（比可见区高）。
      做法：选可见面积最大的窗口 → 按 visualViewport 算像素 → 用 left/top 钉死，
      并在 resize / 旋转 / 软键盘 / 滚动时重算。 */
+  /* ── 悬浮球几何（v182 → v442 重写判据）──
+     手机上「桌面能看见、手机看不见」的老问题。
+     ★★★ v442【真根因】：原来按 `innerHeight` 选窗口，**判据本身是错的**。
+       酒馆里脚本跑在**消息 iframe** 中，而消息 iframe 的高度 = 内容高度
+       （一条长回复能有 1500~3000px），所以 `iframe.innerHeight = 1680`，
+       比真实屏幕 844 还**大** ⇒ 这段代码高高兴兴地选了 iframe。
+       然后 `position:fixed` 在 iframe 内是相对 **iframe 自己的视口**定位：
+       bottom:180 ⇒ y = 1680 - 56 - 180 = 1444，换算到屏幕坐标 y = 1504，
+       而屏幕只有 844 —— **球被放在屏幕外 660px 处**。
+       球确实建了、DOM 里有、局部坐标也对，玩家屏幕上就是没有。
+       这条在桌面上永远复现不了（桌面 iframe 常 == 视口高），所以活了很久。
+
+     ⇒ 正确判据：**该窗口在真实屏幕上的可见矩形**有多大。
+       拿 `frameElement.getBoundingClientRect()` 与祖先视口相交，
+       再拿外层 scrollY 折算到顶层的屏幕坐标；顶层的可见高度就是 innerHeight。
+       哪个窗口的「屏幕可见高」最大就用它 —— 顶层几乎总是赢，
+       因为 iframe 的可视部分被父级裁切，最多只有一屏高。 */
+  function xzFloatVisibleH(w) {
+    var vh = 0;
+    try { vh = w.innerHeight || (w.document && w.document.documentElement && w.document.documentElement.clientHeight) || 0; } catch (e0) { return 0; }
+    if (!vh) return 0;
+    /* 顶层：它自己就是屏幕 */
+    try { if (w === w.top || w === w.parent) return vh; } catch (eT) { return vh; }
+    /* 内层：按 frameElement 在父级里的位置裁一次 */
+    try {
+      var fe = w.frameElement;
+      if (!fe) return vh;
+      var r = fe.getBoundingClientRect();
+      var ph = 0;
+      try { ph = w.parent.innerHeight || 0; } catch (eP) {}
+      if (!ph) return vh;
+      /* iframe 在父级视口里的可见高 = 交集高度 */
+      var visTop = Math.max(0, r.top);
+      var visBottom = Math.min(ph, r.bottom);
+      var vis = Math.max(0, visBottom - visTop);
+      return Math.min(vh, vis);
+    } catch (e1) { return vh; }
+  }
   function xzFloatWin() {
     var best = window, bestH = -1;
     function c(w) {
       if (!w) return;
-      var d = null, h = -1;
+      var d = null;
       try { d = w.document; } catch (e) { return; }
       if (!d || !d.body) return;
-      try { h = w.innerHeight || (d.documentElement && d.documentElement.clientHeight) || 0; } catch (e2) { h = 0; }
+      var h = xzFloatVisibleH(w);
       if (h > bestH) { bestH = h; best = w; }
     }
     c(window);
     try { c(window.parent); } catch (e1) {}
     try { c(window.top); } catch (e2) {}
     return best;
+  }
+  /* 把「某窗口视口内的坐标」换算成「真实屏幕坐标」——只用来判断能不能看见，
+     不参与定位（定位仍写在那块文档里，因为事件得由那块文档收）。 */
+  function xzFloatScreenRect(w) {
+    /* 顶层：视口坐标就是屏幕坐标，再减去滚动 */
+    try { if (w === w.top) return { dx: -(w.scrollX || w.pageXOffset || 0), dy: -(w.scrollY || w.pageYOffset || 0) }; } catch (e0) {}
+    var dx = 0, dy = 0, cur = w, guard = 0;
+    while (cur && guard++ < 8) {
+      try { if (cur === cur.top) break; } catch (eT) { break; }
+      var fe = null;
+      try { fe = cur.frameElement; } catch (e1) { break; }
+      if (!fe) break;
+      var r = fe.getBoundingClientRect();
+      dx += r.left; dy += r.top;
+      try { dx -= (cur.parent.scrollX || 0); dy -= (cur.parent.scrollY || 0); } catch (e2) {}
+      cur = cur.parent;
+    }
+    return { dx: dx, dy: dy };
   }
   function xzFloatGeom(w) {
     var vv = null, vw = 0, vh = 0, ox = 0, oy = 0;
@@ -25901,6 +25957,10 @@ function build() {
     if (!vh) { try { vh = w.innerHeight || 0; } catch (e2) {} }
     if (!vw) vw = 360;
     if (!vh) vh = 640;
+    /* ★ v442：内层文档里定位必须用**屏幕可见高**，不能用它自己的 innerHeight。
+       否则 bottom:180 会被算到屏幕外面去（见 xzFloatWin 头注释的实测数字）。 */
+    var visH = xzFloatVisibleH(w);
+    if (visH > 0 && visH < vh) vh = visH;
     return { vw: vw, vh: vh, ox: ox, oy: oy };
   }
   /* ★★★ v441：球的可点尺寸。原来是 46×46，手机上**手指点不到**。
@@ -27266,14 +27326,27 @@ function build() {
         el.style.boxShadow = '0 0 20px rgba(242,194,111,.85),0 0 42px rgba(201,168,106,.42),0 10px 30px rgba(0,4,8,.75)';
         el.title = '本楼读到 <战斗开始>（点开战前编队；双击看诊断）';
       } else if (soft) {
-        el.style.opacity = '.72';
+        el.style.opacity = '.92';
         el.style.color = '#f6cdb8';
         el.style.boxShadow = '0 0 14px rgba(236,142,116,.55),0 6px 20px rgba(0,4,8,.65)';
         el.title = '本楼有敌我名单、但没写 <战斗开始>：点这里照样能开战';
       } else {
-        el.style.opacity = dice ? '.16' : '.28';
-        el.style.color = '#8c7c5e';
-        el.style.boxShadow = '0 0 8px rgba(201,168,106,.14),0 6px 18px rgba(0,4,8,.55)';
+        /* ★★★ v442：`.28` / `.16` 在手机上等于**隐形**（用户 2026-10-28：
+           「手机端悬浮球还是看不到」）。为什么桌面看着还行、手机就没了：
+             · 手机屏幕小、亮度低、揣在外面阳光下看，28% 不透明的深色球直接融进背景；
+             · 球是深色渐变（rgba(14,27,32,.96)）× 0.28 ⇒ 实际接近纯黑，
+               而酒馆手机端背景也偏深 ⇒ 零对比；
+             · 而且「没读到标签」是**常态**（大多数楼层没有 <战斗开始>），
+               所以玩家绝大多数时间看到的就是这个隐形状态。
+           ⇒ 底态抬到 **.88**，靠**颜色**（灰金 vs 亮金）与发光区分状态，
+             不再靠透明度 —— 「看不见的入口」比「分不清状态」严重得多。
+             骰子模式 .16 → .55：那时候本来就该提示「你不在脚本模式」，
+             但球仍须看得见（否则玩家没法点回来）。 */
+        el.style.opacity = dice ? '.55' : '.88';
+        el.style.color = dice ? '#7d7461' : '#cbb894';
+        el.style.boxShadow = dice
+          ? '0 0 8px rgba(201,168,106,.10),0 6px 18px rgba(0,4,8,.55)'
+          : '0 0 12px rgba(201,168,106,.22),0 8px 22px rgba(0,4,8,.62)';
         el.title = dice
           ? '当前是骰子裁定模式（点模式球切回脚本；双击看诊断）'
           : '本楼没有读到 <战斗开始>（可拖动；双击看诊断）';

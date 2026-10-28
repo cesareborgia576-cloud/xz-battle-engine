@@ -321,7 +321,7 @@ var PORTRAIT_URLS = {
   '沈清颜': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/TW_QQv2%E8%84%B8%E9%83%A8%E5%8F%82%E8%80%83_00020_.png',
   '凌星遥': '',
   '言清漪': 'https://cdn.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/Ab3qJJDgRKZTAAAAAElFTkSuQmCC.png',
-  '阿依莎': 'https://a.imgckr.com/2026/10/14/XDkl5.png',
+  '阿依莎': 'https://a.imgckr.com/2026/10/14/XDkl5.png',
 
   /* ★★★ v406：斗罗 DLC 旗袍立绘（8 个角色）。源图 832×1216 / 1.5MB 太大，
      直接当立绘会让面板加载卡死 ⇒ 压成 512 宽 JPEG（约 90KB），放在仓库 small/ 下。
@@ -22478,6 +22478,687 @@ function jjbLogRest(t) {
   function d0() { return getDoc(); }
   function q(id) { return d0().getElementById(PFX + '-' + id); }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   战斗面板皮肤（v433）。改这里 = 改战斗界面的长相，不用再翻 1400 行旧样式。
+   卡片两档尺寸：`.xz-jjb-row.is-solo`（1v1 撑满半场）/ `.is-multi`
+   （≥2 常规大小，视口恒等于两张卡，多的往下滑）。
+   ══════════════════════════════════════════════════════════════════════════ */
+var XZ_JJB_SKIN = `
+/* ══════════════════════════════════════════════════════════════════════════
+   天元录 · 战斗界面 皮肤 v433
+   布局：顶栏 / 先手轨道 / 左右对阵（卡片自适应 + 可滚动）/ 战报 / 底栏
+   ★ 卡片只有两档尺寸：
+       · 1v1 → is-solo：一张卡撑满半场（立绘大、信息压在立绘下沿）
+       · ≥2  → is-multi：常规大小，视口恒等于 2 张卡的高度，多的往下滑
+     两档都由 .xz-jjb-row.is-solo / .is-multi 控制，JS 只负责加这个 class。
+   ★ 本文件不用 !important（旧皮肤有 478 个，正是它自己改不动自己的原因）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+#xz-jjb-overlay{
+  --xz-bg:#05070a;
+  --xz-panel:#0c1016;
+  --xz-panel-2:#11161e;
+  --xz-ink:#e9e5dc;
+  --xz-ink-2:#9c968c;
+  --xz-ink-3:#615c55;
+  --xz-gold:#c9a86a;
+  --xz-gold-2:#e8cb92;
+  --xz-gold-dim:rgba(201,168,106,.16);
+  --xz-line:rgba(255,255,255,.065);
+  --xz-line-2:rgba(255,255,255,.12);
+  --xz-me:#5eead4;
+  --xz-foe:#ff6b6b;
+  --xz-hp-a:#ff5d6c; --xz-hp-b:#7d1420;
+  --xz-mp-a:#59b4ff; --xz-mp-b:#16406e;
+  --xz-r:10px;
+  --xz-font:"Noto Serif SC","Songti SC","Source Han Serif SC",Georgia,"Microsoft YaHei",serif;
+  --xz-num:"SF Mono",ui-monospace,"JetBrains Mono",Consolas,monospace;
+
+  /* ── 旧令牌别名：不能删 ──
+     增益总览（-bfov）、技能详情（-skpop）、丹药（-miscpop）、编队（-team*）、
+     翻译面板（-tp*）这些**不是本次换皮范围**的界面，样式留在 legacy 段里，
+     但它们吃的是下面这批变量。删掉 = 那些弹层变成透明/纯黑。 */
+  --xz-void:#05080c;
+  --xz-card:linear-gradient(145deg, rgba(18, 26, 33, 0.97) 0%, rgba(10, 15, 20, 0.95) 100%);
+  --xz-card-hover:linear-gradient(145deg, rgba(24, 35, 43, 0.98) 0%, rgba(13, 20, 26, 0.96) 100%);
+  --xz-border:rgba(208, 220, 226, 0.10);
+  --xz-border-strong:rgba(208, 220, 226, 0.26);
+  --xz-gold-bright:#e8c98f;
+  --xz-gold-glow:rgba(201, 168, 106, 0.16);
+  --xz-jade:#6fbfae;--xz-cyan:#7fd4c1;--xz-purple:#c58fa0;--xz-crimson:#b5545c;
+  --xz-text:#eef2f4;--xz-text-2:#a8b6bc;--xz-muted:#6f8188;
+  --dhl-stage:radial-gradient(circle at 78% 10%, rgba(127, 212, 193, 0.07), transparent 26%), linear-gradient(180deg, #0a1016 0%, #05080c 100%);
+  --dhl-reading:linear-gradient(180deg, rgba(12, 19, 26, 0.96), rgba(6, 10, 14, 0.98));
+  --dhl-card:linear-gradient(145deg, rgba(18, 26, 33, 0.97) 0%, rgba(10, 15, 20, 0.95) 100%);
+  --dhl-card-hover:linear-gradient(145deg, rgba(24, 35, 43, 0.98) 0%, rgba(13, 20, 26, 0.96) 100%);
+  --dhl-header:linear-gradient(90deg, rgba(8, 14, 20, 0.99), rgba(14, 22, 29, 0.97) 52%, rgba(24, 20, 20, 0.99));
+  --dhl-button-active:linear-gradient(180deg, rgba(201, 168, 106, 0.20), rgba(10, 16, 22, 0.34));
+  --dhl-gold:#c9a86a;--dhl-gold-bright:#e8c98f;
+  --dhl-border:rgba(208, 220, 226, 0.10);--dhl-border-strong:rgba(208, 220, 226, 0.26);
+  --dhl-shadow:0 10px 30px rgba(0, 4, 8, 0.72);
+  --dhl-glow:0 0 10px rgba(201, 168, 106, 0.12);
+
+  position:fixed;inset:0;z-index:2147483646;
+  background:rgba(3,6,10,.82);
+  font-family:var(--xz-font);font-size:14px;line-height:1.5;color:var(--xz-ink);
+  -webkit-tap-highlight-color:transparent;
+  margin:0;max-width:none;max-height:none;width:100%;height:100%;border:0;padding:0;outline:none;
+  overflow-y:auto;overscroll-behavior:contain;
+}
+#xz-jjb-overlay *{box-sizing:border-box;}
+#xz-jjb-overlay ::selection{background:rgba(201,168,106,.28);}
+
+/* ── 外框 ─────────────────────────────────────────────────────────────── */
+#xz-jjb-frame{
+  position:absolute;left:8px;top:8px;width:min(720px,94vw);
+  display:flex;flex-direction:column;min-width:0;
+  border:1px solid var(--xz-line-2);border-radius:14px;overflow:hidden;
+  background:linear-gradient(180deg,#0b1017,#080b10 60%);
+  box-shadow:0 24px 80px -20px rgba(0,0,0,.9),0 0 0 1px rgba(0,0,0,.6);
+  isolation:isolate;
+}
+#xz-jjb-atmo{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+#xz-jjb-atmo::before{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:44%;
+  background:
+    radial-gradient(70% 120% at 26% 108%,rgba(96,120,132,.13),transparent 62%),
+    radial-gradient(56% 100% at 62% 112%,rgba(96,120,132,.10),transparent 60%),
+    radial-gradient(44% 80% at 86% 110%,rgba(96,120,132,.08),transparent 58%),
+    linear-gradient(180deg,transparent,rgba(6,9,13,.55));
+  filter:blur(.5px);
+}
+
+/* ── 顶栏 ─────────────────────────────────────────────────────────────── */
+#xz-jjb-head{
+  display:flex;align-items:center;gap:12px;min-width:0;
+  padding:13px 16px 12px;position:relative;z-index:2;
+  border-bottom:1px solid var(--xz-line);
+}
+#xz-jjb-seal{
+  width:30px;height:30px;flex:none;display:grid;place-items:center;
+  border:1px solid var(--xz-gold-dim);border-radius:5px;
+  color:var(--xz-gold);font-size:15px;font-weight:700;
+  background:rgba(201,168,106,.05);
+}
+#xz-jjb-caption{display:flex;align-items:center;gap:8px;min-width:0;}
+#xz-jjb-title{
+  font-size:15px;font-weight:700;letter-spacing:.22em;color:var(--xz-ink);
+  white-space:nowrap;
+}
+#xz-jjb-head > button{
+  font-family:var(--xz-font);appearance:none;cursor:pointer;
+  background:transparent;color:var(--xz-ink-2);
+  border:1px solid var(--xz-line);border-radius:7px;
+  padding:5px 12px;font-size:12px;letter-spacing:.06em;
+  transition:color .18s,border-color .18s,background .18s;
+}
+#xz-jjb-restart{margin-left:auto;}
+#xz-jjb-head > button:hover{color:var(--xz-ink);border-color:var(--xz-line-2);background:rgba(255,255,255,.03);}
+
+/* ── 先手轨道 ─────────────────────────────────────────────────────────── */
+#xz-jjb-rail{
+  position:relative;height:38px;flex:none;z-index:2;
+  margin:0 16px;padding:0 0 0 0;
+  display:flex;align-items:center;
+  border-bottom:1px solid var(--xz-line);
+}
+#xz-jjb-rail::before{
+  content:"先手";flex:none;
+  font-size:11px;letter-spacing:.1em;color:var(--xz-ink-3);
+  margin-right:12px;white-space:nowrap;
+}
+#xz-jjb-railline{
+  position:absolute;left:52px;right:78px;top:50%;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,rgba(94,234,212,.22),rgba(255,255,255,.09) 50%,rgba(255,107,107,.22));
+}
+#xz-jjb-railfill{
+  position:absolute;left:52px;top:50%;height:2px;margin-top:-1px;border-radius:2px;
+  background:linear-gradient(90deg,rgba(94,234,212,.55),rgba(94,234,212,.05));
+  transition:width .5s cubic-bezier(.4,0,.2,1);
+}
+/* 刻度不画格子（那像表格）—— 压到几乎没有，只当质感 */
+#xz-jjb-railgrid{
+  position:absolute;left:52px;right:78px;top:50%;height:2px;
+  background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.10) 0 1px,transparent 1px 8.3333%);
+  opacity:.35;
+}
+#xz-jjb-nodes{position:absolute;left:52px;right:78px;top:0;bottom:0;}
+.xz-jjb-node{
+  position:absolute;top:50%;width:19px;height:19px;margin:-9.5px 0 0 -9.5px;
+  display:grid;place-items:center;border-radius:50%;background:#0d1117;
+  font-size:9.5px;line-height:1;letter-spacing:0;color:var(--xz-ink-2);
+  border:1px solid rgba(255,255,255,.22);
+  transition:left .55s cubic-bezier(.4,0,.2,1),box-shadow .3s,transform .3s;
+}
+.xz-jjb-node.ally{color:#9fe8dc;border-color:rgba(94,234,212,.45);}
+.xz-jjb-node.enemy{color:#f4b8b3;border-color:rgba(255,107,107,.45);}
+.xz-jjb-node.now{transform:scale(1.08);background:var(--xz-me);border-color:var(--xz-me);
+  color:#062a26;font-weight:700;
+  box-shadow:0 0 0 3px rgba(94,234,212,.14),0 0 12px rgba(94,234,212,.7);}
+.xz-jjb-node.enemy.now{background:var(--xz-foe);border-color:var(--xz-foe);color:#2a0808;
+  box-shadow:0 0 0 3px rgba(255,107,107,.14),0 0 12px rgba(255,107,107,.7);}
+#xz-jjb-railtag:empty{display:none;}
+#xz-jjb-railtag{
+  position:absolute;right:0;top:50%;transform:translateY(-50%);
+  font-family:var(--xz-num);font-size:11px;letter-spacing:.04em;
+  color:var(--xz-ink-2);padding:3px 9px;border-radius:999px;
+  border:1px solid var(--xz-line);font-variant-numeric:tabular-nums;
+}
+
+/* ── 对阵区 ───────────────────────────────────────────────────────────── */
+#xz-jjb-sides{
+  display:flex;flex-direction:row;align-items:stretch;
+  flex:1 1 auto;min-height:0;position:relative;z-index:2;
+}
+.xz-jjb-side{
+  flex:1 1 50%;min-width:0;min-height:0;
+  display:flex;flex-direction:column;
+  padding:12px 14px;
+}
+.xz-jjb-side.foe{border-left:1px solid var(--xz-line);}
+.xz-jjb-lbl{
+  margin:0 0 8px;flex:none;
+  font-size:10.5px;letter-spacing:.2em;color:var(--xz-ink-3);
+  display:flex;align-items:center;gap:7px;
+}
+.xz-jjb-lbl::before{content:"";width:14px;height:1px;background:currentColor;opacity:.55;}
+.xz-jjb-side.mate .xz-jjb-lbl{color:#5f8f88;}
+.xz-jjb-side.foe .xz-jjb-lbl{color:#8a6a63;}
+
+/* 卡片容器：两种尺寸的唯一开关 */
+.xz-jjb-row{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;}
+.xz-jjb-row.is-solo{justify-content:center;}
+.xz-jjb-row.is-solo .xz-jjb-card{flex:0 1 auto;height:min(100%,460px);min-height:0;}
+.xz-jjb-row.is-multi{overflow-y:auto;overscroll-behavior:contain;padding-right:3px;}
+.xz-jjb-row.is-multi::-webkit-scrollbar{width:4px;}
+.xz-jjb-row.is-multi::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:99px;}
+/* 多打多：视口恒等于两张卡 —— 4 个人也只露 2 个，往下滑看另 2 个 */
+.xz-jjb-row.is-multi .xz-jjb-card{flex:0 0 calc((100% - 10px) / 2);min-height:0;}
+.xz-jjb-row.is-multi .xz-jjb-bf{height:18px;font-size:9px;gap:3px;padding:0 5px 0 4px;}
+.xz-jjb-row.is-multi .xz-jjb-bf svg{width:11px;height:11px;}
+.xz-jjb-row.is-multi .xz-jjb-bfs{gap:4px;}
+.xz-jjb-row.is-multi .xz-jjb-u-info{padding-bottom:9px;margin-top:-24px;}
+
+/* ── 角色卡：立绘带 + 信息区（信息压在立绘下沿）──────────────────────── */
+.xz-jjb-card{
+  position:relative;min-width:0;display:flex;flex-direction:column;
+  border-radius:var(--xz-r);overflow:hidden;cursor:pointer;
+  border:1px solid var(--xz-line);
+  background:linear-gradient(180deg,rgba(255,255,255,.018),transparent 40%);
+  transition:border-color .2s,transform .12s;
+}
+.xz-jjb-card::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:2px;z-index:3;
+  border-radius:2px;background:linear-gradient(180deg,var(--xz-me),transparent 72%);
+  opacity:.75;
+}
+.xz-jjb-card.enemy::before{background:linear-gradient(180deg,var(--xz-foe),transparent 72%);}
+.xz-jjb-card:hover{border-color:var(--xz-line-2);}
+/* 可击：不画整圈红框（那看着像报错），只把左边那条线点亮 + 一枚角 */
+.xz-jjb-card.pick{border-color:rgba(255,107,107,.34);}
+.xz-jjb-card.pick::after{
+  content:"";position:absolute;left:-1px;top:-1px;width:14px;height:14px;
+  border-left:1px solid var(--xz-foe);border-top:1px solid var(--xz-foe);
+  border-top-left-radius:10px;opacity:.85;
+}
+.xz-jjb-card.dead{opacity:.34;filter:grayscale(1);}
+.xz-jjb-card.hit{animation:xz-jjb-shake .32s;}
+@keyframes xz-jjb-shake{
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-6px)}40%{transform:translateX(5px)}
+  60%{transform:translateX(-3px)}80%{transform:translateX(2px)}
+}
+
+.xz-jjb-u-art{
+  position:relative;flex:1 1 auto;min-height:56px;overflow:hidden;
+  background:
+    radial-gradient(78% 62% at 50% 16%,rgba(94,234,212,.08),transparent 66%),
+    linear-gradient(180deg,rgba(14,19,27,.55),rgba(9,12,17,.98));
+}
+.xz-jjb-card.enemy .xz-jjb-u-art{
+  background:
+    radial-gradient(78% 62% at 50% 16%,rgba(255,107,107,.09),transparent 66%),
+    linear-gradient(180deg,rgba(21,15,17,.55),rgba(10,8,10,.98));
+}
+.xz-jjb-u-art::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:46%;pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(8,11,16,.72) 58%,rgba(8,11,16,.97));
+}
+.xz-jjb-u-pic{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;object-position:center 16%;
+  filter:brightness(.84) saturate(.94) contrast(1.03);
+  -webkit-mask-image:radial-gradient(120% 100% at 50% 34%,#000 52%,transparent 92%);
+  mask-image:radial-gradient(120% 100% at 50% 34%,#000 52%,transparent 92%);
+}
+/* 没立绘时的剪影：只交代"这里站着一个人"，不抢戏 */
+.xz-jjb-u-sil{position:absolute;inset:0;display:grid;place-items:center;opacity:.10;pointer-events:none;}
+.xz-jjb-u-sil svg{height:min(62%,230px);width:auto;fill:currentColor;stroke:currentColor;stroke-width:0;}
+.xz-jjb-card.ally .xz-jjb-u-sil{color:#8fd9c9;}
+.xz-jjb-card.enemy .xz-jjb-u-sil{display:none;}
+/* 没有立绘的敌人：一颗会呼吸的核，不留空洞 */
+.xz-jjb-u-core{position:absolute;inset:0;display:none;place-items:center;}
+.xz-jjb-card.enemy .xz-jjb-u-core{display:grid;}
+.xz-jjb-u-core span{
+  width:76px;height:76px;border-radius:50%;position:relative;
+  background:
+    radial-gradient(circle at 38% 34%,rgba(255,150,150,.5),rgba(255,107,107,.16) 42%,transparent 68%),
+    radial-gradient(circle,rgba(255,107,107,.10),transparent 70%);
+  border:1px solid rgba(255,140,140,.5);
+  box-shadow:inset 0 0 34px rgba(255,120,120,.55),0 0 60px -4px rgba(255,107,107,.5);
+  animation:xz-jjb-breathe 3.4s ease-in-out infinite;
+}
+@keyframes xz-jjb-breathe{0%,100%{transform:scale(1);opacity:.9;}50%{transform:scale(1.06);opacity:1;}}
+
+.xz-jjb-u-info{
+  flex:0 0 auto;position:relative;z-index:2;
+  padding:0 13px 12px;margin-top:-30px;
+}
+.xz-jjb-top{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;min-width:0;}
+.xz-jjb-nm{
+  font-size:16px;font-weight:700;letter-spacing:.04em;color:var(--xz-ink);
+  text-shadow:0 1px 10px rgba(0,0,0,.8);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+}
+.xz-jjb-nm.enemy{color:#f0c9c6;}
+.xz-jjb-rlm{font-size:11.5px;color:var(--xz-ink-3);letter-spacing:.08em;flex:none;}
+.xz-jjb-spd{
+  font-size:10px;color:var(--xz-ink-3);letter-spacing:.04em;flex:none;
+  font-family:var(--xz-num);opacity:.8;
+}
+.xz-jjb-ebadge{
+  flex:none;font-size:10.5px;letter-spacing:.1em;
+  padding:1.5px 7px;border-radius:4px;
+  color:#c4b5fd;border:1px solid rgba(167,139,250,.28);background:rgba(167,139,250,.08);
+}
+.xz-jjb-look{
+  flex:none;margin-left:auto;appearance:none;cursor:pointer;
+  font-family:var(--xz-font);font-size:10px;line-height:1;
+  padding:4px 7px;border-radius:5px;
+  color:var(--xz-gold-2);border:1px solid rgba(201,168,106,.28);
+  background:rgba(201,168,106,.08);
+  transition:border-color .15s,background .15s;
+  touch-action:manipulation;
+}
+.xz-jjb-look:hover{border-color:rgba(201,168,106,.55);background:rgba(201,168,106,.14);}
+
+/* 血 / 灵：细长条 + 贴着右端的数字（tabular-nums，数字变时不会左右跳） */
+.xz-jjb-hprow,.xz-jjb-mprow{display:flex;align-items:center;gap:9px;margin-bottom:6px;}
+.xz-jjb-bar-lbl{width:14px;flex:none;text-align:center;font-size:10px;color:var(--xz-ink-3);}
+.xz-jjb-hp,.xz-jjb-mp{
+  position:relative;flex:1 1 auto;min-width:0;height:7px;border-radius:99px;
+  background:rgba(255,255,255,.055);overflow:hidden;
+}
+.xz-jjb-hpf,.xz-jjb-mpf{
+  position:absolute;left:0;top:0;bottom:0;display:block;border-radius:99px;
+  transition:width .5s cubic-bezier(.4,0,.2,1);
+}
+.xz-jjb-hpf{background:linear-gradient(90deg,var(--xz-hp-a),var(--xz-hp-b));box-shadow:0 0 10px rgba(255,93,108,.28);}
+.xz-jjb-mpf{background:linear-gradient(90deg,var(--xz-mp-a),var(--xz-mp-b));box-shadow:0 0 10px rgba(89,180,255,.22);}
+.xz-jjb-bar-txt{
+  flex:0 0 auto;text-align:right;
+  font-size:11px;color:var(--xz-ink-2);letter-spacing:.02em;
+  font-variant-numeric:tabular-nums;font-family:var(--xz-num);
+}
+
+/* ── 状态：图标 + 文字 + 层数角标 ──────────────────────────────────────── */
+.xz-jjb-bfs{
+  display:flex;flex-wrap:wrap;gap:6px;margin-top:2px;min-height:18px;
+  max-height:46px;overflow-y:auto;overscroll-behavior:contain;
+}
+.xz-jjb-bfs::-webkit-scrollbar{width:3px;}
+.xz-jjb-bfs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:2px;}
+.xz-jjb-bf{
+  position:relative;display:inline-flex;align-items:center;gap:4px;
+  height:21px;padding:0 7px 0 5px;border-radius:4px;border:1px solid;
+  font-size:10.5px;letter-spacing:.03em;line-height:1;
+  transition:filter .15s,border-color .15s;
+}
+.xz-jjb-bf svg{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;}
+.xz-jjb-bf:hover{filter:brightness(1.18);}
+.xz-jjb-bfn{
+  flex:none;min-width:12px;font-style:normal;font-family:var(--xz-num);
+  font-size:9px;line-height:1;opacity:.72;font-variant-numeric:tabular-nums;
+}
+.xz-jjb-bf.good{color:#7fe0b0;border-color:rgba(127,224,176,.28);background:rgba(127,224,176,.08);}
+.xz-jjb-bf.bad{color:#f08a84;border-color:rgba(240,138,132,.28);background:rgba(240,138,132,.08);}
+.xz-jjb-bf.neutral{color:#e6bd76;border-color:rgba(230,189,118,.26);background:rgba(230,189,118,.07);}
+.xz-jjb-bfnone{font-size:10px;color:var(--xz-ink-3);opacity:.6;}
+/* 图标右边那行字。v242 砍掉它是因为 152px 卡面塞不下；卡片变大之后补回来 ——
+   只画图标的话「穿防」和「破盾」在玩家眼里都是"一把剑"，得靠长按才知道是什么。 */
+.xz-jjb-bfx{
+  flex:none;font-style:normal;white-space:nowrap;
+  max-width:132px;overflow:hidden;text-overflow:ellipsis;
+}
+
+/* ── 战报：左边一根竖线 + 每行一个圆点 ───────────────────────────────── */
+#xz-jjb-log{
+  flex:0 1 auto;min-height:64px;max-height:34%;overflow-y:auto;
+  position:relative;z-index:2;padding:0 18px;min-width:0;
+  border-top:1px solid var(--xz-line);
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;
+}
+#xz-jjb-log::-webkit-scrollbar{width:6px;}
+#xz-jjb-log::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px;}
+.xz-jjb-lg{
+  position:relative;padding:5px 0 5px 20px;font-size:12.5px;line-height:1.65;
+  color:var(--xz-ink-2);animation:xz-jjb-lgin .3s ease-out;
+}
+@keyframes xz-jjb-lgin{from{opacity:0;transform:translateY(-3px);}to{opacity:1;transform:none;}}
+.xz-jjb-lg::before{
+  content:"";position:absolute;left:1px;top:11px;width:9px;height:9px;border-radius:50%;
+  background:var(--xz-bg);border:1px solid rgba(255,255,255,.22);
+}
+.xz-jjb-lg.a::before{border-color:var(--xz-me);box-shadow:0 0 8px rgba(94,234,212,.5);}
+.xz-jjb-lg.e::before{border-color:var(--xz-foe);box-shadow:0 0 8px rgba(255,107,107,.5);}
+.xz-jjb-l-ally,.xz-jjb-l-enemy,.xz-jjb-l-turn,.xz-jjb-l-note,.xz-jjb-l-sys,.xz-jjb-l-buff{
+  display:flex;flex-wrap:wrap;align-items:center;gap:5px;
+}
+.xz-jjb-nmbox{
+  font-weight:600;font-size:12px;line-height:1;padding:2px 0;
+  border-bottom:1px solid transparent;
+}
+.xz-jjb-nmbox.ally{color:var(--xz-ink);border-bottom-color:rgba(94,234,212,.45);}
+.xz-jjb-nmbox.enemy{color:var(--xz-ink);border-bottom-color:rgba(255,107,107,.45);}
+.xz-jjb-lgkw{color:var(--xz-ink-3);font-size:11.5px;}
+.xz-jjb-skn{
+  color:var(--xz-gold-2);font-weight:600;font-size:12px;
+  border-bottom:1px solid rgba(201,168,106,.3);padding:2px 0;
+}
+.xz-jjb-lghp{
+  font-family:var(--xz-num);font-weight:700;font-size:13px;color:var(--xz-hp-a);
+  font-variant-numeric:tabular-nums;
+}
+.xz-jjb-note{color:var(--xz-ink-3);font-size:11.5px;}
+.xz-jjb-stbox{
+  display:inline-block;font-size:11px;line-height:1;padding:2px 5px;border-radius:3px;
+  color:#9fd8cd;border:1px solid rgba(94,234,212,.22);background:rgba(94,234,212,.06);
+}
+.xz-jjb-stbox.none{color:var(--xz-ink-3);border-color:var(--xz-line);background:none;}
+.xz-jjb-lghas{cursor:pointer;}
+.xz-jjb-lghas:hover{background:rgba(255,255,255,.025);}
+.xz-jjb-lghas::after{
+  content:"▸";position:absolute;right:2px;top:6px;font-size:9px;
+  color:rgba(255,255,255,.18);transition:transform .18s;
+}
+.xz-jjb-lopen::after{transform:rotate(90deg);color:rgba(201,168,106,.7);}
+.xz-jjb-lgd{display:none;margin-top:5px;padding:4px 0 2px 10px;border-left:1px solid rgba(201,168,106,.22);}
+.xz-jjb-lopen .xz-jjb-lgd{display:block;}
+.xz-jjb-lgdline{font-size:11px;line-height:1.7;color:#8a8278;}
+
+/* ── 底栏 ─────────────────────────────────────────────────────────────── */
+#xz-jjb-bar{
+  flex:none;position:relative;z-index:2;
+  display:flex;gap:8px;align-items:stretch;min-width:0;flex-wrap:wrap;
+  padding:9px 16px calc(6px + env(safe-area-inset-bottom,0px));
+  border-top:1px solid var(--xz-line);
+  background:linear-gradient(180deg,rgba(255,255,255,.012),transparent);
+}
+.xz-jjb-skwrap{display:flex;align-items:stretch;gap:6px;flex:1 1 380px;min-width:min(100%,520px);}
+.xz-jjb-skrow{
+  display:flex;gap:8px;flex:1 1 auto;min-width:0;
+  overflow-x:auto;scrollbar-width:none;padding-bottom:2px;
+}
+.xz-jjb-skrow::-webkit-scrollbar{display:none;}
+.xz-jjb-skgrp{display:flex;flex:0 0 auto;min-width:0;}
+
+/* 技能键：菱形图标 + 名字 + 品阶·目标 + 耗灵 */
+.xz-jjb-sk{
+  position:relative;display:flex;align-items:center;gap:9px;
+  min-width:104px;padding:6px 9px 6px 10px;text-align:left;
+  appearance:none;cursor:pointer;font-family:var(--xz-font);color:var(--xz-ink);
+  background:var(--xz-panel);border:1px solid var(--xz-line);border-radius:9px;
+  transition:border-color .16s,background .16s,transform .16s;
+  overflow:hidden;
+}
+.xz-jjb-sk::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:2.5px;
+  background:var(--ico,#8a8578);opacity:.9;
+}
+.xz-jjb-sk:hover{border-color:var(--xz-line-2);background:var(--xz-panel-2);transform:translateY(-1px);}
+.xz-jjb-sk.on{
+  border-color:rgba(201,168,106,.62);
+  background:linear-gradient(180deg,rgba(201,168,106,.11),rgba(201,168,106,.03));
+  box-shadow:0 0 0 1px rgba(201,168,106,.22),0 6px 18px -8px rgba(201,168,106,.5);
+}
+.xz-jjb-sklack{opacity:.45;cursor:not-allowed;}
+.xz-jjb-skico{
+  flex:none;width:14px;height:14px;margin-left:2px;
+  transform:rotate(45deg);border-radius:2px;
+  border:1px solid currentColor;color:var(--ico,#c9a86a);
+  background:linear-gradient(135deg,rgba(255,255,255,.16),transparent 60%);
+  box-shadow:0 0 8px -2px currentColor,inset 0 0 6px -2px currentColor;
+}
+.xz-jjb-sktx{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 auto;}
+.xz-jjb-skname{
+  display:block;font-size:12.5px;font-weight:700;letter-spacing:.02em;color:var(--xz-ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:0;
+}
+.xz-jjb-skpills{display:flex;align-items:center;gap:5px;font-size:9.5px;color:var(--xz-ink-3);}
+.xz-jjb-pill{
+  font-size:9.5px;letter-spacing:0;color:var(--xz-ink-3);
+  padding:0;border:0;background:none;white-space:nowrap;
+}
+.xz-jjb-pill-q{color:var(--xz-ink-3);}
+.xz-jjb-pill-tgt{color:var(--xz-ink-3);}
+.xz-jjb-pill-cost{margin-left:auto;color:var(--xz-mp-a);font-family:var(--xz-num);font-variant-numeric:tabular-nums;}
+.xz-jjb-sk .xz-jjb-pill-cost{color:var(--xz-mp-a);}
+.xz-jjb-see{
+  flex:none;width:22px;appearance:none;cursor:pointer;font-family:var(--xz-font);font-size:10px;
+  color:var(--xz-ink-3);background:transparent;
+  border:1px solid var(--xz-line);border-left:0;border-radius:0 9px 9px 0;
+  transition:color .15s,border-color .15s;
+}
+.xz-jjb-see:hover{color:var(--xz-gold-2);border-color:rgba(201,168,106,.4);}
+.xz-jjb-sknav{
+  flex:none;width:22px;appearance:none;cursor:pointer;
+  font-family:var(--xz-font);font-size:15px;line-height:1;color:var(--xz-ink-3);
+  background:transparent;border:1px solid var(--xz-line);border-radius:7px;
+  transition:color .15s,border-color .15s;
+}
+.xz-jjb-sknav:hover:not(:disabled){color:var(--xz-gold-2);border-color:rgba(201,168,106,.4);}
+.xz-jjb-sknav:disabled{opacity:.28;cursor:default;}
+
+/* 右侧功能键：图标 + 一行小字 */
+#xz-jjb-bar > .xz-jjb-mb,#xz-jjb-endturn,#xz-jjb-flee{
+  flex:none;appearance:none;cursor:pointer;font-family:var(--xz-font);
+  width:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px 0;
+  background:transparent;color:var(--xz-ink-3);
+  border:1px solid var(--xz-line);border-radius:9px;
+  font-size:9.5px;letter-spacing:0;line-height:1.15;text-align:center;
+  transition:color .16s,border-color .16s,background .16s;
+}
+#xz-jjb-bar > .xz-jjb-mb:hover,#xz-jjb-endturn:hover,#xz-jjb-flee:hover{
+  color:var(--xz-ink);border-color:var(--xz-line-2);background:rgba(255,255,255,.03);
+}
+#xz-jjb-flee{color:#c98d86;border-color:rgba(255,107,107,.22);}
+#xz-jjb-flee:hover{color:#ff8a8a;border-color:rgba(255,107,107,.45);}
+.xz-jjb-mb.on{color:var(--xz-gold-2);border-color:rgba(201,168,106,.45);background:rgba(201,168,106,.07);}
+.xz-jjb-hint{
+  display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--xz-ink-3);
+  padding:10px 0;
+}
+.xz-jjb-hint b{font-family:var(--xz-num);color:var(--xz-gold-2);font-weight:700;}
+
+/* ── 战后天道决断 ─────────────────────────────────────────────────────── */
+.xz-jjb-decbox{width:100%;display:flex;flex-direction:column;gap:8px;}
+.xz-jjb-dechd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+.xz-jjb-dechd b{font-size:13px;letter-spacing:.1em;color:var(--xz-gold-2);font-weight:700;}
+.xz-jjb-dechd span{font-size:10.5px;color:var(--xz-ink-3);letter-spacing:.06em;}
+.xz-jjb-decrow{display:flex;align-items:center;gap:8px;}
+.xz-jjb-declbl{flex:none;width:58px;font-size:10.5px;letter-spacing:.12em;color:var(--xz-ink-3);}
+.xz-jjb-decbtns{display:flex;gap:6px;flex-wrap:wrap;min-width:0;}
+.xz-jjb-dec{
+  font-family:var(--xz-font);font-size:11px;padding:5px 12px;border-radius:6px;cursor:pointer;
+  color:var(--xz-ink-2);border:1px solid var(--xz-line);background:transparent;transition:.16s;
+}
+.xz-jjb-dec:hover{color:var(--xz-ink);border-color:var(--xz-line-2);}
+.xz-jjb-dec.on{color:#241a08;font-weight:700;border-color:transparent;
+  background:linear-gradient(180deg,var(--xz-gold-2),var(--xz-gold));}
+.xz-jjb-injbtn{
+  align-self:flex-start;font-family:var(--xz-font);font-size:11.5px;font-weight:700;
+  letter-spacing:.12em;padding:8px 18px;border-radius:7px;cursor:pointer;border:0;
+  color:#241a08;background:linear-gradient(180deg,var(--xz-gold-2),var(--xz-gold));
+}
+.xz-jjb-finishing{align-items:center;}
+.xz-jjb-finishing-tip{font-size:11.5px;color:var(--xz-ink-3);letter-spacing:.08em;}
+
+/* ── 窄屏：同一套分区，只压密度；卡片仍走 is-solo / is-multi 两档 ────── */
+@media (max-width:560px){
+  #xz-jjb-overlay{padding:0;}
+  #xz-jjb-frame{left:0;top:0;width:100%;border:0;border-radius:0;}
+  #xz-jjb-head{padding:10px 12px 9px;gap:9px;}
+  #xz-jjb-seal{width:26px;height:26px;font-size:13px;}
+  #xz-jjb-title{font-size:13px;letter-spacing:.16em;}
+  #xz-jjb-head > button{padding:4px 9px;font-size:11px;}
+  #xz-jjb-rail{margin:0 12px;height:34px;}
+  #xz-jjb-railline,#xz-jjb-railfill,#xz-jjb-railgrid{left:44px;right:66px;}
+  #xz-jjb-nodes{left:44px;right:66px;}
+  #xz-jjb-railtag{font-size:10px;padding:2px 7px;}
+  .xz-jjb-side{padding:9px 10px;}
+  .xz-jjb-lbl{margin-bottom:6px;font-size:9.5px;}
+  .xz-jjb-row{gap:8px;}
+  .xz-jjb-row.is-multi .xz-jjb-card{flex:0 0 calc((100% - 8px) / 2);}
+  .xz-jjb-u-info{padding:0 10px 10px;margin-top:-22px;}
+  .xz-jjb-nm{font-size:14px;}
+  .xz-jjb-rlm{font-size:10.5px;}
+  .xz-jjb-hprow,.xz-jjb-mprow{gap:7px;margin-bottom:5px;}
+  .xz-jjb-bar-txt{font-size:10px;}
+  .xz-jjb-bf{height:19px;font-size:9.5px;padding:0 6px 0 4px;gap:3px;}
+  .xz-jjb-bf svg{width:12px;height:12px;}
+  #xz-jjb-log{max-height:32%;padding:0 12px;}
+  .xz-jjb-lg{font-size:11.5px;padding:4px 0 4px 17px;}
+  .xz-jjb-lg::before{top:9px;width:8px;height:8px;}
+  #xz-jjb-bar{gap:7px;padding:9px 10px calc(10px + env(safe-area-inset-bottom,0px));}
+  .xz-jjb-skwrap{gap:6px;}
+  .xz-jjb-sk{min-width:112px;padding:7px 8px 7px 10px;gap:7px;}
+  .xz-jjb-skico{width:12px;height:12px;}
+  .xz-jjb-skname{font-size:11.5px;}
+  .xz-jjb-pill{font-size:9.5px;}
+  #xz-jjb-bar > .xz-jjb-mb,#xz-jjb-endturn,#xz-jjb-flee{width:46px;font-size:9.5px;}
+  .xz-jjb-sknav{width:22px;}
+}
+@media (prefers-reduced-motion:reduce){
+  #xz-jjb-overlay *{animation:none !important;transition:none !important;}
+}
+`;
+
+/* 不在换皮范围、但仍要保留的旧样式（弹层 / 特效 / 编队 / 翻译面板）。 */
+var XZ_JJB_LEGACY = `
+#xz-jjb-round{font-size:12px;font-weight:700;color:#d4af37;letter-spacing:.04em;}
+#xz-jjb-init{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 14px;background:var(--dhl-reading);border-bottom:1px solid var(--xz-border);font-size:11px;color:var(--xz-muted);}
+.xz-jjb-iv{padding:3px 9px;border-radius:7px;border:1px solid rgba(201,168,106,.25);background:rgba(255,255,255,.02);color:#a9a390;transition:all .15s;}
+.xz-jjb-iv.now{border-color:var(--xz-border-strong);background:var(--dhl-button-active);color:var(--xz-gold-bright);font-weight:700;box-shadow:0 0 10px var(--xz-gold-glow), inset 0 1px 0 rgba(255,255,255,.15);}
+.xz-jjb-iv.done{color:#6b6656;text-decoration:line-through;}
+.xz-jjb-iv.enemy{color:#ff6b6b;}
+.xz-jjb-iv.enemy.now{color:var(--xz-gold-bright);}
+@keyframes xz-jjb-die{0%{opacity:1;filter:none;transform:translate3d(0,0,0) rotate(0deg);}10%{filter:brightness(2.6) saturate(.35);transform:translate3d(-3px,1px,0) rotate(-1.4deg);}19%{filter:brightness(2.9) saturate(.2);transform:translate3d(3px,-1px,0) rotate(1.4deg);}30%{filter:brightness(1.7) grayscale(.45);transform:translate3d(-2px,2px,0) rotate(-2deg);}100%{opacity:0;filter:grayscale(1) blur(3px);transform:translate3d(0,16px,0) scale(.84) rotate(-5deg);}}
+@keyframes xz-jjb-diecut{0%{background-position:130% 0;opacity:0;}14%{opacity:1;}100%{background-position:-45% 0;opacity:0;}}
+@keyframes xz-jjb-pick{0%,100%{box-shadow:0 0 0 rgba(201,168,106,0);border-color:rgba(192,57,43,.42);}50%{box-shadow:0 0 18px var(--xz-gold-glow);border-color:var(--xz-border-strong);}}
+.xz-jjb-card.xz-jjb-hit{animation:xz-jjb-hit .44s ease-out;}
+@keyframes xz-jjb-hit{0%{transform:translateX(0);box-shadow:0 0 22px rgba(192,57,43,.5);}25%{transform:translateX(-4px);}55%{transform:translateX(3px);}100%{transform:translateX(0);}}
+.xz-jjb-badge{display:inline-block;padding:0 6px;margin:0 3px 0 0;border-radius:4px;border:1px solid rgba(198,164,102,.34);background:rgba(198,164,102,.10);color:#e5d6ae;font-size:10.5px;line-height:1.55;letter-spacing:.3px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.xz-jjb-meta{font-size:11.5px;color:var(--xz-muted);display:flex;justify-content:space-between;}
+.xz-jjb-bfx{margin-left:4px;font-size:10px;font-weight:600;letter-spacing:.02em;white-space:nowrap;opacity:.92;line-height:1;}
+.xz-jjb-btn{min-width:34px;min-height:28px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:3px 9px;border:1px solid var(--xz-border);border-radius:6px;background:rgba(201,168,106,.08);color:var(--xz-gold-bright);font-size:11.5px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;letter-spacing:.5px;}
+.xz-jjb-btn:hover{border-color:var(--xz-border-strong);background:rgba(201,168,106,.16);}
+#xz-jjb-bfov{position:absolute;left:14px;right:14px;top:52px;bottom:52px;z-index:60;display:none;flex-direction:column;background:var(--dhl-reading);border:1px solid var(--xz-border-strong);border-radius:10px;box-shadow:0 18px 44px rgba(0,4,8,.72);overflow:hidden;}
+#xz-jjb-bfov-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--xz-border);font-size:12.5px;color:var(--xz-gold-bright);letter-spacing:.08em;flex:none;}
+#xz-jjb-bfov-bd{flex:1;overflow-y:auto;padding:8px 10px 12px;}
+.xz-jjb-bfov-sec{margin-bottom:10px;}
+.xz-jjb-bfov-nm{font-size:12px;font-weight:700;margin-bottom:4px;letter-spacing:.3px;}
+.xz-jjb-fly{position:absolute;right:7px;top:2px;font-size:16.5px;font-weight:700;color:#f0d98a;font-family:var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);letter-spacing:.5px;text-shadow:0 1px 3px #000, 0 0 10px rgba(0,4,8,.85);pointer-events:none;animation:xz-jjb-fly .95s ease-out forwards;}
+.xz-jjb-fly.ally{color:#4ade80;text-shadow:0 1px 3px #000, 0 0 12px rgba(74,222,128,.55);}
+.xz-jjb-fly.enemy{color:#ff6b6b;text-shadow:0 1px 3px #000, 0 0 12px rgba(255,107,107,.5);}
+@keyframes xz-jjb-fly{0%{opacity:0;transform:translateY(2px) scale(.85);}22%{opacity:1;transform:translateY(-4px) scale(1.08);}100%{opacity:0;transform:translateY(-20px) scale(1);}}
+.xz-jjb-dmg{color:#c0392b;font-weight:800;letter-spacing:.2px;}
+.xz-jjb-buff{color:var(--xz-gold-bright);font-weight:700;}
+@keyframes xz-jjb-fintip{0%,100%{opacity:.42;}50%{opacity:.95;}}
+.xz-jjb-miscitem{font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 10px;border-radius:7px;cursor:pointer;text-align:left;min-height:34px;background:rgba(201,168,106,.14);border:1px solid rgba(201,168,106,.40);color:#e8c98f;}
+.xz-jjb-miscitem:hover{background:rgba(201,168,106,.26);border-color:#d4af37;}
+.xz-jjb-miscitem.off{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);color:#6f7783;cursor:not-allowed;}
+.xz-jjb-teamwrap{position:fixed;inset:0;z-index:2147483647;background:rgba(3,13,20,.78);margin:0;max-width:none;max-height:none;width:100%;height:100%;border:0;outline:none;display:flex;align-items:center;justify-content:center;padding:8px;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;--xz-void:#05080c;--xz-bg:#0a1016;--xz-border:rgba(208,220,226,0.10);--xz-border-strong:rgba(208,220,226,0.26);--xz-gold:#c9a86a;--xz-gold-bright:#e8c98f;--xz-gold-glow:rgba(201,168,106,0.16);--xz-text:#eef2f4;--xz-text-2:#a8b6bc;--xz-muted:#6f8188;--xz-font:"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;--dhl-stage:radial-gradient(circle at 78% 10%, rgba(127,212,193,0.07), transparent 26%), linear-gradient(180deg,#0a1016 0%,#05080c 100%);--dhl-reading:linear-gradient(180deg, rgba(12,19,26,0.96), rgba(6,10,14,0.98));--dhl-header:linear-gradient(90deg, rgba(8,14,20,0.99), rgba(14,22,29,0.97) 52%, rgba(24,20,20,0.99));--dhl-button-active:linear-gradient(180deg, rgba(201,168,106,0.20), rgba(10,16,22,0.34));font-family:var(--xz-font);}
+#xz-jjb-teamcard{width:min(440px,92vw);max-height:calc(100vh - 16px);overflow:hidden;display:flex;flex-direction:column;background:var(--dhl-stage);border:1px solid var(--xz-border);border-top:2px solid var(--xz-gold-bright);border-radius:12px;box-shadow:0 16px 45px rgba(0,4,8,.75), inset 0 1px 0 rgba(255,255,255,.06);color:var(--xz-text-2);}
+@media (max-width:560px){.xz-jjb-teamwrap{align-items:flex-start;padding-top:8px;}}
+#xz-jjb-teamhead{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--dhl-header);border-bottom:1px solid var(--xz-border);box-shadow:0 4px 15px rgba(0,0,0,.45);}
+#xz-jjb-teamseal{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;border:1px solid rgba(201,168,106,.55);border-radius:4px;color:#d4af37;font-size:12px;}
+#xz-jjb-teamtitle{font-size:13px;letter-spacing:.06em;color:#e8e3d3;font-weight:700;}
+#xz-jjb-teambody{padding:12px 14px 14px;overflow-y:auto;}
+#xz-jjb-teambody::-webkit-scrollbar{width:4px;}
+#xz-jjb-teambody::-webkit-scrollbar-thumb{background:var(--xz-border-strong);border-radius:2px;}
+#xz-jjb-teamhint{margin:0 0 10px;font-size:12.5px;color:var(--xz-text-2);text-align:center;line-height:1.6;}
+#xz-jjb-teamlist{margin-bottom:10px;}
+.xz-jjb-tp-row{display:flex;align-items:center;gap:9px;padding:9px 11px;margin-bottom:6px;background:var(--dhl-reading);border:1px solid var(--xz-border);border-radius:8px;cursor:pointer;transition:all .15s;}
+.xz-jjb-tp-row:hover{border-color:var(--xz-border-strong);box-shadow:0 0 10px var(--xz-gold-glow);}
+.xz-jjb-tp-ck{width:17px;height:17px;flex:none;accent-color:#d4af37;cursor:pointer;}
+.xz-jjb-tp-mark{flex:none;font-size:13px;}
+.xz-jjb-tp-nm{flex:1;font-size:13px;font-weight:700;color:var(--xz-text);letter-spacing:.3px;}
+.xz-jjb-tp-rl{flex:none;font-size:11.5px;color:var(--xz-muted);}
+.xz-jjb-tp-empty{padding:14px 4px;text-align:center;font-size:12px;color:var(--xz-muted);line-height:1.7;}
+.xz-jjb-tp-rem{display:flex;align-items:center;gap:8px;margin:10px 0 12px;padding:9px 11px;background:var(--dhl-reading);border:1px solid var(--xz-border);border-radius:8px;font-size:12px;color:var(--xz-muted);cursor:pointer;}
+#xz-jjb-teambtns{display:flex;gap:8px;flex-wrap:wrap;}
+.xz-jjb-tp-main{flex:2 1 160px;padding:10px 0;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.06em;border:1.5px solid var(--xz-border-strong);background:var(--dhl-button-active);color:var(--xz-gold-bright);box-shadow:0 0 12px var(--xz-gold-glow), inset 0 1px 0 rgba(255,255,255,.14);transition:all .15s;}
+.xz-jjb-tp-main:hover{background:rgba(201,168,106,.30);border-color:#d4af37;}
+.xz-jjb-tp-sub{flex:1 1 88px;padding:10px 0;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:700;border:1px solid var(--xz-border);background:transparent;color:var(--xz-text);transition:all .15s;}
+.xz-jjb-tp-sub:hover{border-color:var(--xz-border-strong);background:rgba(201,168,106,.14);color:var(--xz-gold-bright);}
+.xz-jjb-tp-cancel{width:100%;margin-top:10px;padding:9px 0;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:700;letter-spacing:.5px;border:1.5px solid var(--xz-gold);background:rgba(201,168,106,.08);color:var(--xz-gold);transition:all .15s;}
+.xz-jjb-tp-cancel:hover{background:rgba(201,168,106,.20);border-color:#d4af37;color:var(--xz-gold-bright);}
+@keyframes xz-jjb-lite-fly{0%{opacity:1;transform:scale(0.75);}100%{opacity:0;transform:scale(0.32);}}
+@keyframes xz-jjb-particle-fly{0%{opacity:1;transform:translate(-50%,-50%) scale(0.7);}60%{opacity:0.85;}100%{opacity:0;transform:translate(calc(-50% + var(--dx,0px)), calc(-50% + var(--dy,0px))) scale(1.05);}}
+@keyframes xz-jjb-trail{0%{opacity:0;transform:translate(-50%,-50%) scale(0.5);}14%{opacity:1;}78%{opacity:0.95;}100%{opacity:0;transform:translate(calc(-50% + var(--tx,0px)), calc(-50% + var(--ty,0px))) scale(0.85);}}
+@keyframes xz-jjb-elem-burst{0%{opacity:1;transform:translate(-50%,-50%) scale(0.4);}45%{opacity:1;transform:translate(-50%,-50%) scale(6.5);}100%{opacity:0;transform:translate(-50%,-50%) scale(11);}}
+@keyframes xz-jjb-water-ripple{0%{transform:scale(0.3);opacity:1;}50%{transform:scale(1.6);opacity:0.8;}100%{transform:scale(2.4);opacity:0;}}
+@keyframes xz-jjb-fire-burst{0%{transform:scale(0.2);opacity:1;}40%{transform:scale(1.8) rotate(15deg);opacity:0.95;}100%{transform:scale(2.6) rotate(30deg);opacity:0;}}
+@keyframes xz-jjb-thunder-flash{0%{transform:scale(0.4);opacity:1;filter:brightness(2);}30%{transform:scale(1.7);opacity:0.9;}100%{transform:scale(2.4);opacity:0;}}
+@keyframes xz-jjb-metal-spark{0%{transform:scale(0.2) rotate(0deg);opacity:1;}50%{transform:scale(1.6) rotate(90deg);opacity:0.9;}100%{transform:scale(2.2) rotate(180deg);opacity:0;}}
+@keyframes xz-jjb-wood-spiral{0%{transform:scale(0.3) rotate(0deg);opacity:1;}60%{transform:scale(1.5) rotate(180deg);opacity:0.8;}100%{transform:scale(2.2) rotate(360deg);opacity:0;}}
+@keyframes xz-jjb-earth-slam{0%{transform:scale(0.4);opacity:1;}40%{transform:scale(1.5);opacity:0.9;}100%{transform:scale(2.3);opacity:0;}}
+@keyframes xz-jjb-wind-spin{0%{transform:scale(0.3) rotate(0deg);opacity:1;}50%{transform:scale(1.6) rotate(180deg);opacity:0.85;}100%{transform:scale(2.4) rotate(360deg);opacity:0;}}
+@keyframes xz-jjb-ice-freeze{0%{transform:scale(0.3);opacity:1;}45%{transform:scale(1.5);opacity:0.9;}100%{transform:scale(2.3);opacity:0;}}
+@keyframes xz-jjb-fx-aoe{0%{opacity:0.9;transform:translate(-50%,-50%) scale(0.3);}55%{opacity:0.6;transform:translate(-50%,-50%) scale(1.2);}100%{opacity:0;transform:translate(-50%,-50%) scale(1.95);}}
+@keyframes xz-jjb-fx-aoe-line{0%{opacity:0.95;transform:translate(-50%,-50%) scaleX(0.2);}60%{opacity:0.75;transform:translate(-50%,-50%) scaleX(1);}100%{opacity:0;transform:translate(-50%,-50%) scaleX(1.5);}}
+@keyframes xz-jjb-now-pulse{0%,100%{box-shadow:0 0 0 1px var(--xz-gold-bright),0 0 16px rgba(201,168,106,.30),inset 0 1px 0 rgba(255,255,255,.08);}50%{box-shadow:0 0 0 1px var(--xz-gold-bright),0 0 26px rgba(201,168,106,.55),inset 0 1px 0 rgba(255,255,255,.10);}}
+@keyframes xz-jjb-node-pulse{0%,100%{transform:translateY(-50%) scale(1);}50%{transform:translateY(-50%) scale(1.09);}}
+@keyframes xz-jjb-sheen{0%{transform:translateX(-120%);}100%{transform:translateX(220%);}}
+.xz-jjb-tp-sub,.xz-jjb-hbtn{transition:transform .12s ease,box-shadow .16s ease,filter .16s ease;}
+.xz-jjb-tp-sub:hover,.xz-jjb-hbtn:hover{transform:translateY(-1px);filter:brightness(1.12);box-shadow:0 4px 14px rgba(0,0,0,.42);}
+.xz-jjb-tp-sub:active,.xz-jjb-hbtn:active{transform:translateY(0) scale(.98);}
+.xz-jjb-fly{text-shadow:0 0 3px rgba(0,0,0,.95),0 2px 6px rgba(0,0,0,.85),0 0 14px currentColor;}
+@keyframes xz-jjb-flypop{0%{transform:translate(-50%,-50%) scale(.55);opacity:0;}18%{transform:translate(-50%,-58%) scale(1.18);opacity:1;}38%{transform:translate(-50%,-62%) scale(1);}100%{transform:translate(-50%,-96%) scale(.96);opacity:0;}}
+@keyframes xz-jjb-shake{0%,100%{transform:translate3d(0,0,0);}12%{transform:translate3d(-5px,2px,0);}26%{transform:translate3d(4px,-2px,0);}42%{transform:translate3d(-3px,1px,0);}60%{transform:translate3d(2px,-1px,0);}78%{transform:translate3d(-1px,1px,0);}}
+@keyframes xz-jjb-glowring{0%{opacity:.75;transform:translate(-50%,-50%) scale(.6);}100%{opacity:0;transform:translate(-50%,-50%) scale(1.9);}}
+.xz-jjb-fly{font-weight:900 !important;font-size:calc(22px * var(--xz-fs,1)) !important;letter-spacing:.02em;-webkit-text-stroke:1px rgba(0,0,0,.55);paint-order:stroke fill;animation:xz-jjb-flypop .95s cubic-bezier(.18,.8,.3,1) forwards !important;}
+.xz-jjb-fly.ally{color:#f3d9a0 !important;text-shadow:0 0 12px rgba(243,217,160,.55),0 2px 6px rgba(0,0,0,.9) !important;}
+.xz-jjb-fly.enemy{color:#ff9b8a !important;text-shadow:0 0 12px rgba(255,120,100,.55),0 2px 6px rgba(0,0,0,.9) !important;}
+.xz-jjb-tp-sub,.xz-jjb-hbtn{border-radius:8px !important;box-shadow:0 1px 0 rgba(255,255,255,.10) inset,0 -2px 0 rgba(0,0,0,.35) inset,0 3px 10px rgba(0,0,0,.4) !important;}
+.xz-jjb-tp-sub:active,.xz-jjb-hbtn:active{transform:translateY(1px) !important;box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 -1px 0 rgba(0,0,0,.3) inset,0 1px 4px rgba(0,0,0,.4) !important;}
+@keyframes xz-jjb-bagua{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+@keyframes xz-jjb-bagua-r{0%{transform:rotate(0deg);}100%{transform:rotate(-360deg);}}
+@keyframes xz-jjb-griddrift{0%{background-position:0 0,0 0;}100%{background-position:34px 34px,34px 34px;}}
+@keyframes xz-jjb-breathe{0%,100%{opacity:.5;transform:scale(1);}50%{opacity:.85;transform:scale(1.06);}}
+@keyframes xz-jjb-nowring{0%,100%{box-shadow:0 1px 0 rgba(255,255,255,.1) inset,0 0 0 1px rgba(232,201,143,.5),0 0 0 4px rgba(127,212,193,.08),0 20px 46px rgba(0,0,0,.6);}50%{box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 0 0 1px rgba(232,201,143,.85),0 0 0 9px rgba(127,212,193,.16),0 20px 46px rgba(0,0,0,.6);}}
+@keyframes xz-jjb-hitflash{0%{filter:brightness(2.2) saturate(.6);}60%{filter:brightness(1.15);}100%{filter:none;}}
+#xz-jjb-round{color:#f0d79b !important;text-shadow:0 0 8px rgba(226,180,96,.5) !important;}
+#xz-jjb-init{background:linear-gradient(180deg,rgba(9,13,18,.92),rgba(5,7,11,.96)) !important;border-bottom:1px solid rgba(198,164,102,.18) !important;}
+.xz-jjb-iv{border:1px solid rgba(198,164,102,.22) !important;background:rgba(255,255,255,.02) !important;color:#a49a84 !important;}
+.xz-jjb-iv.now{border-color:rgba(240,215,155,.75) !important;background:linear-gradient(180deg,rgba(226,180,96,.26),rgba(18,20,16,.92)) !important;color:#fff2cc !important;box-shadow:0 0 16px rgba(226,180,96,.32),inset 0 1px 0 rgba(255,238,196,.28) !important;}
+.xz-jjb-iv.done{color:#6a6355 !important;}
+.xz-jjb-iv.enemy{color:#e08a80 !important;}
+.xz-jjb-meta{color:#a89d85 !important;}
+.xz-jjb-skpop,.xz-jjb-miscpop,.xz-jjb-upop{background:linear-gradient(160deg,#111820,#080b10) !important;border:1px solid rgba(240,215,155,.35) !important;border-radius:12px !important;box-shadow:0 0 0 1px rgba(0,0,0,.80),0 22px 60px rgba(0,0,0,.90),0 0 40px rgba(226,180,96,.12) !important;}
+@keyframes xz-jjb-cloudm{from{transform:scale(1) translateY(0);opacity:.82;}to{transform:scale(1.06) translateY(-1.6%);opacity:1;}}
+@keyframes xz-jjb-dust{from{background-position:0 0;}to{background-position:-260px -220px;}}
+@media (prefers-reduced-motion: reduce){.xz-jjb-fly{animation:none !important;}}
+.xz-jjb-sklack .xz-jjb-skcost{color:#c0564e !important;}
+@keyframes xz-jjb-cloud{0%{background-position:0% 0,100% 0,0% 0;}100%{background-position:200% 0,-160% 0,-140% 0;}}
+@keyframes xz-jjb-mtn{0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.78;}50%{transform:translate3d(-2.6%,0,0) scale(1.06);opacity:1;}}
+@keyframes xz-jjb-smoke{0%{transform:translate3d(0,0,0) scale(1);opacity:.8;}100%{transform:translate3d(-4%,-2.6%,0) scale(1.09);opacity:1;}}
+.xz-jjb-tp-rl{flex:0 0 auto !important;width:auto !important;}
+.xz-jjb-tp-cancel{background:linear-gradient(180deg,#2b2418 0%,#12161a 100%) !important;border:1px solid rgba(201,168,106,.48) !important;border-radius:9px !important;color:#c9b98a !important;font-size:12px !important;}
+.xz-jjb-tp-cancel:hover{border-color:#e8c98f !important;color:#ffe9b8 !important;background:linear-gradient(180deg,#3b321f 0%,#181d22 100%) !important;.xz-jjb-teamwrap{background:radial-gradient(circle at 50% 42%,rgba(36,28,16,.86) 0%,rgba(3,5,9,.95) 68%) !important;}#xz-jjb-teamcard{background:radial-gradient(ellipse 120% 46% at 50% 0%,rgba(201,168,106,.13),transparent 60%),linear-gradient(168deg,#1b2119 0%,#0c1014 58%,#080a0e 100%) !important;border:1px solid rgba(201,168,106,.48) !important;border-top:2px solid #e8c98f !important;border-radius:14px !important;box-shadow:0 26px 72px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,235,195,.14),0 0 0 1px rgba(0,0,0,.55),0 0 34px rgba(201,168,106,.12) !important;}#xz-jjb-teamhead{background:linear-gradient(90deg,#2c2418 0%,#151a1e 58%,#101418 100%) !important;border-bottom:1px solid rgba(201,168,106,.32) !important;box-shadow:0 6px 18px rgba(0,0,0,.5) !important;padding:11px 14px !important;}#xz-jjb-teamseal{width:26px !important;height:26px !important;background:linear-gradient(180deg,#8c2f2a,#48140f) !important;border:1px solid rgba(232,201,143,.78) !important;border-radius:6px !important;color:#ffe9b8 !important;font-weight:800 !important;font-size:13px !important;box-shadow:0 0 12px rgba(180,60,50,.55),inset 0 1px 0 rgba(255,210,190,.28) !important;}#xz-jjb-teamtitle{font-size:14px !important;font-weight:800 !important;letter-spacing:.26em !important;background:linear-gradient(180deg,#fff3cd 0%,#d8b678 54%,#8a6f3a 100%) !important;-webkit-background-clip:text !important;background-clip:text !important;-webkit-text-fill-color:transparent !important;color:transparent !important;}#xz-jjb-teamhint{color:#a89d85 !important;font-size:12px !important;}.xz-jjb-tp-row{background:linear-gradient(160deg,#1a2320 0%,#0c1115 100%) !important;border:1px solid rgba(201,168,106,.20) !important;border-radius:9px !important;box-shadow:inset 0 1px 0 rgba(255,255,255,.05) !important;transition:border-color .15s,box-shadow .15s,transform .15s !important;}.xz-jjb-tp-row:hover{border-color:rgba(232,201,143,.75) !important;box-shadow:0 0 14px rgba(201,168,106,.26),inset 0 1px 0 rgba(255,255,255,.08) !important;transform:translateY(-1px);}.xz-jjb-tp-nm{color:#f6efdd !important;font-size:13.5px !important;}.xz-jjb-tp-rl{padding:2px 7px !important;border-radius:4px !important;background:#1b2328 !important;border:1px solid rgba(148,163,184,.30) !important;color:#a2b6bf !important;font-size:10.5px !important;letter-spacing:.02em;}.xz-jjb-tp-ck{accent-color:#d4af37 !important;width:16px !important;height:16px !important;}.xz-jjb-tp-empty{padding:22px 4px !important;color:#8b8071 !important;font-size:12.5px !important;letter-spacing:.06em;}.xz-jjb-tp-rem{background:linear-gradient(160deg,#151b1f 0%,#0a0e12 100%) !important;border:1px solid rgba(148,163,184,.20) !important;border-radius:9px !important;color:#9aa8b0 !important;font-size:11.5px !important;}#xz-jjb-teambtns{gap:9px !important;}.xz-jjb-tp-main{background:linear-gradient(180deg,#4a3a19 0%,#1d1608 100%) !important;border:1.5px solid rgba(232,201,143,.78) !important;border-radius:9px !important;color:#ffe9b8 !important;font-size:13.5px !important;letter-spacing:.1em !important;box-shadow:0 0 18px rgba(201,168,106,.30),inset 0 1px 0 rgba(255,235,195,.24) !important;}.xz-jjb-tp-main:hover{background:linear-gradient(180deg,#63501f 0%,#2a1f0b 100%) !important;border-color:#ffe9b8 !important;}.xz-jjb-tp-sub{background:linear-gradient(180deg,#1b2329 0%,#0b0f14 100%) !important;border:1px solid rgba(148,163,184,.34) !important;border-radius:9px !important;color:#c6d3da !important;font-size:12px !important;}.xz-jjb-tp-sub:hover{border-color:rgba(232,201,143,.68) !important;color:#ffe9b8 !important;}.xz-jjb-tp-cancel{background:linear-gradient(180deg,#2a1614 0%,#120a09 100%) !important;border:1px solid rgba(200,90,75,.48) !important;border-radius:9px !important;color:#e3a89c !important;font-size:12px !important;}.xz-jjb-tp-cancel:hover{border-color:rgba(230,120,100,.85) !important;color:#ffcfc4 !important;}.xz-jjb-trcard{width:min(700px,94vw) !important;max-height:88vh !important;overflow:auto !important;padding:0 !important;background:radial-gradient(ellipse 120% 42% at 50% 0%,rgba(201,168,106,.12),transparent 58%),linear-gradient(168deg,#181e23 0%,#0b0f14 58%,#070a0e 100%) !important;border:1px solid rgba(201,168,106,.46) !important;border-top:2px solid #e8c98f !important;border-radius:14px !important;color:#e9e3d3 !important;box-shadow:0 26px 72px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,235,195,.12),0 0 34px rgba(201,168,106,.12) !important;}.xz-jjb-trcard::-webkit-scrollbar{width:5px;}.xz-jjb-trcard::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#8a6f3a,#d9b877);border-radius:3px;}.xz-jjb-trcard::-webkit-scrollbar-track{background:#0a0e12;}.xz-jjb-trhd{display:flex;align-items:center;gap:9px;padding:11px 15px;background:linear-gradient(90deg,#2c2418 0%,#151a1e 58%,#101418 100%);border-bottom:1px solid rgba(201,168,106,.30);box-shadow:0 6px 18px rgba(0,0,0,.5);}.xz-jjb-trseal{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;font-weight:800;color:#ffe9b8;background:linear-gradient(180deg,#8c2f2a,#48140f);border:1px solid rgba(232,201,143,.78);box-shadow:0 0 12px rgba(180,60,50,.55),inset 0 1px 0 rgba(255,210,190,.28);}.xz-jjb-trtitle{font-size:14px;font-weight:800;letter-spacing:.26em;background:linear-gradient(180deg,#fff3cd 0%,#d8b678 54%,#8a6f3a 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}.xz-jjb-trrow{margin:10px 14px;padding:10px 12px;border-radius:10px;border:1px solid rgba(201,168,106,.18);background:linear-gradient(160deg,#151b20 0%,#0a0e12 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);}.xz-jjb-trrowhd{display:flex;align-items:center;gap:8px;margin-bottom:8px;}.xz-jjb-trname{font-size:13.5px;font-weight:700;color:#f6efdd;letter-spacing:.03em;}.xz-jjb-trst{font-size:10.5px;padding:2px 9px;border-radius:5px;font-weight:700;color:var(--stc,#94a3b8);background:var(--stbg,rgba(148,163,184,.13));border:1px solid var(--stc,#94a3b8);letter-spacing:.02em;}.xz-jjb-trfp{margin-left:auto;font-size:10px;font-family:monospace;color:#7d7466;padding:1px 7px;border-radius:4px;background:#11161a;border:1px solid rgba(148,163,184,.18);}.xz-jjb-trgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}.xz-jjb-trlbl{font-size:10px;color:#8b8071;margin-bottom:4px;letter-spacing:.10em;}.xz-jjb-trtext{font-size:11.5px;line-height:1.7;white-space:pre-wrap;max-height:118px;overflow:auto;padding:7px 9px;border-radius:8px;background:#0a0e12;border:1px solid rgba(148,163,184,.16);color:#b9c6cc;}.xz-jjb-trtext::-webkit-scrollbar{width:4px;}.xz-jjb-trtext::-webkit-scrollbar-thumb{background:#3a3222;border-radius:2px;}.xz-jjb-trta{width:100%;box-sizing:border-box;height:118px;resize:vertical;font-size:11.5px;line-height:1.66;font-family:monospace;padding:7px 9px;border-radius:8px;background:#0a0e12;color:#e9e3d3;border:1px solid rgba(201,168,106,.30);outline:none;transition:border-color .15s,box-shadow .15s;}.xz-jjb-trta:focus{border-color:rgba(232,201,143,.72);box-shadow:0 0 0 2px rgba(201,168,106,.16);}.xz-jjb-trmsg{font-size:11px;min-height:16px;margin:2px 14px 8px;color:#fbbf24;line-height:1.7;white-space:pre-wrap;}.xz-jjb-trbtns{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 14px;}.xz-jjb-trbtns .xz-jjb-tp-main{flex:1 1 180px;}.xz-jjb-trlock{filter:saturate(.35) brightness(.8);}@media (max-width:560px){.xz-jjb-trgrid{grid-template-columns:1fr;}}
+`;
+
   function ensureStyle() {
     var d = d0();
     /* ★★ v113【用户实测：「你确定你导出了？战斗脚本 0 变化」——根因就是这三行】★★
@@ -22505,1449 +23186,17 @@ function jjbLogRest(t) {
        ★ 本模块不新造任何一个色值：敌我红金、危险字色、空槽灰
          全部取自状态栏现成的语义色（--xz-gold-bright / --xz-crimson /
          #f0a6a0 / #c0392b / rgba(255,255,255,.08)）。 */
-    st.textContent =
-      /* ─────── 状态栏令牌（05:2427 `:root` 原值，逐字）─────── */
-      '#' + PFX + '-overlay{'
-      + '--xz-void:#05080c;--xz-bg:#0a1016;'
-      /* ★ v112：**这里是 overlay 上真正生效的那份色板**（另一份在容器上，两处必须同步改）。
-         原来只改了容器那份 ⇒ 页面毫不变色（用户实测：「战斗脚本 0 变化」）。
-         ⚠ 以后动配色，两处一起改；只改一处等于没改。 */
-      + '--xz-card:linear-gradient(145deg, rgba(18, 26, 33, 0.97) 0%, rgba(10, 15, 20, 0.95) 100%);'
-      + '--xz-card-hover:linear-gradient(145deg, rgba(24, 35, 43, 0.98) 0%, rgba(13, 20, 26, 0.96) 100%);'
-      + '--xz-border:rgba(208, 220, 226, 0.10);--xz-border-strong:rgba(208, 220, 226, 0.26);'
-      + '--xz-gold:#c9a86a;--xz-gold-bright:#e8c98f;--xz-gold-glow:rgba(201, 168, 106, 0.16);'
-      + '--xz-jade:#6fbfae;--xz-cyan:#7fd4c1;--xz-purple:#c58fa0;--xz-crimson:#b5545c;'
-      + '--xz-text:#eef2f4;--xz-text-2:#a8b6bc;--xz-muted:#6f8188;'
-      + '--xz-font:"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
-      + '--dhl-stage:radial-gradient(circle at 78% 10%, rgba(127, 212, 193, 0.07), transparent 26%), linear-gradient(180deg, #0a1016 0%, #05080c 100%);'
-      + '--dhl-reading:linear-gradient(180deg, rgba(12, 19, 26, 0.96), rgba(6, 10, 14, 0.98));'
-      + '--dhl-card:linear-gradient(145deg, rgba(18, 26, 33, 0.97) 0%, rgba(10, 15, 20, 0.95) 100%);'
-      + '--dhl-card-hover:linear-gradient(145deg, rgba(24, 35, 43, 0.98) 0%, rgba(13, 20, 26, 0.96) 100%);'
-      + '--dhl-header:linear-gradient(90deg, rgba(8, 14, 20, 0.99), rgba(14, 22, 29, 0.97) 52%, rgba(24, 20, 20, 0.99));'
-      + '--dhl-button-active:linear-gradient(180deg, rgba(201, 168, 106, 0.20), rgba(10, 16, 22, 0.34));'
-      + '--dhl-gold:#c9a86a;--dhl-gold-bright:#e8c98f;'
-      + '--dhl-border:rgba(208, 220, 226, 0.10);--dhl-border-strong:rgba(208, 220, 226, 0.26);'
-      + '--dhl-shadow:0 10px 30px rgba(0, 4, 8, 0.72);--dhl-glow:0 0 10px rgba(201, 168, 106, 0.12);'
-      + 'font-family:var(--xz-font);}'
-      /* ─────────── 遮罩（--xz-void #030d14）─────────── */
-      /* ★ 层级：主战斗的面板在 2147483644、悬浮入口在 2147483645（04:943 / 7477），
-         而本浮层原来只有 2147483000 ⇒ 一旦主面板开着，**极简演武的卡片会被压在下面**，
-         点击全落在主面板的层上（真机实测：卡正中 elementsFromPoint 命中 #xz-team-choose）。
-         本浮层是独立入口，必须永远在最上面；只让 2147483647 的原子／词条弹层压住它。 */
-      /* ★ v69：遮罩改成**可滚动容器**（照抄早期斗法台 `#<P>-overlay`：
-         `position:fixed;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch`）。
-         面板万一仍比可见区高，手指在遮罩上滑得动 —— 而不是像以前那样「下半截直接没了」。 */
-      + '#' + PFX + '-overlay{position:fixed;inset:0;z-index:2147483646;background:rgba(3,13,20,.78);display:none;'
-      + 'overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;'
-      /* dialog 的 UA 复位：否则它有 margin/max-width/默认背景与内边距 */
-      + 'margin:0;max-width:none;max-height:none;width:100%;height:100%;border:0;padding:0;outline:none;}'
-      + '#' + PFX + '-overlay.on{display:block;}'
-      /* ─────────── 主容器 = .xz-st-card ─────────── */
-      /* ★ v69【手机端「只显示下半部分 / 位置太靠上」的修法】—— 逐条照抄早期斗法台脚本。
-         旧写法 `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)` 有两个坑：
-           ① 酒馆把正文渲染在 **iframe** 里，`position:fixed` 的包含块**不一定是真视口**
-              ⇒ `50%` 算出的中心偏高，面板整块被顶到屏幕上方，肉眼只剩下半截；
-           ② `88vh / 100dvh` 量的是 **iframe 的布局视口**，手机浏览器地址栏收起时它比可见区**更高**
-              ⇒ 面板比看得见的地方还高，底部又被原生控件盖住。
-         斗法台当年用的是**算出来的像素坐标**（见本文件 `placeFrame()`）：
-           宽高一律取 `window.top.innerWidth/innerHeight`（顶层窗口才是真视口），
-           窄屏（<560）**直接贴顶 8px**，桌面端由中心再上提 40px。
-         这里把 left/top 交给 `placeFrame()` 每次开面板时算；CSS 只留一个**手机安全兜底**（贴顶靠左 8px），
-         就算 JS 那一步没跑到，也绝不会出现「面板跑到屏幕上方去」。 */
-      + '#' + PFX + '-frame{position:absolute;left:8px;top:8px;width:min(720px,94vw);'
-      /* ★ v104：`height` / `max-height` 交给 `placeFrame()` 按**真视口像素**写 ——
-         桌面端直接把面板拉满（top 6px + 高 = 视口 − 12），
-         内部竖向 flex 再把剩余空间分给 `-sides`（卡片）与 `-log`（文本显示区）。
-         ⚠ CSS 这层的 `height:auto` 只是**兜底**：真跑起来 JS 那一步一定会覆盖它，
-           所以「面板自己撑多高就多高、屏幕再高也空着一大片」这个症状在 JS 没跑到时仍在。
-           别指望改 CSS 能解决 —— 视口高度必须是真值（iframe 里的 `100vh` 不等于可见高度）。 */
-      + 'max-height:calc(100vh - 16px);height:auto;'
-      + 'display:flex;flex-direction:column;background:var(--dhl-stage);border:1px solid var(--xz-border);border-top:2px solid var(--xz-gold-bright);'
-      + 'border-radius:12px;box-shadow:0 16px 45px rgba(0,4,8,.75), inset 0 1px 0 rgba(255,255,255,.06);'
-      + 'color:var(--xz-text-2);font:13.5px/1.6 var(--xz-font);overflow:hidden;}'
-      /* ─────────── 头部 = .xz-st-head ─────────── */
-      + '#' + PFX + '-head{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--dhl-header);'
-      + 'border-bottom:1px solid var(--xz-border);box-shadow:0 4px 15px rgba(0,0,0,.45);}'
-      /* 印玺 = .xz-st-seal */
-      + '#' + PFX + '-seal{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;'
-      + 'border:1px solid rgba(201,168,106,.55);border-radius:4px;color:#d4af37;font-size:12px;}'
-      /* ★ v68 标题小框：`.xz-st-title` 与「第 N 息」原本是两个散着的 span，
-         各占一块宽度（手机上把重开/关闭挤到换行）。现在收进同一枚胶囊里，整体只占一格。 */
-      + '#' + PFX + '-caption{display:inline-flex;align-items:center;gap:7px;flex:none;'
-      + 'padding:2px 10px;border:1px solid rgba(201,168,106,.42);border-radius:7px;background:rgba(201,168,106,.08);}'
-      /* 标题 = .xz-st-title */
-      + '#' + PFX + '-title{font-size:13px;letter-spacing:.06em;color:#e8e3d3;}'
-      + '#' + PFX + '-caption #' + PFX + '-title::after{content:"·";color:rgba(201,168,106,.5);margin-left:7px;}'
-      /* 回合号：状态栏强调字色 #d4af37（.xz-st-sec / .xz-st-equipped-head 同色） */
-      + '#' + PFX + '-round{font-size:12px;font-weight:700;color:#d4af37;letter-spacing:.04em;}'
-      /* 头按钮 = .xz-st-mini */
-      + '#' + PFX + '-head button{font-family:inherit;font-size:11px;padding:2px 9px;border-radius:5px;cursor:pointer;'
-      + 'border:1px solid rgba(201,168,106,.45);background:transparent;color:#cbbd90;transition:all .15s;}'
-      + '#' + PFX + '-head button:hover{border-color:#d4af37;background:rgba(201,168,106,.14);color:#f0d98a;}'
-      + '#' + PFX + '-restart{margin-left:auto;}'
-      /* ─────────── 顺位条 = .xz-st-tab / .on ─────────── */
-      + '#' + PFX + '-init{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 14px;background:var(--dhl-reading);'
-      + 'border-bottom:1px solid var(--xz-border);font-size:11px;color:var(--xz-muted);}'
-      + '.' + PFX + '-iv{padding:3px 9px;border-radius:7px;border:1px solid rgba(201,168,106,.25);background:rgba(255,255,255,.02);'
-      + 'color:#a9a390;transition:all .15s;}'
-      + '.' + PFX + '-iv.now{border-color:var(--xz-border-strong);background:var(--dhl-button-active);color:var(--xz-gold-bright);'
-      + 'font-weight:700;box-shadow:0 0 10px var(--xz-gold-glow), inset 0 1px 0 rgba(255,255,255,.15);}'
-      + '.' + PFX + '-iv.done{color:#6b6656;text-decoration:line-through;}'
-      + '.' + PFX + '-iv.enemy{color:#ff6b6b;}'
-      + '.' + PFX + '-iv.enemy.now{color:var(--xz-gold-bright);}'
-      /* ─────────── 阵营区 ─────────── */
-      /* ★ v45：两侧卡片收进一个**可滚动**的容器 `-sides`（`flex:1 1 auto;min-height:0;overflow:auto`）。
-         卡片多 / 增益栏长时，压力由这里吸收（内部滚动），而不是把日志与底栏挤出可视区。
-         这是「看不到技能区」的根治：底栏(flex:none) + 日志(可压缩) + 阵营区(可滚动) 三层各司其职。 */
-      + '#' + PFX + '-sides{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;}'
-      /* ★ v104：**日志才是「文本显示区」，高度的分给方式改了**。
-         原先 `-sides` 与 `-log` 都是「有多少给多少」，面板一拉满，多出来的空间
-         全被 `-sides` 吃掉（它 `flex:1 1 auto`）而 `-log` 有 `max-height:64px` 硬顶 ——
-         于是「屏幕很高」换来的只是**卡片区下面多出一大片空**，日志还是那么高。
-         现在给日志 `flex:1.35`（比卡片区更饿一点）、把 64px 硬顶拆掉：
-         面板多高，日志就跟着长多少。用户那句「文本显示区太小了」说的正是这一块。 */
-      + '#' + PFX + '-sides::-webkit-scrollbar{width:4px;}'
-      + '#' + PFX + '-sides::-webkit-scrollbar-thumb{background:var(--xz-border-strong);border-radius:2px;}'
-      + '.' + PFX + '-side{padding:10px 14px 2px;}'
-      /* 分区标题 = .xz-st-sec */
-      + '.' + PFX + '-lbl{margin:10px 0 6px;padding-left:7px;border-left:2px solid rgba(201,168,106,.55);color:#d4af37;'
-      + 'font-size:12px;letter-spacing:.04em;font-weight:700;}'
-      + '.' + PFX + '-lbl:first-child{margin-top:2px;}'
-      + '.' + PFX + '-row{display:flex;gap:8px;flex-wrap:wrap;}'
-      /* ★ v104：**我方在左、敌方在右，以一条垂直线为界**（用户原话：「文本显示区太小了，
-         所以为了显示的更多，我们把敌方放在右边，也就是以垂直线为楚河汉界，而不是横线」）。
-         原来 `-sides` 是**上下两段**（我方一块、敌方一块），日志区被挤到只剩窄窄一条；
-         改成左右两栏后：日志拿到整幅宽度，卡片区也从「上下堆叠」变成「并排」，
-         同一屏能看到的战斗文本显著变多。
-         ⚠ 窄屏（<560px）必须**退回上下堆叠**：两栏各 152px 卡片 + 14px 内边距
-           在手机上会横向溢出，反而比原来更糟。所以用 media query 兜住，
-           别写成「一律两栏」——那是把桌面的优化强加给手机。 */
-      + '@media (min-width:560px){'
-      /* ★ v104：`align-items:stretch`（不是 flex-start）+ **保留 overflow:auto**。
-         flex-start 会让两栏各自贴顶、高度按内容不同 ⇒ 那条垂直楚河汉界长短不一，
-         看着像没对齐；stretch 让两栏等高，金线从上贯到底。
-         ⚠ `overflow` 必须留着：卡片多到一栏装不下时，没它就会直接顶穿面板下沿
-           （面板 `overflow:hidden`，顶穿的部分表现为「卡片凭空少了几张」，
-           而零报错 —— 又一次静默失效）。 */
-      + '#' + PFX + '-sides{display:flex;flex-direction:row;align-items:stretch;overflow-y:auto;overflow-x:hidden;}'
-      /* 楚河汉界：两栏之间的那条垂直金线 */
-      + '#' + PFX + '-sides .' + PFX + '-side.foe{margin-left:14px;padding-left:14px;'
-      + 'border-left:1px solid rgba(201,168,106,.38);}'
-      + '#' + PFX + '-sides .' + PFX + '-side.mate{flex:1 1 0;min-width:0;}'
-      + '#' + PFX + '-sides .' + PFX + '-side.foe{flex:1 1 0;min-width:0;}'
-      + '}'
-      /* ─────────── 单位卡 = 状态栏卡面色 --xz-card + .xz-st-omen 描边 ─────────── */
-      /* ★ 2026-10-12 v43：卡片由 128 → 152px，并允许它长高 ——
-         用户原话：「文本区域缩小，人物显示框拉高／拉长，搞 buff 显示栏」。
-         多出来的高度给下面那条 -bfs（增益/状态挂在外面，不再只藏在日志里）。 */
-      + '.' + PFX + '-card{position:relative;width:152px;background:var(--xz-card);border:1px solid rgba(255,255,255,.12);'
-      + 'border-radius:8px;padding:7px 9px;box-shadow:0 4px 16px rgba(0,4,8,.55);transition:all .15s;}'
-      + '.' + PFX + '-card.enemy{border-color:rgba(192,57,43,.42);}'
-      + '.' + PFX + '-card.dead{opacity:.3;filter:grayscale(1);}'
-      /* ★★★ v330【用户：「打赢了攻击特效没看到，瞬间就赢了，感觉好突兀好生硬」】★★★
-         死亡演出：先亮一下（斩中的反光），再抖两下，最后淡出下沉 + 微旋 + 模糊。
-         为什么不是直接 `display:none`：瞬间消失读起来像"渲染丢了"，
-         闪白 → 抖 → 散 这三拍才是玩家认得的"被打死了"。
-         ⚠ 动画只跑 1.15s，`endBattle` 那边等 1.9s 再出战后决断 —— 两边时间是配好的
-           （见 `XZ_FINISH_MS`），改一边要同时改另一边，否则要么断在动画中间、
-           要么面板出来了卡还在动。 */
-      + '.' + PFX + '-card.is-dying{pointer-events:none;animation:' + PFX + '-die 1.15s cubic-bezier(.3,.85,.45,1) forwards;}'
-      + '@keyframes ' + PFX + '-die{'
-      + '0%{opacity:1;filter:none;transform:translate3d(0,0,0) rotate(0deg);}'
-      + '10%{filter:brightness(2.6) saturate(.35);transform:translate3d(-3px,1px,0) rotate(-1.4deg);}'
-      + '19%{filter:brightness(2.9) saturate(.2);transform:translate3d(3px,-1px,0) rotate(1.4deg);}'
-      + '30%{filter:brightness(1.7) grayscale(.45);transform:translate3d(-2px,2px,0) rotate(-2deg);}'
-      + '100%{opacity:0;filter:grayscale(1) blur(3px);transform:translate3d(0,16px,0) scale(.84) rotate(-5deg);}}'
-      /* 斩痕：一道斜向亮线扫过卡面（只在死亡那一瞬出现）。 */
-      + '.' + PFX + '-card.is-dying::after{content:"";position:absolute;inset:-1px;pointer-events:none;'
-      + 'background:linear-gradient(112deg,transparent 30%,rgba(255,250,232,.0) 38%,'
-      + 'rgba(255,250,232,.95) 48%,rgba(255,206,120,.55) 53%,transparent 63%);'
-      + 'background-size:280% 280%;'
-      + 'animation:' + PFX + '-diecut .62s ease-out .04s forwards;}'
-      + '@keyframes ' + PFX + '-diecut{0%{background-position:130% 0;opacity:0;}'
-      + '14%{opacity:1;}100%{background-position:-45% 0;opacity:0;}}'
-      /* ★ v43 · 「轮到你了」必须**看得见**。
-         底栏那行「轮到你了：点招式，再点敌方结束这一手」其实一直在，但敌方卡
-         只靠 `:hover` 高亮 + 名字下划线表达「可点」—— 鼠标不动时它就是一张普通卡。
-         用户体感就是「我共出手 0 次 / 点了没反应」：引擎确实停在 `S.waiting` 等点击，
-         可界面没把「现在该你点谁」这件事喊出来。
-         所以给可选目标加两样静态就能看见的东西：金色呼吸边框 + 右上角「可击」角标。 */
-      + '.' + PFX + '-card.pick{cursor:pointer;animation:' + PFX + '-pick 1.4s ease-in-out infinite;}'
-      + '@keyframes ' + PFX + '-pick{'
-      + '0%,100%{box-shadow:0 0 0 rgba(201,168,106,0);border-color:rgba(192,57,43,.42);}'
-      + '50%{box-shadow:0 0 18px var(--xz-gold-glow);border-color:var(--xz-border-strong);}}'
-      + '.' + PFX + '-card.pick::after{content:"可击";position:absolute;top:-7px;right:-6px;'
-      + 'padding:1px 6px;border-radius:6px;background:var(--xz-gold,#d4af37);color:#0b1a20;'
-      + 'font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 0 10px var(--xz-gold-glow);'
-      + 'pointer-events:none;z-index:3;}'
-      + '.' + PFX + '-card.ally{cursor:pointer;}'
-      + '.' + PFX + '-card.ally:hover{border-color:var(--xz-border-strong);box-shadow:0 0 14px var(--xz-gold-glow);transform:translateY(-2px);}'
-      /* ★ 可点区域提示：整张卡（含所有子元素）都能点，这里给「该点谁」一个视觉锚 */
-      /* ★ v234：名字**不再加下划线**（用户：「对方的名字的下划线去掉」）。
-         「该点谁」现在由卡片描边 + 右上「可击」角标表达，足够清楚；
-         名字上再压一道下划线，读起来像超链接。 */
-      + '.' + PFX + '-card.pick .' + PFX + '-nm{font-weight:800;}'
-      + '.' + PFX + '-card.pick:hover{border-color:var(--xz-border-strong);box-shadow:0 0 16px var(--xz-gold-glow);transform:translateY(-2px);}'
-      + '.' + PFX + '-card.now{border-color:var(--xz-border-strong);box-shadow:0 0 14px var(--xz-gold-glow);}'
-      + '.' + PFX + '-card.' + PFX + '-hit{animation:' + PFX + '-hit .44s ease-out;}'
-      + '@keyframes ' + PFX + '-hit{0%{transform:translateX(0);box-shadow:0 0 22px rgba(192,57,43,.5);}'
-      + '25%{transform:translateX(-4px);}55%{transform:translateX(3px);}100%{transform:translateX(0);}}'
-      + '.' + PFX + '-nm{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.3px;}'
-      /* ★ v234：境界 / 速度统一套圆角小框（铁律：徽标必须是框，不许裸文字）。 */
-      /* ★ v235：名字 / 属性 / 查看 同一行 —— 名字可缩，另两枚不缩。 */
-      + '.' + PFX + '-top{display:flex;align-items:center;gap:5px;margin-bottom:3px;}'
-      + '.' + PFX + '-top .' + PFX + '-nm{flex:1 1 auto;min-width:0;}'
-      + '.' + PFX + '-ebadge{flex:none;padding:0 6px;border-radius:4px;border:1px solid;'
-      + 'font-size:10px;line-height:1.55;letter-spacing:.04em;white-space:nowrap;font-weight:700;}'
-      + '.' + PFX + '-badge{display:inline-block;padding:0 6px;margin:0 3px 0 0;border-radius:4px;'
-      + 'border:1px solid rgba(198,164,102,.34);background:rgba(198,164,102,.10);'
-      + 'color:#e5d6ae;font-size:10.5px;line-height:1.55;letter-spacing:.3px;'
-      + 'font-variant-numeric:tabular-nums;white-space:nowrap;}'
-      /* ★ v57 文本配色铁律：**我方（玩家）＝绿，敌方＝红**。
-         除此之外，整个演武界面**不许再出现第二种红色或绿色字体** ——
-         buff 徽标、飘字、回合行一律退回金/灰。 */
-      + '.' + PFX + '-nm.ally{color:#4ade80;}'
-      + '.' + PFX + '-nm.enemy{color:#ff6b6b;}'
-      /* ★ v104：血条 / 灵力条 —— **数字写进条里**（用户原话：「我需要把下面的数字写进条里，
-         也就是条里是 1000/1000 这样子，而不是坐在下面」）。
-   实现：槽 `position:relative`，数字用绝对定位**压在填充层之上**、垂直居中。
-   两条配套的硬要求：
-     ① 文字永远可读 —— 条满时字压在高饱和填充上会糊，所以每个数字都带
-        `text-shadow` 深色描边（1px 黑），任何填充色下都读得出来。
-     ② 就地更新必须同步改数字 —— `updateCard` 里改宽度的同时改 textContent，
-        否则会退化成「条在走、数字停在建卡那一刻」。 */
-      + '.' + PFX + '-hp{position:relative;height:14px;background:rgba(2,12,18,.85);border:1px solid var(--xz-border);border-radius:4px;overflow:hidden;margin:6px 0 4px;}'
-      + '.' + PFX + '-hpf{height:100%;background:var(--xz-gold);border-radius:3px;transition:width .25s;}'
-      + '.' + PFX + '-card.enemy .' + PFX + '-hpf{background:var(--xz-crimson);}'
-      /* ★ v59：灵力条 —— 卡面上原本只有气血与时序，灵力完全看不见（用户点名补上）。
-         蓝灰为灵力语义色，不占红绿。v104 起同样 14px 高、数字写进条内。 */
-      + '.' + PFX + '-mp{position:relative;height:12px;background:rgba(2,12,18,.85);border:1px solid var(--xz-border);border-radius:4px;overflow:hidden;margin:0 0 3px;}'
-      + '.' + PFX + '-mpf{height:100%;background:#7fa8d9;border-radius:3px;transition:width .25s;}'
-      /* 条内数字：绝对定位居中 + 深色描边（描边是关键 —— 条满时它压在填充上） */
-      + '.' + PFX + '-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;'
-      + 'font-size:9.5px;line-height:1;font-weight:700;letter-spacing:.02em;color:#f2e6c8;pointer-events:none;'
-      + 'text-shadow:0 0 2px rgba(0,0,0,.95),0 1px 1px rgba(0,0,0,.95),0 -1px 1px rgba(0,0,0,.75);}'
-      + '.' + PFX + '-meta{font-size:11.5px;color:var(--xz-muted);display:flex;justify-content:space-between;}'
-      /* 卡内行动条：槽照抄状态栏输入框底（rgba(2,12,18,.85) + var(--xz-border)），
-         充能走 var(--xz-gold-bright) —— 与状态栏 .xz-st-slot-badge.empty → 点亮 同一套语汇。
-         （v33 的 AP 圆点已废弃：行动条制下「本回合额度」是连续量，圆点表达不了。） */
-                  /* ─────────── 时序条（行动条）：本模块的主视觉 ───────────
-         一条水平轨道 = 0 → TRACK_MAX；每个单位的圆点按自己的条定位，越靠右越接近出手。
-         出手线（右端金线）＝ 条满位置。配色一律取状态栏现成语义色。 */
-      + '#' + PFX + '-rail{position:relative;height:40px;margin:9px 14px 0;background:rgba(2,12,18,.85);'
-      + 'border:1px solid var(--xz-border);border-radius:8px;box-shadow:inset 0 2px 8px rgba(0,4,8,.6);overflow:hidden;}'
-      + '#' + PFX + '-railfill{position:absolute;inset:0;background:linear-gradient(90deg,rgba(201,168,106,.03) 0%,rgba(201,168,106,.12) 100%);}'
-      + '#' + PFX + '-railgrid{position:absolute;inset:0;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,transparent 1px 10%);}'
-      + '#' + PFX + '-railline{position:absolute;right:10px;top:0;bottom:0;width:2px;background:var(--xz-gold-bright);box-shadow:0 0 10px var(--xz-gold-glow);}'
-      + '#' + PFX + '-railtag{position:absolute;right:18px;bottom:2px;font-size:10px;color:var(--xz-muted);letter-spacing:.06em;}'
-      + '#' + PFX + '-nodes{position:absolute;left:10px;right:10px;top:0;bottom:0;}'
-      + '.' + PFX + '-node{position:absolute;top:50%;width:20px;height:20px;margin-top:-10px;margin-left:-10px;border-radius:50%;'
-      + 'display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;z-index:2;'
-      + 'border:1px solid var(--xz-border);transition:left 42ms linear;will-change:left;}'
-      + '.' + PFX + '-node.ally{background:linear-gradient(180deg,rgba(126,78,42,.92),rgba(14,27,32,.94));'
-      + 'color:var(--xz-gold-bright);border-color:var(--xz-border-strong);box-shadow:0 0 8px var(--xz-gold-glow);}'
-      + '.' + PFX + '-node.enemy{background:linear-gradient(180deg,rgba(120,42,42,.88),rgba(24,14,14,.94));'
-      + 'color:#ff6b6b;border-color:rgba(255,107,107,.6);}'
-      + '.' + PFX + '-node.now{transform:scale(1.3);box-shadow:0 0 14px var(--xz-gold-glow);z-index:6;}'
-      + '.' + PFX + '-node.enemy.now{box-shadow:0 0 14px rgba(192,57,43,.8);}'
-      /* ★ 2026-10-12 v43 · **增益／状态挂到卡片外面**（用户原话：「增益 buff 全部在外面
-         显示，过长的话就滑轮，或者点击增益按钮查看」）。
-         旧写法里 buff 只活在日志文字里 —— 打完一轮回头看「我身上现在挂着什么」要翻日志，
-         实战里根本来不及。现在每张卡下面一条 -bfs，超出高度自己滚（不撑爆卡片）。 */
-      + '.' + PFX + '-bfs{margin-top:5px;max-height:58px;overflow-y:auto;overscroll-behavior:contain;padding-right:2px;}'
-      + '.' + PFX + '-bfs::-webkit-scrollbar{width:3px;}'
-      + '.' + PFX + '-bfs::-webkit-scrollbar-thumb{background:var(--xz-border-strong);border-radius:2px;}'
-      + '.' + PFX + '-bf{position:relative;display:inline-flex;align-items:center;justify-content:flex-start;'
-      + 'min-width:23px;height:23px;padding:0 7px 0 4px;margin:0 5px 5px 0;border-radius:5px;'
-      + 'border:1px solid;box-sizing:border-box;gap:1px;}'
-      /* ★ v278：图标从 14px 提到 15px、线宽从 1.5 提到 1.7 ——
-         24 单位的图在 14px 下只有 0.875px/单位，穿防那种多线构图会糊成一团；
-         提一档之后剑与盾的分离能看出来（用户原话：「穿防应该是剑戳破盾牌，但实际上不是」）。 */
-      + '.' + PFX + '-bf svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;'
-      + 'stroke-linecap:round;stroke-linejoin:round;}'
-      /* ★ v239：图标右侧的短文字（破甲20% / 减伤 / 护身 / …），常驻后面缀「整场」 */
-      + '.' + PFX + '-bfx{margin-left:4px;font-size:10px;font-weight:600;letter-spacing:.02em;'
-      + 'white-space:nowrap;opacity:.92;line-height:1;}'
-      + '.' + PFX + '-bfn{position:absolute;right:-4px;bottom:-4px;min-width:12px;height:12px;'
-      + 'padding:0 2px;border-radius:7px;background:#0b1a20;border:1px solid currentColor;'
-      + 'font-size:8.5px;line-height:10px;font-style:normal;font-weight:700;text-align:center;'
-      + 'box-sizing:border-box;font-variant-numeric:tabular-nums;}'
-      /* ★ v235（用户）：「增益全是好看的绿色，减益就是红色」——
-         原来 good 是金、bad 是灰，玩家分不清哪个是对自己好。
-         ⇒ 增益绿 / 减益红 / 常驻中性金。颜色只表「好·坏」，不表阵营。 */
-      + '.' + PFX + '-bf.good{color:#7fe0b0;border-color:rgba(127,224,176,.55);background:rgba(127,224,176,.13);'
-      + 'box-shadow:0 0 8px rgba(127,224,176,.16) inset;}'
-      + '.' + PFX + '-bf.bad{color:#f08a84;border-color:rgba(240,138,132,.55);background:rgba(240,138,132,.13);'
-      + 'box-shadow:0 0 8px rgba(240,138,132,.16) inset;}'
-      + '.' + PFX + '-bf.neutral{color:#e6bd76;border-color:rgba(230,189,118,.45);background:rgba(230,189,118,.10);}'
-      + '.' + PFX + '-bfnone{font-size:10px;color:var(--xz-muted);opacity:.6;}'
-      /* 底栏「增益」按钮 → 开全员增益总览（卡片上滚不完的时候点它） */
-      + '.' + PFX + '-btn{min-width:34px;min-height:28px;box-sizing:border-box;display:inline-flex;align-items:center;'
-      + 'justify-content:center;padding:3px 9px;border:1px solid var(--xz-border);border-radius:6px;'
-      + 'background:rgba(201,168,106,.08);color:var(--xz-gold-bright);font-size:11.5px;cursor:pointer;'
-      + 'touch-action:manipulation;-webkit-tap-highlight-color:transparent;letter-spacing:.5px;}'
-      + '.' + PFX + '-btn:hover{border-color:var(--xz-border-strong);background:rgba(201,168,106,.16);}'
-      /* 增益总览弹层 */
-      + '#' + PFX + '-bfov{position:absolute;left:14px;right:14px;top:52px;bottom:52px;z-index:60;display:none;'
-      + 'flex-direction:column;background:var(--dhl-reading);border:1px solid var(--xz-border-strong);'
-      + 'border-radius:10px;box-shadow:0 18px 44px rgba(0,4,8,.72);overflow:hidden;}'
-      + '#' + PFX + '-bfov-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;'
-      + 'padding:8px 10px;border-bottom:1px solid var(--xz-border);font-size:12.5px;color:var(--xz-gold-bright);'
-      + 'letter-spacing:.08em;flex:none;}'
-      + '#' + PFX + '-bfov-bd{flex:1;overflow-y:auto;padding:8px 10px 12px;}'
-      + '.' + PFX + '-bfov-sec{margin-bottom:10px;}'
-      + '.' + PFX + '-bfov-nm{font-size:12px;font-weight:700;margin-bottom:4px;letter-spacing:.3px;}'
-      /* ★ 2026-10-12 · 伤害飘字**按出手方阵营上色**，不再一律红。
-         旧写法写死 `color:#f0a6a0` —— 飘字是弹在**挨打那张卡**上的，
-         于是场上永远飘同一种粉红，完全看不出这一下是谁出的手（用户原话：
-         「不要敌方一律是红色了，不然看不到是谁打谁」）。
-         现在与我方／敌方**名字同款配色**：ally = --xz-gold-bright #e8c98f，
-         enemy = #f0a6a0；字号一并放大（13 → 16.5px），字体沿用 --xz-font（衬线）。 */
-      + '.' + PFX + '-fly{position:absolute;right:7px;top:2px;font-size:16.5px;font-weight:700;color:#f0d98a;'
-      + 'font-family:var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);'
-      + 'letter-spacing:.5px;text-shadow:0 1px 3px #000, 0 0 10px rgba(0,4,8,.85);'
-      + 'pointer-events:none;animation:' + PFX + '-fly .95s ease-out forwards;}'
-      + '.' + PFX + '-fly.ally{color:#4ade80;text-shadow:0 1px 3px #000, 0 0 12px rgba(74,222,128,.55);}'
-      + '.' + PFX + '-fly.enemy{color:#ff6b6b;text-shadow:0 1px 3px #000, 0 0 12px rgba(255,107,107,.5);}'
-      + '@keyframes ' + PFX + '-fly{0%{opacity:0;transform:translateY(2px) scale(.85);}22%{opacity:1;transform:translateY(-4px) scale(1.08);}'
-      + '100%{opacity:0;transform:translateY(-20px) scale(1);}}'
-      /* ─────────── 日志 = .xz-st-equipped-box ─────────── */
-      /* ★ v45：日志区**再压一档**（112 → 64px 上限），并把 `min-height` 从 88 收到 40 ——
-         用户原话：「文本区域缩小，否则根本看不到技能区」。
-         真凶不只是「高」，而是 **`min-height:88px` 让日志拒绝收缩**：帧是 `max-height:88vh` 的
-         竖向 flex 且 `overflow:hidden`，卡片一多，日志凭 88px 硬顶，底栏（技能区）就被挤出可视区裁掉。
-         现在：日志 `flex:0 1 auto` + `min-height:0`（可被压缩）+ 上限 64px，把高度的**优先级让给底栏技能区**。
-         `-bar` 同时声明 `flex:none`，任何情况下都不许被压掉。 */
-      /* ★ v45→v104→v108：日志区高度的三次口径变更（注释必须跟着代码走，否则就是腐烂）。
-         · v45：压到 64px 上限、min-height 0，把高度优先让给底栏技能区；
-         · v104：拆掉 64px 硬顶，用户要「文本显示区太小了」；
-         · v108：**basis 归 0** —— 用户原话「战报区域一直在变成，必须只能锁定区域高度，
-           高度锁定只能滑轮」。
-         根因：v104 注释里写的「给日志 flex:1.35」**从来没落进代码**（实际是 flex:1 1 auto），
-         而 basis auto = 高度由**内容**决定 ⇒ 日志从几条长到几十条时一路长高，
-         把 -sides 顶得忽大忽小，面板内部每块都在「变成」。
-         ⇒ 真正实现：flex:1.35 1 0 —— 高度只由「面板剩余空间 × 比例」定，与条数无关；
-           条数再多也只长滚动条，面板一块像素都不动。
-           min-height:44px 保底（v45 老 40 略提，再挤也看得见两行）；
-           overscroll-behavior:contain 防滚轮穿透到正文（否则滚日志会连带滚聊天记录）。
-         ⚠ 别改回 flex:1 1 auto，也别加 max-height —— 那正是「高度跟着内容变」的两种写法。 */
-      + '#' + PFX + '-log{flex:1.35 1 0;min-height:44px;max-height:none;overflow-y:auto;'
-      + 'overscroll-behavior:contain;margin:9px 14px 0;padding:8px 12px;'
-      + 'background:var(--dhl-reading);border:1px solid var(--xz-border);border-radius:8px;box-shadow:0 4px 16px rgba(0,4,8,.55);'
-      + 'font-size:13px;line-height:1.6;}'
-      + '#' + PFX + '-log::-webkit-scrollbar{width:4px;}'
-      + '#' + PFX + '-log::-webkit-scrollbar-thumb{background:var(--xz-border-strong);border-radius:2px;}'
-      + '#' + PFX + '-log div{margin-bottom:2px;word-break:break-word;}'
-      /* ★ v59：只有**名字**允许阵营色（我方绿 / 敌方红，见 -nm）；整行中性灰，其它文本禁止红绿。
-         ★ v60（用户口径）：例外只有两处，且都不是「第二种阵营色」——
-           · 扣血：深红加粗 + 🩸（-dmg）
-           · buff：金色（-buff）
-         这三个类各自只有一个用途，不会再出现「谁都跟名字一个颜色」。 */
-      + '.' + PFX + '-l-ally{color:var(--xz-text-2);}'
-      + '.' + PFX + '-l-enemy{color:var(--xz-text-2);}'
-      + '.' + PFX + '-l-sys{color:var(--xz-text-2);}'
-      + '.' + PFX + '-dmg{color:#c0392b;font-weight:800;letter-spacing:.2px;}'
-      + '.' + PFX + '-buff{color:var(--xz-gold-bright);font-weight:700;}'
-      + '.' + PFX + '-l-turn{color:#c9ced8;font-weight:700;border-top:1px dashed rgba(201,206,216,.22);padding-top:5px;margin-top:6px;letter-spacing:.3px;}'
-      /* ─────────── 底栏 ─────────── */
-      /* ★ v45：底栏（技能区所在）**永不被压缩** —— `flex:none` + 给足高度。
-         这是用户本轮的核心诉求（「根本看不到技能区」）：技能区必须在任何情况下都完整可见。 */
-      + '#' + PFX + '-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--xz-border);'
-      + 'background:var(--dhl-reading);font-size:12.5px;min-height:46px;flex:none;}'
-      + '.' + PFX + '-hint{color:var(--xz-text-2);}'
-      /* ★ v57：note = 「其余信息」—— 括号包起来 + 字号更小 + 灰色 */
-      + '.' + PFX + '-note{color:var(--xz-muted);font-size:11px;opacity:.85;letter-spacing:0;}'
-      + '.' + PFX + '-l-note{color:var(--xz-muted);font-size:11px;}'
-      + '.' + PFX + '-hint b{color:#d4af37;}'
-      /* ── 选招区（v38）──
-         按钮语汇沿用本卡状态栏的 .xz-st-mini/.xz-st-main 家族：
-         未选 = 透明底 + var(--xz-border) 边 + #cbbd90 字；
-         选中 = var(--dhl-button-active) 底 + var(--xz-border-strong) 边 + var(--xz-gold-bright) 字 + var(--xz-gold-glow) 影。
-         `flex:1 1 100%` 让招式行**独占一行**，不跟提示语抢宽度。 */
-      + '.' + PFX + '-skrow{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 100%;align-items:center;}'
-      /* ★ v39：招式按钮的字体与**双方名字同款**（`--xz-font` 这套衬线字），并整体放大 ——
-         用户原话：「这些字体给我他妈改成双方名字同款的字体，然后放大一点！」
-         名字是 12.5px/700；按钮原来 11.5px 且 font-family:inherit（在 body 层会退化成无衬线），
-         现在显式声明 --xz-font 并提到 13px。 */
-      + '.' + PFX + '-skgrp{display:inline-flex;align-items:center;gap:0;}'
-      + '.' + PFX + '-sk{font-family:var(--xz-font);font-size:13px;font-weight:700;letter-spacing:.3px;'
-      + 'padding:5px 12px;border-radius:6px;cursor:pointer;'
-      + 'border:1px solid rgba(201,168,106,.32);background:transparent;color:#cbbd90;transition:all .15s;}'
-      + '.' + PFX + '-sk:hover{border-color:#d4af37;background:rgba(201,168,106,.14);color:#f0d98a;}'
-      + '.' + PFX + '-sk.on{border-color:var(--xz-border-strong);background:var(--dhl-button-active);color:var(--xz-gold-bright);'
-      + 'font-weight:700;box-shadow:0 0 10px var(--xz-gold-glow), inset 0 1px 0 rgba(255,255,255,.15);}'
-      /* ★ v64：灵力不足的招 → 灰掉 + 虚线边（看得见「现在放不出」，而不是点了没反应） */
-      + '.' + PFX + '-sklack{border-style:dashed;border-color:rgba(255,255,255,.14);color:#6f7783;background:rgba(255,255,255,.02);}'
-      /* 「查看」：附在招式按钮右侧，**只读**，视觉上刻意比招式钮弱一档 */
-      + '.' + PFX + '-see{font-family:var(--xz-font);font-size:11.5px;margin-left:2px;padding:5px 8px;'
-      + 'border-radius:0 6px 6px 0;cursor:pointer;border:1px solid rgba(201,168,106,.22);border-left:none;'
-      + 'background:rgba(201,168,106,.06);color:#a9a390;transition:all .15s;}'
-      + '.' + PFX + '-see:hover{border-color:#d4af37;background:rgba(201,168,106,.18);color:#f0d98a;}'
-      + '.' + PFX + '-see.on{border-color:var(--xz-border-strong);background:var(--dhl-button-active);color:var(--xz-gold-bright);}'
-      /* 结束回合 = .xz-st-main */
-      /* ★ v43 底栏「杂项 / 自动战斗」：与 endturn 同款黑金按钮，开启态用青色点亮 */
-      + '.' + PFX + '-mb{font-family:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:7px;'
-      + 'cursor:pointer;background:rgba(201,168,106,.14);border:1px solid rgba(201,168,106,.40);'
-      + 'color:var(--xz-gold-bright,#e8c98f);min-height:30px;letter-spacing:.5px;}'
-      + '.' + PFX + '-mb:hover{background:rgba(201,168,106,.26);border-color:#d4af37;}'
-      + '.' + PFX + '-mb.on{background:rgba(104,197,178,.18);border-color:rgba(104,197,178,.62);color:#68c5b2;}'
-      /* ══════════════════════════════════════════════════════════════════════
-         ★★★ v165：底栏**绝不压缩** + 战后决策面板升级 ★★★
-         用户：「战斗脚本打完之后，会自动重新开打，不像老版本的斗法台一样可以选择
-               杀死或手下留情，选择让详细推演或是一笔带过」。
-         **根因**：`#bar` 从来没设过 flex —— 在 `#frame` 这个 flex 列里默认 `flex:0 1 auto`，
-         也就是**可以被压缩**。战后决策面板（2 行选项 + 2 颗按钮）比技能栏高得多，
-         空间不够时被压到只剩几十像素 ⇒ 选项与按钮全被裁掉 ⇒
-         玩家看到的就是「打完了、什么也没得选」，只剩底下一片空白，以为它自己又开了。
-         修法：`#bar{flex:none}`（按内容高度，永不压缩）+ 决策面板做成独立的金框玉牌。
-         ══════════════════════════════════════════════════════════════════════ */
-      + '#' + PFX + '-bar{flex:none !important;}'
-      + '.' + PFX + '-decbox{gap:7px !important;padding:9px 11px !important;border-radius:10px !important;'
-      + 'background:linear-gradient(160deg,#1c1810 0%,#0d1014 100%) !important;'
-      + 'border:1px solid rgba(201,168,106,.44) !important;'
-      + 'box-shadow:0 0 20px rgba(201,168,106,.18),inset 0 1px 0 rgba(255,235,195,.10) !important;}'
-      + '.' + PFX + '-dechd{border-bottom:1px solid rgba(201,168,106,.24) !important;'
-      + 'padding-bottom:6px !important;}'
-      + '.' + PFX + '-dechd b{font-size:14.5px !important;color:#ffe9b8 !important;'
-      + 'text-shadow:0 0 12px rgba(232,201,143,.42) !important;letter-spacing:.06em !important;}'
-      + '.' + PFX + '-dechd span{color:#a89d85 !important;font-size:11.5px !important;}'
-      /* 选项名：圆角小框（铁律：任何标签不得是裸文字） */
-      + '.' + PFX + '-declbl{font-size:11.5px !important;color:#b8ab90 !important;'
-      + 'padding:2px 8px !important;border-radius:4px !important;'
-      + 'background:#1b2025 !important;border:1px solid rgba(148,163,184,.28) !important;'
-      + 'letter-spacing:.02em;}'
-      + '.' + PFX + '-dec{font-size:12.5px !important;padding:6px 14px !important;border-radius:7px !important;'
-      + 'background:linear-gradient(180deg,#1b2228 0%,#0b0f13 100%) !important;'
-      + 'border:1px solid rgba(148,163,184,.34) !important;color:#b9c6cc !important;'
-      + 'transition:all .15s !important;}'
-      + '.' + PFX + '-dec:hover{border-color:rgba(232,201,143,.7) !important;color:#ffe9b8 !important;'
-      + 'box-shadow:0 0 12px rgba(201,168,106,.26) !important;}'
-      + '.' + PFX + '-dec.on{'
-      + 'background:linear-gradient(180deg,#4a3a19 0%,#1d1608 100%) !important;'
-      + 'border:1.5px solid rgba(232,201,143,.82) !important;color:#ffe9b8 !important;'
-      + 'font-weight:800 !important;'
-      + 'box-shadow:0 0 16px rgba(201,168,106,.34),inset 0 1px 0 rgba(255,235,195,.24) !important;}'
-      + '.' + PFX + '-injbtn{'
-      + 'background:linear-gradient(180deg,#4a3a19 0%,#1d1608 100%) !important;'
-      + 'border:1.5px solid rgba(232,201,143,.80) !important;border-radius:8px !important;'
-      + 'color:#ffe9b8 !important;font-size:13.5px !important;font-weight:800 !important;'
-      + 'letter-spacing:.14em !important;padding:9px !important;min-height:38px !important;'
-      + 'box-shadow:0 0 18px rgba(201,168,106,.32),inset 0 1px 0 rgba(255,235,195,.24) !important;}'
-      + '.' + PFX + '-injbtn:hover{'
-      + 'background:linear-gradient(180deg,#63501f 0%,#2a1f0b 100%) !important;'
-      + 'border-color:#ffe9b8 !important;}'
-      /* 战后：底栏变高 ⇒ 战报让出一截，保证决策面板完整可见 */
-      + '#' + PFX + '-log{min-height:96px !important;}'
-      /* ★ v45 战后天道决断面板（底栏在 S.over 时换成的样子）—— 逐字照抄斗法台 .dec-btn / .decision-box 的观感 */
-      + '.' + PFX + '-decbox{display:flex;flex-direction:column;gap:6px;flex:1 1 100%;}'
-      + '.' + PFX + '-dechd{display:flex;align-items:center;justify-content:space-between;gap:8px;'
-      + 'border-bottom:1px solid rgba(255,255,255,.10);padding-bottom:4px;}'
-      + '.' + PFX + '-dechd b{font-size:14px;color:var(--xz-gold-bright,#e8c98f);letter-spacing:.04em;}'
-      + '.' + PFX + '-dechd span{font-size:11.5px;color:var(--xz-muted,#8a9496);}'
-      /* ★ v330：胜利演出期间的底栏占位。故意做得"安静"（无按钮、无光效）——
-         它只要传达一件事：还没轮到玩家操作，别去点。 */
-      + '.' + PFX + '-finishing-tip{font-size:12px;color:var(--xz-gold-bright,#e8c98f);'
-      + 'letter-spacing:.18em;opacity:.86;animation:' + PFX + '-fintip 1.4s ease-in-out infinite;}'
-      + '@keyframes ' + PFX + '-fintip{0%,100%{opacity:.42;}50%{opacity:.95;}}'
-      + '.' + PFX + '-decrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}'
-      + '.' + PFX + '-declbl{font-size:12.5px;color:var(--xz-text-2,#b7b8b3);flex:none;}'
-      + '.' + PFX + '-decbtns{display:inline-flex;gap:6px;flex-wrap:wrap;}'
-      + '.' + PFX + '-dec{font-family:var(--xz-font);font-size:12.5px;font-weight:600;letter-spacing:.3px;'
-      + 'padding:5px 12px;border-radius:6px;cursor:pointer;transition:all .15s;'
-      + 'border:1px solid rgba(201,168,106,.32);background:transparent;color:#cbbd90;}'
-      + '.' + PFX + '-dec:hover{border-color:#d4af37;background:rgba(201,168,106,.14);color:#f0d98a;}'
-      + '.' + PFX + '-dec.on{border-color:var(--xz-border-strong);background:var(--dhl-button-active);'
-      + 'color:var(--xz-gold-bright);font-weight:700;box-shadow:0 0 10px var(--xz-gold-glow), inset 0 1px 0 rgba(255,255,255,.15);}'
-      + '.' + PFX + '-injbtn{width:100%;padding:8px;border-radius:7px;cursor:pointer;font-family:inherit;'
-      + 'font-size:13px;font-weight:700;letter-spacing:.5px;min-height:36px;'
-      + 'background:rgba(201,168,106,.22);border:1px solid var(--xz-border-strong);color:var(--xz-gold-bright,#e8c98f);}'
-      + '.' + PFX + '-injbtn:hover{background:rgba(201,168,106,.34);border-color:#d4af37;}'
-      /* ★ v43 杂项面板里的三条按钮 */
-      + '.' + PFX + '-miscitem{font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 10px;'
-      + 'border-radius:7px;cursor:pointer;text-align:left;min-height:34px;'
-      + 'background:rgba(201,168,106,.14);border:1px solid rgba(201,168,106,.40);color:#e8c98f;}'
-      + '.' + PFX + '-miscitem:hover{background:rgba(201,168,106,.26);border-color:#d4af37;}'
-      + '.' + PFX + '-miscitem.off{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);'
-      + 'color:#6f7783;cursor:not-allowed;}'
-      + '#' + PFX + '-endturn{margin-left:auto;font-family:inherit;font-size:12px;font-weight:600;padding:6px 16px;border-radius:7px;cursor:pointer;'
-      + 'border:1px solid rgba(201,168,106,.5);background:rgba(201,168,106,.16);color:#f0d98a;transition:all .15s;}'
-      + '#' + PFX + '-endturn:hover{background:rgba(201,168,106,.28);border-color:#d4af37;}'
-      /* ═════════ v49 战前编队（极简演武自己的选择界面）═════════
-         ★ 用户绝对指令：「斗法台的战前选择删了，用我们自己的」「照抄美化试试看」。
-         语汇全部照抄**本卡自己的状态栏 / 演武面板**：
-           · 遮罩      = rgba(3,13,20,.78)（与主浮层同一片 void 色）
-           · 卡片      = var(--dhl-stage) + 顶边 var(--xz-gold-bright) + 12px 圆角 + 双阴影（.xz-st-card）
-           · 头栏      = var(--dhl-header) + 底边 var(--xz-border)（.xz-st-head）
-           · 印玺      = .xz-st-seal（22x22 / rgba(201,168,106,.55) / #d4af37）
-           · 标题      = .xz-st-title（13px / letter-spacing .06em / #e8e3d3）
-           · 主钮      = .xz-st-main  → 金底金字
-           · 次钮      = .xz-st-mini  → 透明底金边
-         不新造任何色值：全部走 --xz-* / --dhl-* 语义令牌。 */
-      /* ★ v69：与主面板同一套手机端加固 —— 遮罩可滚动、自带 8px 内边距，
-         窄屏改成**顶对齐**（早期斗法台对话框就是 `align-items:flex-start` + 可滚动遮罩的写法）。
-         旧写法只有 `align-items:center`：名单一长（勾选项多）卡片就比可见区高，
-         居中的结果就是**上沿跑出屏幕**，玩家只看得到下半截 —— 与第 1 项同一个病根。 */
-      + '.' + PFX + '-teamwrap{position:fixed;inset:0;z-index:2147483647;background:rgba(3,13,20,.78);'
-      /* ★ v192：弹层改用 <dialog>.showModal() —— 进 **top layer**，不受任何 z-index / 层叠上下文影响。
-         手机端此前它挂在 body 上，会被酒馆自己的容器压到最底层。下面几行是 dialog 的 UA 复位。 */
-      + 'margin:0;max-width:none;max-height:none;width:100%;height:100%;border:0;outline:none;'
-      + 'display:flex;align-items:center;justify-content:center;padding:8px;box-sizing:border-box;'
-      + 'overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;'
-      + '--xz-void:#05080c;--xz-bg:#0a1016;'
-      + '--xz-border:rgba(208,220,226,0.10);--xz-border-strong:rgba(208,220,226,0.26);'
-      /* ★ v111 配色重做（用户：「美化配色还是太丑」）：压掉满屏亮金与橙色光斑。
-         口径：金只做**描边与刻度**（低饱和 #c9a86a），不再大面积发光；
-         强调色交给**玉青**（正向／我家）与**朱砂**（伤害／敌方），文字走中性冷白。
-         这样底色是中性的，彩色只出现在「该看的地方」，不会再显得发脏。 */
-      + '--xz-gold:#c9a86a;--xz-gold-bright:#e8c98f;--xz-gold-glow:rgba(201,168,106,0.16);'
-      + '--xz-text:#eef2f4;--xz-text-2:#a8b6bc;--xz-muted:#6f8188;'
-      + '--xz-font:"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
-      /* 舞台光：原来右上角那团橙色会让整块面板发黄发脏 ⇒ 换成极淡的青，且更小 */
-      + '--dhl-stage:radial-gradient(circle at 78% 10%, rgba(127,212,193,0.07), transparent 26%), linear-gradient(180deg,#0a1016 0%,#05080c 100%);'
-      + '--dhl-reading:linear-gradient(180deg, rgba(12,19,26,0.96), rgba(6,10,14,0.98));'
-      + '--dhl-header:linear-gradient(90deg, rgba(8,14,20,0.99), rgba(14,22,29,0.97) 52%, rgba(24,20,20,0.99));'
-      + '--dhl-button-active:linear-gradient(180deg, rgba(201,168,106,0.20), rgba(10,16,22,0.34));'
-      + 'font-family:var(--xz-font);}'
-      + '#' + PFX + '-teamcard{width:min(440px,92vw);max-height:calc(100vh - 16px);overflow:hidden;'
-      + 'display:flex;flex-direction:column;background:var(--dhl-stage);border:1px solid var(--xz-border);'
-      + 'border-top:2px solid var(--xz-gold-bright);border-radius:12px;'
-      + 'box-shadow:0 16px 45px rgba(0,4,8,.75), inset 0 1px 0 rgba(255,255,255,.06);color:var(--xz-text-2);}'
-      /* ★ v69 窄屏：编队卡片**顶对齐**（`align-items:flex-start`）——
-         名单长时它一定从可见区顶部往下长，看得见标题与「按勾选列阵」；居中反而把上沿顶出屏幕。
-         这一条与早期斗法台对话框的口径一致。 */
-      + '@media (max-width:560px){.' + PFX + '-teamwrap{align-items:flex-start;padding-top:8px;}}'
-      + '#' + PFX + '-teamhead{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--dhl-header);'
-      + 'border-bottom:1px solid var(--xz-border);box-shadow:0 4px 15px rgba(0,0,0,.45);}'
-      + '#' + PFX + '-teamseal{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;'
-      + 'border:1px solid rgba(201,168,106,.55);border-radius:4px;color:#d4af37;font-size:12px;}'
-      + '#' + PFX + '-teamtitle{font-size:13px;letter-spacing:.06em;color:#e8e3d3;font-weight:700;}'
-      + '#' + PFX + '-teambody{padding:12px 14px 14px;overflow-y:auto;}'
-      + '#' + PFX + '-teambody::-webkit-scrollbar{width:4px;}'
-      + '#' + PFX + '-teambody::-webkit-scrollbar-thumb{background:var(--xz-border-strong);border-radius:2px;}'
-      + '#' + PFX + '-teamhint{margin:0 0 10px;font-size:12.5px;color:var(--xz-text-2);text-align:center;line-height:1.6;}'
-      + '#' + PFX + '-teamlist{margin-bottom:10px;}'
-      + '.' + PFX + '-tp-row{display:flex;align-items:center;gap:9px;padding:9px 11px;margin-bottom:6px;'
-      + 'background:var(--dhl-reading);border:1px solid var(--xz-border);border-radius:8px;cursor:pointer;transition:all .15s;}'
-      + '.' + PFX + '-tp-row:hover{border-color:var(--xz-border-strong);box-shadow:0 0 10px var(--xz-gold-glow);}'
-      + '.' + PFX + '-tp-ck{width:17px;height:17px;flex:none;accent-color:#d4af37;cursor:pointer;}'
-      + '.' + PFX + '-tp-mark{flex:none;font-size:13px;}'
-      + '.' + PFX + '-tp-nm{flex:1;font-size:13px;font-weight:700;color:var(--xz-text);letter-spacing:.3px;}'
-      + '.' + PFX + '-tp-rl{flex:none;font-size:11.5px;color:var(--xz-muted);}'
-      + '.' + PFX + '-tp-empty{padding:14px 4px;text-align:center;font-size:12px;color:var(--xz-muted);line-height:1.7;}'
-      + '.' + PFX + '-tp-rem{display:flex;align-items:center;gap:8px;margin:10px 0 12px;padding:9px 11px;'
-      + 'background:var(--dhl-reading);border:1px solid var(--xz-border);border-radius:8px;'
-      + 'font-size:12px;color:var(--xz-muted);cursor:pointer;}'
-      + '#' + PFX + '-teambtns{display:flex;gap:8px;flex-wrap:wrap;}'
-      + '.' + PFX + '-tp-main{flex:2 1 160px;padding:10px 0;border-radius:8px;cursor:pointer;font-family:inherit;'
-      + 'font-size:14px;font-weight:700;letter-spacing:.06em;border:1.5px solid var(--xz-border-strong);'
-      + 'background:var(--dhl-button-active);color:var(--xz-gold-bright);'
-      + 'box-shadow:0 0 12px var(--xz-gold-glow), inset 0 1px 0 rgba(255,255,255,.14);transition:all .15s;}'
-      + '.' + PFX + '-tp-main:hover{background:rgba(201,168,106,.30);border-color:#d4af37;}'
-      + '.' + PFX + '-tp-sub{flex:1 1 88px;padding:10px 0;border-radius:8px;cursor:pointer;font-family:inherit;'
-      + 'font-size:12.5px;font-weight:700;border:1px solid var(--xz-border);background:transparent;'
-      + 'color:var(--xz-text);transition:all .15s;}'
-      + '.' + PFX + '-tp-sub:hover{border-color:var(--xz-border-strong);background:rgba(201,168,106,.14);color:var(--xz-gold-bright);}'
-      + '.' + PFX + '-tp-cancel{width:100%;margin-top:10px;padding:9px 0;border-radius:8px;cursor:pointer;font-family:inherit;'
-      + 'font-size:12.5px;font-weight:700;letter-spacing:.5px;border:1.5px solid var(--xz-gold);'
-      + 'background:rgba(201,168,106,.08);color:var(--xz-gold);transition:all .15s;}'
-      + '.' + PFX + '-tp-cancel:hover{background:rgba(201,168,106,.20);border-color:#d4af37;color:var(--xz-gold-bright);}'
-      /* ═════════ 八属性命中特效的关键帧（v39）═════════
-         逐条照抄主战斗 `xiuxian_timeline_atb-*` 那一组（04:10126-10230），
-         只把前缀换成 `xz-jjb-` —— 两套必须互相独立，否则谁先注入谁生效，
-         后注入的那一边会静默用上对方的曲线（本工程「跨模块撞名」事故的第 N 次）。 */
-      + '@keyframes ' + PFX + '-lite-fly{0%{opacity:1;transform:scale(0.75);}100%{opacity:0;transform:scale(0.32);}}'
-      + '@keyframes ' + PFX + '-particle-fly{0%{opacity:1;transform:translate(-50%,-50%) scale(0.7);}60%{opacity:0.85;}100%{opacity:0;transform:translate(calc(-50% + var(--dx,0px)), calc(-50% + var(--dy,0px))) scale(1.05);}}'
-      /* ★ 2026-10-12 新增：弹道轨迹粒子的行进关键帧（原给 `jjTrailFx` 用；该函数 v152 已弃用、**现已不存在**）。
-         与主战斗的 `-fx-trail` 同形：**淡入 → 沿 --tx/--ty 飞到落点 → 淡出**。
-         必须在本模块自建一份（带 PFX 前缀）——主战斗那份是 P 前缀的，
-         而本浮层是独立文档作用域，取不到主战斗的关键帧（会「动画不存在 → 粒子不动」）。 */
-      + '@keyframes ' + PFX + '-trail{0%{opacity:0;transform:translate(-50%,-50%) scale(0.5);}14%{opacity:1;}78%{opacity:0.95;}100%{opacity:0;transform:translate(calc(-50% + var(--tx,0px)), calc(-50% + var(--ty,0px))) scale(0.85);}}'
-      + '@keyframes ' + PFX + '-elem-burst{0%{opacity:1;transform:translate(-50%,-50%) scale(0.4);}45%{opacity:1;transform:translate(-50%,-50%) scale(6.5);}100%{opacity:0;transform:translate(-50%,-50%) scale(11);}}'
-      + '@keyframes ' + PFX + '-water-ripple{0%{transform:scale(0.3);opacity:1;}50%{transform:scale(1.6);opacity:0.8;}100%{transform:scale(2.4);opacity:0;}}'
-      + '@keyframes ' + PFX + '-fire-burst{0%{transform:scale(0.2);opacity:1;}40%{transform:scale(1.8) rotate(15deg);opacity:0.95;}100%{transform:scale(2.6) rotate(30deg);opacity:0;}}'
-      + '@keyframes ' + PFX + '-thunder-flash{0%{transform:scale(0.4);opacity:1;filter:brightness(2);}30%{transform:scale(1.7);opacity:0.9;}100%{transform:scale(2.4);opacity:0;}}'
-      + '@keyframes ' + PFX + '-metal-spark{0%{transform:scale(0.2) rotate(0deg);opacity:1;}50%{transform:scale(1.6) rotate(90deg);opacity:0.9;}100%{transform:scale(2.2) rotate(180deg);opacity:0;}}'
-      + '@keyframes ' + PFX + '-wood-spiral{0%{transform:scale(0.3) rotate(0deg);opacity:1;}60%{transform:scale(1.5) rotate(180deg);opacity:0.8;}100%{transform:scale(2.2) rotate(360deg);opacity:0;}}'
-      + '@keyframes ' + PFX + '-earth-slam{0%{transform:scale(0.4);opacity:1;}40%{transform:scale(1.5);opacity:0.9;}100%{transform:scale(2.3);opacity:0;}}'
-      + '@keyframes ' + PFX + '-wind-spin{0%{transform:scale(0.3) rotate(0deg);opacity:1;}50%{transform:scale(1.6) rotate(180deg);opacity:0.85;}100%{transform:scale(2.4) rotate(360deg);opacity:0;}}'
-      + '@keyframes ' + PFX + '-ice-freeze{0%{transform:scale(0.3);opacity:1;}45%{transform:scale(1.5);opacity:0.9;}100%{transform:scale(2.3);opacity:0;}}'
-      + '@keyframes ' + PFX + '-fx-aoe{0%{opacity:0.9;transform:translate(-50%,-50%) scale(0.3);}55%{opacity:0.6;transform:translate(-50%,-50%) scale(1.2);}100%{opacity:0;transform:translate(-50%,-50%) scale(1.95);}}'
-      + '@keyframes ' + PFX + '-fx-aoe-line{0%{opacity:0.95;transform:translate(-50%,-50%) scaleX(0.2);}60%{opacity:0.75;transform:translate(-50%,-50%) scaleX(1);}100%{opacity:0;transform:translate(-50%,-50%) scaleX(1.5);}}'
-      /* ══════════════════════════════════════════════════════════════
-         v110 视觉层（**追加覆盖**，不改上面任何原规则）
-         设计口径：深墨青底 + 鎏金描边 + 血红／灵蓝双色条。
-         全部走「只加不删」：原规则仍在，这层在样式表末尾，同权重后写者胜。
-         想整体回退，删这一个块即可（不会牵连布局）。
-         ══════════════════════════════════════════════════════════════ */
-      + '@keyframes ' + PFX + '-now-pulse{0%,100%{box-shadow:0 0 0 1px var(--xz-gold-bright),0 0 16px rgba(201,168,106,.30),inset 0 1px 0 rgba(255,255,255,.08);}50%{box-shadow:0 0 0 1px var(--xz-gold-bright),0 0 26px rgba(201,168,106,.55),inset 0 1px 0 rgba(255,255,255,.10);}}'
-      + '@keyframes ' + PFX + '-node-pulse{0%,100%{transform:translateY(-50%) scale(1);}50%{transform:translateY(-50%) scale(1.09);}}'
-      + '@keyframes ' + PFX + '-sheen{0%{transform:translateX(-120%);}100%{transform:translateX(220%);}}'
-      /* ① 镜头：四角压暗，视线收到中央（不挡点击） */
-      + '#' + PFX + '-overlay{background:radial-gradient(130% 90% at 50% 40%,rgba(4,10,14,0) 45%,rgba(3,8,11,.42) 100%);}'
-      /* ② 角色卡：浮起 2px + 内高光；当前出手者鎏金呼吸 */
-      + '.' + PFX + '-card{transition:transform .18s cubic-bezier(.2,.7,.3,1),box-shadow .2s ease,border-color .2s ease;box-shadow:0 6px 18px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.06);}'
-      + '.' + PFX + '-card:hover{transform:translateY(-2px);}'
-      + '.' + PFX + '-card.now{box-shadow:inset 3px 0 0 #7fd4c1,0 0 0 1px rgba(232,201,143,.46),0 10px 26px rgba(0,0,0,.46);}'
-      /* ③ 时序条：轨道内阴影 + 金色流向渐变；出手线加双层光 */
-      + '#' + PFX + '-rail{box-shadow:inset 0 1px 0 rgba(255,255,255,.05),inset 0 -8px 18px rgba(0,0,0,.45);}'
-      + '#' + PFX + '-railfill{background:linear-gradient(90deg,rgba(127,212,193,.015) 0%,rgba(127,212,193,.05) 60%,rgba(232,201,143,.12) 100%);}'
-      + '#' + PFX + '-railline{box-shadow:0 0 6px rgba(232,201,143,.45);}'
-      /* ④ 圆点：径向高光 + 金环；出手瞬间放大呼吸 */
-      + '.' + PFX + '-node{background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.20),rgba(255,255,255,0) 64%),linear-gradient(180deg,#16222b,#0b1218);box-shadow:0 0 0 1px rgba(208,220,226,.22),0 3px 8px rgba(0,0,0,.55);}'
-      + '.' + PFX + '-node.now{box-shadow:0 0 0 2px #7fd4c1,0 4px 12px rgba(0,0,0,.5);animation:' + PFX + '-node-pulse 1.8s ease-in-out infinite;}'
-      /* ⑤ 气血／灵力条：上缘高光 + 同色柔光晕，宽度线性补间（与 42ms 步进同长） */
-      + '.' + PFX + '-hpf{transition:width .18s linear;background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(0,0,0,0) 48%),linear-gradient(90deg,#7a332c,#c25a4a);}'
-      + '.' + PFX + '-mpf{transition:width .18s linear;background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(0,0,0,0) 48%),linear-gradient(90deg,#2a5f80,#4d9fd0);}'
-      /* ⑥ 按钮：按下去有回弹，悬停微亮（不位移过多，避免连点时抖） */
-      + '.' + PFX + '-tp-sub,.' + PFX + '-hbtn{transition:transform .12s ease,box-shadow .16s ease,filter .16s ease;}'
-      + '.' + PFX + '-tp-sub:hover,.' + PFX + '-hbtn:hover{transform:translateY(-1px);filter:brightness(1.12);box-shadow:0 4px 14px rgba(0,0,0,.42);}'
-      + '.' + PFX + '-tp-sub:active,.' + PFX + '-hbtn:active{transform:translateY(0) scale(.98);}'
-      /* ⑦ 伤害飘字：先暗描边再亮芯，压在任何底图上都读得清 */
-      + '.' + PFX + '-fly{text-shadow:0 0 3px rgba(0,0,0,.95),0 2px 6px rgba(0,0,0,.85),0 0 14px currentColor;}'
-      /* ⑧ 无障碍：系统开了「减少动态效果」就只留颜色变化 */
-      + '@media (prefers-reduced-motion: reduce){.' + PFX + '-card,.' + PFX + '-node,.' + PFX + '-hpf,.' + PFX + '-mpf{animation:none !important;transition:none !important;}}'
-      /* ══════════════════════════════════════════════════════════════
-         v115 **重构级视觉层**（用户的「就变了个背景颜色」指的是：上一版只调了色值，
-         结构、层次、质感、动效全没动。这一层不复用上一版的思路，全部重写：
-           · 背景：细网格 + 上下暗角 + 中心柔光（把面板「压」进夜里的感觉）
-           · 卡片：玻璃板 + 左侧阵营色条 + 顶部高光带 + 悬浮抬升
-           · 时序条：刻度尺 + 内凹轨道 + 圆点双层环
-           · 数字：描边 + 弹入 + 暴击爆闪
-           · 按钮：立体边 + 按下压深
-         全部追加在样式表末尾，同权重后写者胜 ⇒ 覆盖上面所有旧规则。
-         ══════════════════════════════════════════════════════════════ */
-      + '@keyframes ' + PFX + '-flypop{0%{transform:translate(-50%,-50%) scale(.55);opacity:0;}18%{transform:translate(-50%,-58%) scale(1.18);opacity:1;}38%{transform:translate(-50%,-62%) scale(1);}100%{transform:translate(-50%,-96%) scale(.96);opacity:0;}}'
-      + '@keyframes ' + PFX + '-shake{0%,100%{transform:translate3d(0,0,0);}12%{transform:translate3d(-5px,2px,0);}26%{transform:translate3d(4px,-2px,0);}42%{transform:translate3d(-3px,1px,0);}60%{transform:translate3d(2px,-1px,0);}78%{transform:translate3d(-1px,1px,0);}}'
-      + '@keyframes ' + PFX + '-glowring{0%{opacity:.75;transform:translate(-50%,-50%) scale(.6);}100%{opacity:0;transform:translate(-50%,-50%) scale(1.9);}}'
-      /* ① 背景：细网格 + 上下暗角（伪元素，零 DOM 改动） */
-      + '#' + PFX + '-overlay::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;'
-      + 'background-image:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);'
-      + 'background-size:34px 34px;mask-image:radial-gradient(circle at 50% 42%,#000 0%,transparent 78%);'
-      + '-webkit-mask-image:radial-gradient(circle at 50% 42%,#000 0%,transparent 78%);}'
-      + '#' + PFX + '-overlay::after{content:"";position:absolute;left:0;right:0;bottom:0;height:34%;pointer-events:none;z-index:0;'
-      + 'background:linear-gradient(180deg,transparent,rgba(0,0,0,.55));}'
-      /* ② 卡片：玻璃板 + 阵营色条 + 顶部高光 + 抬升 */
-      /* ⚠ 不能加 overflow:hidden：.pick::after 的「可击」角标画在 top:-7/right:-6（卡外），会被裁掉。 */
-      + '.' + PFX + '-card{position:relative;border-radius:12px !important;'
-      + 'background:linear-gradient(160deg,rgba(26,36,44,.92) 0%,rgba(13,19,25,.94) 100%) !important;'
-      + 'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);'
-      + 'box-shadow:0 1px 0 rgba(255,255,255,.07) inset,0 0 0 1px rgba(208,220,226,.12),0 14px 34px rgba(0,0,0,.55) !important;'
-      + 'transition:transform .2s cubic-bezier(.2,.7,.3,1),box-shadow .22s ease;}'
-      + '.' + PFX + '-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:12px 0 0 12px;'
-      + 'background:linear-gradient(180deg,var(--xz-cyan,#7fd4c1),rgba(127,212,193,.15));opacity:.85;}'
-      + '.' + PFX + '-card.enemy::before{background:linear-gradient(180deg,#c25a4a,rgba(194,90,74,.15));}'
-      /* ★ v116【用户实测：轮到我出手，敌方卡片出现一块黄斑】根因 —— 这里原用 -card::after
-         画「顶部高光带」，而原设计用 -card.pick::after 画「可击」角标（content:"可击";
-         top:-7px;right:-6px）。**同一个伪元素被我整条覆盖** ⇒ 角标变成 46% 高的一整条色带。
-         铁律：改伪元素前先 grep 同名 ::after / ::before，它们是有主的。
-         ⇒ 高光带删除（收益低、风险高），角标恢复原样。 */
-      + '.' + PFX + '-card:hover{transform:translateY(-3px);box-shadow:0 1px 0 rgba(255,255,255,.09) inset,0 0 0 1px rgba(208,220,226,.20),0 20px 44px rgba(0,0,0,.6) !important;}'
-      + '.' + PFX + '-card.now{box-shadow:0 1px 0 rgba(255,255,255,.1) inset,0 0 0 1px rgba(232,201,143,.55),0 0 0 4px rgba(127,212,193,.10),0 20px 46px rgba(0,0,0,.6) !important;}'
-      /* ③ 血／灵条：内凹槽 + 圆角 + 顶部高光（宽度线性补间） */
-      + '.' + PFX + '-hp,.' + PFX + '-mp{border-radius:99px !important;overflow:hidden;'
-      + 'box-shadow:inset 0 1px 3px rgba(0,0,0,.75) !important;background:rgba(0,0,0,.5) !important;}'
-      + '.' + PFX + '-hpf,.' + PFX + '-mpf{border-radius:99px;transition:width .18s linear;'
-      + 'background-image:linear-gradient(180deg,rgba(255,255,255,.22),rgba(0,0,0,0) 52%) !important;}'
-      + '.' + PFX + '-hpf{background-color:#b6503f !important;}'
-      + '.' + PFX + '-mpf{background-color:#3d84b8 !important;}'
-      /* ④ 时序条：刻度尺 + 内凹 + 圆点双层环 */
-      + '#' + PFX + '-rail{border-radius:10px !important;overflow:hidden;'
-      + 'box-shadow:inset 0 2px 10px rgba(0,0,0,.75),0 0 0 1px rgba(208,220,226,.10) !important;}'
-      + '#' + PFX + '-railgrid{opacity:.5 !important;'
-      + 'background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.10) 0 1px,transparent 1px 5%) !important;}'
-      + '#' + PFX + '-railfill{background:linear-gradient(90deg,rgba(127,212,193,.03),rgba(232,201,143,.14)) !important;}'
-      + '#' + PFX + '-railline{width:2px;background:#e8c98f !important;box-shadow:0 0 10px rgba(232,201,143,.6) !important;}'
-      + '.' + PFX + '-node{width:22px !important;height:22px !important;margin-top:-11px !important;margin-left:-11px !important;'
-      + 'box-shadow:0 0 0 1px rgba(208,220,226,.30),0 3px 10px rgba(0,0,0,.65) !important;}'
-      + '.' + PFX + '-node.now{box-shadow:0 0 0 2px #7fd4c1,0 0 0 6px rgba(127,212,193,.16),0 4px 14px rgba(0,0,0,.6) !important;}'
-      /* ⑤ 伤害数字：粗体 + 描边 + 弹入（覆盖旧的位移动画） */
-      + '.' + PFX + '-fly{font-weight:900 !important;font-size:calc(22px * var(--xz-fs,1)) !important;'
-      + 'letter-spacing:.02em;-webkit-text-stroke:1px rgba(0,0,0,.55);paint-order:stroke fill;'
-      + 'animation:' + PFX + '-flypop .95s cubic-bezier(.18,.8,.3,1) forwards !important;}'
-      + '.' + PFX + '-fly.ally{color:#f3d9a0 !important;text-shadow:0 0 12px rgba(243,217,160,.55),0 2px 6px rgba(0,0,0,.9) !important;}'
-      + '.' + PFX + '-fly.enemy{color:#ff9b8a !important;text-shadow:0 0 12px rgba(255,120,100,.55),0 2px 6px rgba(0,0,0,.9) !important;}'
-      /* ⑥ 按钮：立体边 + 按下压深 */
-      + '.' + PFX + '-tp-sub,.' + PFX + '-hbtn{border-radius:8px !important;'
-      + 'box-shadow:0 1px 0 rgba(255,255,255,.10) inset,0 -2px 0 rgba(0,0,0,.35) inset,0 3px 10px rgba(0,0,0,.4) !important;}'
-      + '.' + PFX + '-tp-sub:active,.' + PFX + '-hbtn:active{transform:translateY(1px) !important;'
-      + 'box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 -1px 0 rgba(0,0,0,.3) inset,0 1px 4px rgba(0,0,0,.4) !important;}'
-      /* ⑦ 暴击屏震（JS 加 class 触发；减少动态效果时不抖） */
-      + '.' + PFX + '-shake{animation:' + PFX + '-shake .34s cubic-bezier(.36,.07,.19,.97) 1;}'
-      /* ⑧ 动态背景：**八卦阵**（纯 CSS 锥形渐变，八方位 + 反向环 + 中心留空） */
-      + '@keyframes ' + PFX + '-bagua{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}'
-      + '@keyframes ' + PFX + '-bagua-r{0%{transform:rotate(0deg);}100%{transform:rotate(-360deg);}}'
-      + '@keyframes ' + PFX + '-griddrift{0%{background-position:0 0,0 0;}100%{background-position:34px 34px,34px 34px;}}'
-      + '@keyframes ' + PFX + '-breathe{0%,100%{opacity:.5;transform:scale(1);}50%{opacity:.85;transform:scale(1.06);}}'
-      + '@keyframes ' + PFX + '-nowring{0%,100%{box-shadow:0 1px 0 rgba(255,255,255,.1) inset,0 0 0 1px rgba(232,201,143,.5),0 0 0 4px rgba(127,212,193,.08),0 20px 46px rgba(0,0,0,.6);}50%{box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 0 0 1px rgba(232,201,143,.85),0 0 0 9px rgba(127,212,193,.16),0 20px 46px rgba(0,0,0,.6);}}'
-      + '@keyframes ' + PFX + '-hitflash{0%{filter:brightness(2.2) saturate(.6);}60%{filter:brightness(1.15);}100%{filter:none;}}'
-      /* 外圈：八等分锥形（每 45° 一道亮扇 + 细刻线），72s 一转；中心 30% 掏空，不压卡片 */
-      + '#' + PFX + '-frame::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;border-radius:inherit;'
-      + 'background:'
-      + 'repeating-conic-gradient(from 0deg,rgba(232,201,143,.20) 0deg 3.4deg,transparent 3deg 45deg),'
-      + 'repeating-conic-gradient(from 22.5deg,rgba(127,212,193,.13) 0deg 1.4deg,transparent 1.2deg 45deg),'
-      + 'radial-gradient(circle at 50% 50%,transparent 29.6%,rgba(232,201,143,.26) 30%,rgba(232,201,143,.26) 30.55%,transparent 30.6%),'
-      + 'radial-gradient(circle at 50% 50%,transparent 63.6%,rgba(127,212,193,.22) 64%,rgba(127,212,193,.22) 64.5%,transparent 64.7%);'
-      + 'mask-image:radial-gradient(circle at 50% 50%,transparent 10%,#000 32%,#000 82%,transparent 97%);'
-      + '-webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 10%,#000 32%,#000 82%,transparent 97%);'
-      + 'animation:' + PFX + '-bagua 72s linear infinite;}'
-      /* 内圈：反向慢转的细刻度，制造「阵法在推演」的层次 */
-      + '#' + PFX + '-frame::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;border-radius:inherit;'
-      + 'background:'
-      + 'repeating-conic-gradient(from 0deg,rgba(255,255,255,.11) 0deg .8deg,transparent .7deg 15deg);'
-      + 'mask-image:radial-gradient(circle at 50% 50%,transparent 31%,#000 33%,#000 47%,transparent 52%);'
-      + '-webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 31%,#000 33%,#000 47%,transparent 52%);'
-      + 'animation:' + PFX + '-bagua-r 118s linear infinite;}'
-      + '.' + PFX + '-card.hit{animation:' + PFX + '-hitflash .42s ease-out 1;}'
-      + '.' + PFX + '-card.now{animation:' + PFX + '-nowring 2.2s ease-in-out infinite;}'
-      + '.' + PFX + '-node.now{animation:' + PFX + '-breathe 1.8s ease-in-out infinite;}'
-      /* ════════════════════════════════════════════════════════════════════
-         ★★★ v153 终版主题：鎏金玄墨 ★★★
-         用户：「彻底重构战斗脚本的前端，就按现在的信息显示方式和密度，只改变美化配色」
+    /* ══════════════════════════════════════════════════════════════════════
+       ★★★ v433：整段换皮（用户 2026-10-28：「这个界面好看，实装这个吧」）。
 
-         铁律（写在最前面，改这一层的人必须遵守）：
-           **只动颜色 / 描边 / 阴影 / 渐变 / 圆角 / 字色 / 字重 / 字间距。**
-           一行都不碰 width / height / padding / margin / position / display /
-           flex / 字号 —— 信息密度与布局保持原样，换的只是皮。
+       旧皮肤是 v104~v404 一层层叠出来的：1463 行 / 478 个 !important / 7 个媒体查询。
+       它改不动自己 —— 往上加任何覆盖都会被上一层的 !important 咬住，
+       这正是历史上「改了 CSS 完全没反应 / 战斗脚本 0 变化」的成因。
+       ⇒ 这次不叠，整段换。新皮肤 0 个 !important（只有 reduced-motion 那两条）。
 
-         色系四色：玄墨（暖黑底）· 鎏金（主强调）· 朱砂（敌／危险）· 青玉（我／灵力）
-         ════════════════════════════════════════════════════════════════════ */
-      /* ① 色板重设：overlay 子树内所有变量一次性对齐（这一步决定整体气质） */
-      + '#' + PFX + '-overlay{'
-      + '--xz-void:#04060a;--xz-bg:#080b10;'
-      + '--xz-card:linear-gradient(160deg,#11171f 0%,#0a0e13 100%);'
-      + '--xz-card-hover:linear-gradient(160deg,#161f28 0%,#0d1218 100%);'
-      + '--xz-border:rgba(198,164,102,.20);--xz-border-strong:rgba(240,215,155,.55);'
-      + '--xz-gold:#c8a45e;--xz-gold-bright:#f0d79b;--xz-gold-glow:rgba(226,180,96,.22);'
-      + '--xz-jade:#63b8a4;--xz-cyan:#8fe3cd;--xz-crimson:#c9453f;'
-      + '--xz-text:#f6f1e4;--xz-text-2:#c6bba3;--xz-muted:#8b8071;'
-      + '--dhl-stage:radial-gradient(ellipse at 50% 0%,rgba(86,62,30,.42),transparent 58%),'
-      + 'radial-gradient(ellipse at 50% 108%,rgba(58,30,24,.42),transparent 62%),'
-      + 'linear-gradient(180deg,#0b0f15 0%,#05070b 100%);'
-      + '--dhl-reading:linear-gradient(180deg,#0b1016,#070a0e);'
-      + '--dhl-card:linear-gradient(160deg,#11171f,#0a0e13);'
-      + '--dhl-card-hover:linear-gradient(160deg,#161f28,#0d1218);'
-      + '--dhl-header:linear-gradient(90deg,#07090e,#0e131a 48%,#17100d);'
-      + '--dhl-button-active:linear-gradient(180deg,rgba(240,215,155,.26),rgba(10,14,20,.42));'
-      + '--dhl-gold:#c8a45e;--dhl-gold-bright:#f0d79b;'
-      + '--dhl-border:rgba(198,164,102,.20);--dhl-border-strong:rgba(240,215,155,.55);'
-      + '--dhl-glow:0 0 16px rgba(226,180,96,.22);'
-      + '}'
-      /* ② 遮罩：暖黑径向，中心透一点金，四周压深（原来是冷青） */
-      + '#' + PFX + '-overlay{background:radial-gradient(ellipse at 50% 28%,rgba(30,22,13,.88),rgba(3,5,9,.95) 72%) !important;}'
-      + '#' + PFX + '-overlay::before{'
-      + 'background-image:linear-gradient(rgba(240,215,155,.028) 1px,transparent 1px),'
-      + 'linear-gradient(90deg,rgba(240,215,155,.028) 1px,transparent 1px) !important;}'
-      + '#' + PFX + '-overlay::after{background:linear-gradient(180deg,transparent,rgba(0,0,0,.65)) !important;}'
-      /* ③ 面板：四角金晕 + 鎏金描边 + 顶部亮金线 + 双层内阴影（做出「牌位」的厚度） */
-      + '#' + PFX + '-frame{'
-      + 'background:'
-      + 'radial-gradient(circle at 0 0,rgba(240,215,155,.16),transparent 11%),'
-      + 'radial-gradient(circle at 100% 0,rgba(240,215,155,.16),transparent 11%),'
-      + 'radial-gradient(circle at 0 100%,rgba(224,97,90,.12),transparent 11%),'
-      + 'radial-gradient(circle at 100% 100%,rgba(224,97,90,.12),transparent 11%),'
-      + 'var(--dhl-stage) !important;'
-      + 'border:1px solid rgba(198,164,102,.36) !important;'
-      + 'border-top:2px solid #f0d79b !important;'
-      + 'border-radius:14px !important;'
-      + 'box-shadow:0 0 0 1px rgba(0,0,0,.85),0 0 70px rgba(226,180,96,.10),'
-      + '0 26px 76px rgba(0,0,0,.92),inset 0 1px 0 rgba(255,238,196,.16),'
-      + 'inset 0 -70px 130px rgba(0,0,0,.45) !important;}'
-      /* ④ 头部：印玺 · 烫金标题 · 玄铁按钮 */
-      + '#' + PFX + '-head{background:linear-gradient(90deg,#07090e,#0e131a 46%,#17100d) !important;'
-      + 'border-bottom:1px solid rgba(198,164,102,.26) !important;'
-      + 'box-shadow:0 6px 22px rgba(0,0,0,.6),inset 0 -1px 0 rgba(240,215,155,.14) !important;}'
-      + '#' + PFX + '-seal{background:linear-gradient(160deg,#41201a,#1a0c0a) !important;'
-      + 'border:1px solid rgba(240,215,155,.60) !important;color:#f9e8bd !important;font-weight:700 !important;'
-      + 'box-shadow:0 0 14px rgba(226,180,96,.35),inset 0 1px 0 rgba(255,238,196,.30) !important;'
-      + 'text-shadow:0 0 8px rgba(240,215,155,.85) !important;}'
-      + '#' + PFX + '-caption{border:1px solid rgba(240,215,155,.42) !important;'
-      + 'background:linear-gradient(180deg,rgba(226,180,96,.16),rgba(226,180,96,.04)) !important;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,238,196,.18),0 0 12px rgba(226,180,96,.12) !important;}'
-      + '#' + PFX + '-title{font-weight:700 !important;letter-spacing:.10em !important;'
-      + 'background:linear-gradient(180deg,#fff6dc 0%,#f0d79b 46%,#b8894a 100%) !important;'
-      + '-webkit-background-clip:text !important;background-clip:text !important;'
-      + '-webkit-text-fill-color:transparent !important;color:transparent !important;'
-      + 'filter:drop-shadow(0 1px 2px rgba(0,0,0,.9)) !important;}'
-      + '#' + PFX + '-round{color:#f0d79b !important;text-shadow:0 0 8px rgba(226,180,96,.5) !important;}'
-      + '#' + PFX + '-head button{background:linear-gradient(180deg,rgba(30,38,46,.92),rgba(12,17,22,.96)) !important;'
-      + 'border:1px solid rgba(198,164,102,.42) !important;color:#d8c79c !important;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,238,196,.10),0 2px 6px rgba(0,0,0,.5) !important;}'
-      + '#' + PFX + '-head button:hover{border-color:#f0d79b !important;color:#fff0cc !important;'
-      + 'background:linear-gradient(180deg,rgba(226,180,96,.28),rgba(20,26,32,.96)) !important;'
-      + 'box-shadow:0 0 16px rgba(226,180,96,.35),inset 0 1px 0 rgba(255,238,196,.25) !important;}'
-      /* ⑤ 顺位条：玄墨底 + 金线分隔 */
-      + '#' + PFX + '-init{background:linear-gradient(180deg,rgba(9,13,18,.92),rgba(5,7,11,.96)) !important;'
-      + 'border-bottom:1px solid rgba(198,164,102,.18) !important;}'
-      + '.' + PFX + '-iv{border:1px solid rgba(198,164,102,.22) !important;'
-      + 'background:rgba(255,255,255,.02) !important;color:#a49a84 !important;}'
-      + '.' + PFX + '-iv.now{border-color:rgba(240,215,155,.75) !important;'
-      + 'background:linear-gradient(180deg,rgba(226,180,96,.26),rgba(18,20,16,.92)) !important;'
-      + 'color:#fff2cc !important;box-shadow:0 0 16px rgba(226,180,96,.32),inset 0 1px 0 rgba(255,238,196,.28) !important;}'
-      + '.' + PFX + '-iv.done{color:#6a6355 !important;}'
-      + '.' + PFX + '-iv.enemy{color:#e08a80 !important;}'
-      /* ⑥ 卡片：玄墨玉牌 + 顶部金线 + 阵营色边条 + 内发光 */
-      + '.' + PFX + '-card{'
-      + 'background:linear-gradient(160deg,rgba(24,32,41,.96) 0%,rgba(13,18,24,.98) 100%) !important;'
-      + 'border:1px solid rgba(198,164,102,.34) !important;'
-      + 'border-radius:11px !important;'
-      + 'box-shadow:0 1px 0 rgba(255,238,196,.10) inset,0 0 0 1px rgba(0,0,0,.60),'
-      + '0 12px 28px rgba(0,0,0,.66),0 0 24px rgba(226,180,96,.05) !important;'
-      + 'backdrop-filter:blur(5px) !important;-webkit-backdrop-filter:blur(5px) !important;}'
-      + '.' + PFX + '-card::before{'
-      + 'background:linear-gradient(180deg,#8fe3cd,rgba(99,184,164,.06)) !important;'
-      + 'box-shadow:0 0 12px rgba(143,227,205,.55) !important;opacity:.95 !important;}'
-      + '.' + PFX + '-card.enemy::before{background:linear-gradient(180deg,#e0615a,rgba(201,69,63,.06)) !important;'
-      + 'box-shadow:0 0 12px rgba(224,97,90,.50) !important;}'
-      + '.' + PFX + '-card:hover{'
-      + 'box-shadow:0 1px 0 rgba(255,238,196,.16) inset,0 0 0 1px rgba(240,215,155,.42),'
-      + '0 18px 38px rgba(0,0,0,.72),0 0 30px rgba(226,180,96,.16) !important;}'
-      + '.' + PFX + '-card.now{'
-      + 'box-shadow:0 1px 0 rgba(255,238,196,.20) inset,0 0 0 1px rgba(240,215,155,.85),'
-      + '0 0 0 5px rgba(240,215,155,.10),0 0 34px rgba(226,180,96,.30),0 18px 40px rgba(0,0,0,.72) !important;}'
-      + '.' + PFX + '-nm.ally{color:#a9ecd8 !important;'
-      + 'text-shadow:0 0 10px rgba(143,227,205,.55),0 1px 2px rgba(0,0,0,.9) !important;}'
-      + '.' + PFX + '-nm.enemy{color:#ffa093 !important;'
-      + 'text-shadow:0 0 10px rgba(224,97,90,.55),0 1px 2px rgba(0,0,0,.9) !important;}'
-      + '.' + PFX + '-meta{color:#a89d85 !important;}'
-      /* ⑦ 气血／灵力条：内凹槽 + 高饱和渐变 + 顶高光 + 条内数字强描边 */
-      + '.' + PFX + '-hp,.' + PFX + '-mp{background:rgba(0,0,0,.72) !important;'
-      + 'border:1px solid rgba(198,164,102,.20) !important;'
-      + 'box-shadow:inset 0 2px 6px rgba(0,0,0,.90),0 1px 0 rgba(255,238,196,.06) !important;}'
-      + '.' + PFX + '-hpf{background:linear-gradient(180deg,#8fdfc9 0%,#2f8474 46%,#14453c 100%) !important;'
-      + 'box-shadow:0 0 14px rgba(143,227,205,.45),inset 0 1px 0 rgba(255,255,255,.40) !important;}'
-      /* 铁律：我方青玉 / 敌方朱砂（原 v110 把两条都染成红，敌我分不出来） */
-      + '.' + PFX + '-card.enemy .' + PFX + '-hpf{'
-      + 'background:linear-gradient(180deg,#ff8a72 0%,#c9453f 46%,#7d2724 100%) !important;'
-      + 'box-shadow:0 0 14px rgba(224,97,90,.50),inset 0 1px 0 rgba(255,255,255,.40) !important;}'
-      + '.' + PFX + '-mpf{background:linear-gradient(180deg,#8ce8f6 0%,#3d84b8 46%,#1d4661 100%) !important;'
-      + 'box-shadow:0 0 14px rgba(90,180,230,.42),inset 0 1px 0 rgba(255,255,255,.32) !important;}'
-      + '.' + PFX + '-bar-txt{color:#fff4dc !important;'
-      + 'text-shadow:0 0 3px #000,0 1px 2px #000,0 0 8px rgba(0,0,0,.95) !important;}'
-      /* ⑧ 时序条：玄铁轨道 + 金色刻度 + 强光出手线 */
-      + '#' + PFX + '-rail{background:linear-gradient(180deg,rgba(20,26,32,.94),rgba(9,12,17,.96)) !important;'
-      + 'border:1px solid rgba(198,164,102,.24) !important;'
-      + 'box-shadow:inset 0 3px 12px rgba(0,0,0,.92),0 1px 0 rgba(255,238,196,.07) !important;}'
-      + '#' + PFX + '-railfill{background:linear-gradient(90deg,rgba(143,227,205,.05) 0%,'
-      + 'rgba(226,180,96,.12) 65%,rgba(240,215,155,.30) 100%) !important;}'
-      + '#' + PFX + '-railgrid{background-image:repeating-linear-gradient(90deg,'
-      + 'rgba(240,215,155,.10) 0 1px,transparent 1px 5%) !important;}'
-      + '#' + PFX + '-railline{background:linear-gradient(180deg,transparent,#fff2cc,#f0d79b,transparent) !important;'
-      + 'box-shadow:0 0 12px rgba(240,215,155,.90),0 0 30px rgba(226,180,96,.50) !important;}'
-      + '.' + PFX + '-node{background:linear-gradient(180deg,#3a2a16,#141a20) !important;color:#f6e6b8 !important;box-shadow:0 0 0 1px rgba(240,215,155,.55),'
-      + '0 0 16px rgba(226,180,96,.40),0 4px 12px rgba(0,0,0,.75) !important;}'
-      + '.' + PFX + '-node.now{box-shadow:0 0 0 2px #f0d79b,0 0 0 8px rgba(240,215,155,.18),'
-      + '0 0 26px rgba(240,215,155,.55) !important;}'
-      /* ⑨ 战报区 + 底栏 + 招式键 */
-      + '#' + PFX + '-log{background:linear-gradient(180deg,rgba(7,10,14,.94),rgba(4,6,9,.97)) !important;'
-      + 'box-shadow:inset 0 12px 30px rgba(0,0,0,.65) !important;}'
-      + '.' + PFX + '-note{color:#7e7462 !important;}'
-      + '#' + PFX + '-bar{background:linear-gradient(180deg,rgba(11,15,20,.97),rgba(5,7,10,.99)) !important;'
-      + 'border-top:1px solid rgba(198,164,102,.30) !important;'
-      + 'box-shadow:0 -10px 28px rgba(0,0,0,.65),inset 0 1px 0 rgba(240,215,155,.10) !important;}'
-      + '.' + PFX + '-sk{background:linear-gradient(180deg,rgba(28,36,44,.95),rgba(12,16,21,.98)) !important;'
-      + 'border:1px solid rgba(198,164,102,.34) !important;color:#d3c6a4 !important;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,238,196,.10),0 3px 8px rgba(0,0,0,.50) !important;}'
-      + '.' + PFX + '-sk:hover{border-color:rgba(240,215,155,.70) !important;color:#fff2cc !important;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,238,196,.18),0 0 16px rgba(226,180,96,.30) !important;}'
-      + '.' + PFX + '-sk.on{background:linear-gradient(180deg,rgba(226,180,96,.30),rgba(30,25,16,.95)) !important;'
-      + 'border-color:#f0d79b !important;color:#fff6dc !important;'
-      + 'box-shadow:0 0 20px rgba(226,180,96,.45),inset 0 1px 0 rgba(255,238,196,.35) !important;}'
-      + '.' + PFX + '-mb{background:linear-gradient(180deg,rgba(26,34,42,.95),rgba(10,14,19,.98)) !important;'
-      + 'border:1px solid rgba(198,164,102,.35) !important;color:#d8c79c !important;}'
-      /* ⑩ 弹层：玉简质感 */
-      + '.' + PFX + '-skpop,.' + PFX + '-miscpop,.' + PFX + '-upop{'
-      + 'background:linear-gradient(160deg,#111820,#080b10) !important;'
-      + 'border:1px solid rgba(240,215,155,.35) !important;border-radius:12px !important;'
-      + 'box-shadow:0 0 0 1px rgba(0,0,0,.80),0 22px 60px rgba(0,0,0,.90),'
-      + '0 0 40px rgba(226,180,96,.12) !important;}'
-      /* ★★★ v401：背景从「八卦阵盘」换成「云海 + 星尘」★★★
-         用户 2026-10-26：「顺便把战斗界面的背景的动态时针换了，换成更好看的符合场景的美化」。
-         原实现（v162）是两圈 conic-gradient 刻度盘反向旋转（180s/300s）——
-         玩家读出来是「一个走得极慢的钟」，而不是「战斗中该有的气象」。
-
-         ⇒ 新背景拆成两层，**都不旋转**：
-           ::before = 云海柔光：两团异色雾气（冷青 / 暖金）在上下错位，46s 缓慢呼吸
-                      （scale 1→1.06 + 轻微上浮），像站在半山云上、脚下有光在动
-           ::after  = 星尘缓浮：点阵星子按 260×220 平铺，90s 斜向平移一格
-                      （background-position 位移，**不是旋转**），像灵气在飘
-
-         ⚠ 三条硬约束（改之前先读）：
-           ① **不许旋转** —— 视角一转就回到「钟面」，这正是用户要换掉的东西
-           ② 亮度必须低于战报文字：色调一律走 rgba(…,.06~.12)，
-              叠在 #0b1017 的战报底上仍然能一眼读字（战报区有自己的实色底，不受影响）
-           ③ 只动 transform / background-position（GPU 合成），不动 filter / box-shadow
-              —— 那两项每个动画帧都要重绘整块面板，手机端会掉帧
-           ④ `prefers-reduced-motion` 那条媒体查询里已经关掉了 before/after 的动画，保持有效 */
-      + '#' + PFX + '-frame::before{'
-      + 'background:'
-      + 'radial-gradient(ellipse 62% 42% at 18% 76%,rgba(116,178,220,.11),transparent 72%),'
-      + 'radial-gradient(ellipse 55% 38% at 82% 84%,rgba(226,180,96,.10),transparent 72%),'
-      + 'radial-gradient(ellipse 48% 30% at 62% 16%,rgba(150,198,232,.07),transparent 70%),'
-      + 'radial-gradient(ellipse 80% 60% at 50% 50%,transparent 46%,rgba(0,0,0,.16) 100%) !important;'
-      + 'transform-origin:50% 55%;'
-      + 'animation:' + PFX + '-cloudm 46s ease-in-out infinite alternate !important;}'
-      + '@keyframes ' + PFX + '-cloudm{'
-      + 'from{transform:scale(1) translateY(0);opacity:.82;}'
-      + 'to{transform:scale(1.06) translateY(-1.6%);opacity:1;}}'
-      + '#' + PFX + '-frame::after{'
-      /* 星点用 background-image 的多个 radial-gradient 平铺 ——
-         单点尺寸给 1~1.6px，透明到底，不会在深色底上结成白斑。 */
-      + 'background-image:'
-      + 'radial-gradient(1.6px 1.6px at 18% 24%,rgba(255,238,196,.50),transparent 100%),'
-      + 'radial-gradient(1.2px 1.2px at 44% 62%,rgba(198,226,255,.42),transparent 100%),'
-      + 'radial-gradient(1.4px 1.4px at 71% 31%,rgba(255,238,196,.38),transparent 100%),'
-      + 'radial-gradient(1px 1px at 88% 74%,rgba(198,226,255,.34),transparent 100%),'
-      + 'radial-gradient(1.3px 1.3px at 29% 87%,rgba(255,238,196,.30),transparent 100%),'
-      + 'radial-gradient(1px 1px at 59% 12%,rgba(198,226,255,.28),transparent 100%) !important;'
-      + 'background-size:260px 220px !important;background-repeat:repeat !important;'
-      + 'opacity:.62 !important;'
-      + 'animation:' + PFX + '-dust 90s linear infinite !important;}'
-      + '@keyframes ' + PFX + '-dust{'
-      + 'from{background-position:0 0;}'
-      + 'to{background-position:-260px -220px;}}'
-      /* ⑫ 增益徽标：玄底金边小牌 */
-      + '.' + PFX + '-bf{border:1px solid rgba(198,164,102,.30) !important;'
-      + 'background:rgba(226,180,96,.08) !important;color:#cbbb96 !important;}'
-      + '@media (prefers-reduced-motion: reduce){' + '.' + PFX + '-shake{animation:none !important;}'
-      + '.' + PFX + '-fly{animation:none !important;}'
-      + '#' + PFX + '-frame::before,#' + PFX + '-frame::after{animation:none !important;}'
-      + '.' + PFX + '-card.now,.' + PFX + '-node.now,.' + PFX + '-card.hit{animation:none !important;}}'
-      /* ════════════════════════════════════════════════════════════════════
-         ★★★ v155 战斗界面「游戏化」重做：技能区 + 战报区 + 全面去透明 ★★★
-         用户：「技能区域重做吧，还有战报区域，都太透明了，而且总感觉怪怪的…
-               要弄的特别像游戏，像崩铁、阴阳师一样，最好还有技能图标，不能透明」
-         ⚠ 这一层放在 v153 主题层**之后**（且在 media query 之后），
-           所以它允许改 padding / 尺寸 —— 但**只限这两块区域**，
-           其它地方的布局仍由 v153 的「只改配色」铁律约束。
-         ════════════════════════════════════════════════════════════════════ */
-      /* ① 全面去透明：卡片 / 战报 / 底栏一律**实色**（半分透明都不要） */
-      + '.' + PFX + '-card{background:linear-gradient(160deg,#1b232d 0%,#0f141b 100%) !important;'
-      + 'backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}'
-      + '#' + PFX + '-log{background:linear-gradient(180deg,#0b1017 0%,#070a0e 100%) !important;'
-      + 'border:1px solid rgba(198,164,102,.30) !important;border-radius:10px !important;'
-      + 'box-shadow:inset 0 2px 16px rgba(0,0,0,.85),0 1px 0 rgba(255,238,196,.07) !important;'
-      + 'padding:0 !important;overflow-y:auto;}'
-      + '#' + PFX + '-bar{background:linear-gradient(180deg,#0f141b 0%,#070a0e 100%) !important;'
-      + 'border-top:1px solid rgba(198,164,102,.36) !important;'
-      + 'box-shadow:0 -8px 26px rgba(0,0,0,.7),inset 0 1px 0 rgba(240,215,155,.12) !important;}'
-      /* ② 战报：★ v234（用户：「战报区域的分割线还是不够明显，完全改成矩形框框住单条战报」）
-         ⇒ 不再用一条淡淡的下边框分隔，而是**每条战报一枚独立的圆角矩形框**：
-           框与框之间留 5px 空隙，描边 20% 金、内底微亮；奇偶行底色略有差，长串也好数。
-           原来那行 `border-bottom` + `:last-child{border-bottom:0}` 一并去掉。 */
-      + '.' + PFX + '-lg{position:relative;margin:5px 6px;padding:7px 26px 7px 12px;'
-      + 'border:1px solid rgba(240,215,155,.20);border-radius:7px;'
-      + 'background:rgba(255,255,255,.025);transition:background .16s,border-color .16s;}'
-      + '.' + PFX + '-lg:nth-child(odd){background:rgba(255,255,255,.048);}'
-      + '.' + PFX + '-lghas{cursor:pointer;}'
-      + '.' + PFX + '-lghas:hover{background:rgba(240,215,155,.07);border-color:rgba(240,215,155,.42);}'
-      + '.' + PFX + '-lghas::after{content:"▸";position:absolute;right:9px;top:7px;'
-      + 'font-size:10px;line-height:1.5;color:rgba(240,215,155,.5);transition:transform .18s;}'
-      + '.' + PFX + '-lopen::after{transform:rotate(90deg);color:#f0d79b;}'
-      + '.' + PFX + '-lgd{display:none;margin-top:6px;padding:5px 0 2px 11px;'
-      + 'border-left:2px solid rgba(240,215,155,.30);}'
-      + '.' + PFX + '-lopen .' + PFX + '-lgd{display:block;}'
-      + '.' + PFX + '-lgdline{font-size:11.5px;line-height:1.64;color:#9a8f7d;word-break:break-word;}'
-      + '#' + PFX + '-log .' + PFX + '-l-ally,'
-      + '#' + PFX + '-log .' + PFX + '-l-enemy,'
-      + '#' + PFX + '-log .' + PFX + '-l-turn,'
-      + '#' + PFX + '-log .' + PFX + '-l-note{line-height:1.55;}'
-      /* ③ 技能区：卡牌键（属性图标 + 名字 + 耗灵），实色、金边、选中发光 */
-      + '#' + PFX + '-bar{gap:8px !important;align-items:stretch !important;}'
-      /* ★ v156：底栏**不换行、横向滑动**。
-         原来 flex-wrap 换行后，第二行会被面板高度裁掉（截图里「回春术/普通攻击」只露一半）。
-         游戏里的技能栏也是横向滑动的，这样技能再多也不会挤。 */
-      /* v157 底栏两行布局（用户截图反馈：提示语把技能组挤成竖排、底栏撑成大块）：
-           第一行 = 提示语 + 杂项/自动/让过；第二行 = 技能组，**独占整行并横向滑动**。
-           用 order 重排，不改 DOM 结构。 */
-      + '#' + PFX + '-bar{flex-wrap:wrap !important;align-items:center !important;'
-      + 'gap:7px 10px !important;padding:8px 12px !important;}'
-      + '#' + PFX + '-bar > .' + PFX + '-hint{order:1;flex:1 1 auto;min-width:0;'
-      + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-      + '#' + PFX + '-bar > .' + PFX + '-mb,#' + PFX + '-bar > #' + PFX + '-endturn{order:2;flex:none;}'
-      /* 逃跑：主角特权，红色警示描边，和「让过一手」明确区分 */
-      + '#' + PFX + '-flee{order:3;flex:none;margin-left:8px;font-family:inherit;'
-      + 'font-size:12px;font-weight:700;letter-spacing:.12em;padding:6px 18px;border-radius:7px;cursor:pointer;'
-      + 'color:#ffd9d0 !important;background:linear-gradient(180deg,rgba(74,20,18,.95),rgba(30,8,8,.97)) !important;'
-      + 'border:1px solid rgba(226,110,86,.72) !important;'
-      + 'box-shadow:0 0 12px rgba(200,70,50,.22),inset 0 1px 0 rgba(255,190,170,.14) !important;'
-      + 'transition:transform .14s,border-color .16s,box-shadow .18s;}'
-      + '#' + PFX + '-flee:hover{transform:translateY(-1px);border-color:#ff8a6a !important;'
-      + 'box-shadow:0 0 18px rgba(226,110,86,.42),inset 0 1px 0 rgba(255,190,170,.2) !important;}'
-      + '#' + PFX + '-flee:active{transform:translateY(0);}'
-      /* 提示语删掉后，第一行只剩功能钮 —— 靠右排，别孤零零挂在左上角 */
-      + '#' + PFX + '-bar > button:first-of-type{margin-left:auto;}'
-      + '#' + PFX + '-bar > .' + PFX + '-hint{order:1;flex:1 1 auto;}'
-      /* ══════════════════════════════════════════════════════════════════════
-         ★★★ v161：技能区改「定尺播放条」（用户：技能不限数量，加滑轮、固定长宽）★★★
-         三段结构：`[‹] [滑轨] [›]`
-         - `.skwrap` 高度锁定 56px ⇒ **底栏高度恒定**，技能再多也不会把战报挤掉；
-         - `.skrow` 是唯一的滚动容器（`overflow-x:auto`），滚动条加粗到 8px 并做成
-           金条 + 深槽（原来是 4px 半透明，几乎看不见，等于没有滑轮）；
-         - `.sk` 每条技能键**宽度锁定 190px、高度 44px**，技能再多也只是往右延伸；
-         - 两侧 `‹ ›` 箭头翻组，滚到两端自动置灰；
-         - 边缘做渐隐（mask），暗示「后面还有」，是游戏技能栏的常见暗示。
-         ══════════════════════════════════════════════════════════════════════ */
-      + '.' + PFX + '-skwrap{order:3;flex:0 0 100% !important;'
-      + 'display:flex !important;align-items:center !important;gap:6px !important;'
-      + 'height:56px !important;min-width:0;overflow:hidden;}'
-      /* ★ v166：滑轨改**分页**（魔兽世界动作条）—— 不再横向滚动，
-         一页就是一整排，超出的用 ‹ › 翻页；没有下一页时箭头 disabled。
-         `overflow:hidden` 是硬要求：它保证「不会露出半条技能」，
-         也就不会再有「滑轮」这个交互。 */
-      + '.' + PFX + '-skrow{box-sizing:border-box !important;order:0 !important;flex:1 1 auto !important;'
-      + 'display:flex !important;flex-wrap:nowrap !important;gap:6px !important;'
-      + 'align-items:center !important;height:100% !important;min-width:0;'
-      + 'overflow:hidden !important;'
-      + 'padding:0 !important;justify-content:flex-start !important;}'
-      /* ★ v324：`-skpg`（页码小框）的样式随按钮一起下架 —— 界面不产这颗元素了，
-         留样式只是让「复活」变得更容易（改回来时看不出来）。窄屏那条 display:none 一并删。 */
-      /* 页码与左右箭头之间的间距略收，避免挤占技能位 */
-      + '.' + PFX + '-skwrap{gap:5px !important;}'
-      /* ★ v198：手机端技能显示不全的修法。
-         根因：`-skrow` 是 `overflow:hidden`，屏幕窄时 3 个 190px 的键放不下就被**直接裁掉**
-         （既不换行、也不给滚）。现在窄屏改成横向滑动，宽屏保持原来的样子：
-           · 触屏可滑：加 `touch-action:pan-x`、`-webkit-overflow-scrolling:touch`、`overscroll-behavior-x:contain`
-           · 滚动条常驻可见（触屏也要有「还剩多少」的提示）
-           · 滑动到两端时把 ‹ › 置灰（配合 JS 的 scroll 监听）
-         用媒体查询而非全局改，避免动到桌面端的排版。 */
-      + '@media (max-width:760px){'
-      + '#' + PFX + '-skwrap{gap:4px !important;}'
-      + '.' + PFX + '-skrow{overflow-x:auto !important;overflow-y:hidden !important;'
-      + 'scroll-snap-type:x proximity;'
-      + '-webkit-overflow-scrolling:touch;touch-action:pan-x;'
-      + 'overscroll-behavior-x:contain;'
-      + 'padding:0 2px !important;'
-      + '-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);'
-      + 'mask-image:linear-gradient(90deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);}'
-      + '.' + PFX + '-skrow::-webkit-scrollbar{height:6px !important;}'
-      + '.' + PFX + '-sk{scroll-snap-align:start;}'
-      + '.' + PFX + '-sknav{width:26px !important;}'
-      + '}'
-      + '.' + PFX + '-skrow::-webkit-scrollbar{height:8px;}'
-      + '.' + PFX + '-skrow::-webkit-scrollbar-track{background:#12161c;'
-      + 'border-radius:4px;box-shadow:inset 0 0 5px rgba(0,0,0,.9);}'
-      + '.' + PFX + '-skrow::-webkit-scrollbar-thumb{'
-      + 'background:linear-gradient(90deg,#8a6f3a 0%,#d9b877 50%,#8a6f3a 100%);'
-      + 'border-radius:4px;border:1px solid #241d12;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,235,195,.55);}'
-      + '.' + PFX + '-skrow::-webkit-scrollbar-thumb:hover{'
-      + 'background:linear-gradient(90deg,#a98a4a 0%,#ffe1a0 50%,#a98a4a 100%);}'
-      + '.' + PFX + '-skrow::-webkit-scrollbar-thumb:active{'
-      + 'background:linear-gradient(90deg,#c9a86a 0%,#fff3cd 50%,#c9a86a 100%);}'
-      /* 换组箭头：玄铁底 + 金边，滚到端头置灰 */
-      + '.' + PFX + '-sknav{flex:none !important;width:22px !important;height:44px !important;'
-      + 'display:inline-flex !important;align-items:center !important;justify-content:center !important;'
-      + 'padding:0 !important;border-radius:6px !important;'
-      + 'font-size:16px !important;font-weight:800 !important;line-height:1 !important;'
-      + 'color:#e8c98f !important;'
-      + 'background:linear-gradient(180deg,#2a2215 0%,#14181f 100%) !important;'
-      + 'border:1px solid rgba(198,164,102,.5) !important;'
-      + 'cursor:pointer !important;user-select:none;transition:color .15s,border-color .15s,box-shadow .15s;}'
-      + '.' + PFX + '-sknav:hover:not([disabled]){color:#fff3cd !important;'
-      + 'border-color:#e8c98f !important;box-shadow:0 0 10px rgba(232,201,143,.45) !important;}'
-      + '.' + PFX + '-sknav[disabled]{opacity:.3 !important;cursor:default !important;'
-      + 'box-shadow:none !important;}'
-      /* 技能键定尺：宽度 190px / 高度 44px。名字过长截断，不撑破格子。 */
-      + '.' + PFX + '-sk{width:190px !important;height:44px !important;'
-      + 'flex:none !important;overflow:hidden;}'
-      + '.' + PFX + '-sktx{min-width:0 !important;flex:1 1 auto !important;}'
-      + '.' + PFX + '-skname{display:block !important;max-width:100% !important;'
-      + 'overflow:hidden !important;text-overflow:ellipsis !important;}'
-      + '.' + PFX + '-skpills{flex-wrap:nowrap !important;overflow:hidden !important;min-width:0;}'
-      + '.' + PFX + '-skgrp{display:inline-flex;gap:5px;align-items:stretch;flex:none;}'
-      + '.' + PFX + '-sk{flex:none !important;}'
-      /* ★ v157：高度分配改口（用户截图：「战报区域就这一点，下面更是诡异」）。
-         原来 `-sides` 是 `flex:1 1 auto` ⇒ 它按内容撑高，把战报挤成一条；
-         现在 `-sides` **不增长**、封顶 52%，战报 `flex:1` 吃掉全部剩余空间。
-         卡片多的时候 sides 自己滚，战报至少还能看到半屏。 */
-      + '#' + PFX + '-sides{flex:0 1 auto !important;max-height:46% !important;min-height:0;}'
-      + '#' + PFX + '-log{flex:1 1 0 !important;min-height:120px !important;}'
-      + '.' + PFX + '-sk{display:inline-flex !important;align-items:center;gap:6px;'
-      + 'padding:5px 12px 5px 6px !important;border-radius:10px !important;'
-      + 'background:linear-gradient(180deg,#1c242e 0%,#0c1117 100%) !important;'
-      + 'border:1px solid rgba(198,164,102,.40) !important;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,238,196,.12),0 3px 10px rgba(0,0,0,.6) !important;'
-      + 'transition:transform .14s,border-color .16s,box-shadow .18s;}'
-      + '.' + PFX + '-sk:hover{transform:translateY(-1px);border-color:rgba(240,215,155,.75) !important;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,238,196,.2),0 6px 16px rgba(0,0,0,.65),'
-      + '0 0 18px rgba(226,180,96,.25) !important;}'
-      + '.' + PFX + '-sk.on{background:linear-gradient(180deg,#3a2f16 0%,#171307 100%) !important;'
-      + 'border-color:#f0d79b !important;'
-      + 'box-shadow:0 0 0 1px rgba(240,215,155,.55),0 0 22px rgba(226,180,96,.45),'
-      + 'inset 0 1px 0 rgba(255,238,196,.30) !important;}'
-      /* 图标：属性色宝石块（内高光 + 外发光），字压在上面 */
-      /* v156：图标**不带字**，改成一枚「属性色宝石 + 内嵌白菱形」的纯图形 */
-      + '.' + PFX + '-skico{position:relative;width:30px;height:30px;flex:none;display:inline-flex;'
-      + 'align-items:center;justify-content:center;border-radius:10px;'
-      + 'background:radial-gradient(circle at 32% 24%,rgba(255,255,255,.55),rgba(255,255,255,.04) 58%),'
-      + 'var(--ico,#c0a97a);'
-      + 'border:1px solid rgba(255,255,255,.40);'
-      + 'box-shadow:0 0 12px var(--ico,#c0a97a),inset 0 -3px 8px rgba(0,0,0,.45);}'
-      + '.' + PFX + '-skico::after{content:"";width:10px;height:10px;border-radius:2.5px;'
-      + 'border:2px solid rgba(255,255,255,.92);transform:rotate(45deg);'
-      + 'box-shadow:0 0 8px rgba(255,255,255,.75),inset 0 0 6px rgba(255,255,255,.45);}'
-      + '.' + PFX + '-sk.on .' + PFX + '-skico{box-shadow:0 0 20px var(--ico,#c0a97a),'
-      + '0 0 0 2px rgba(255,240,200,.85),inset 0 -3px 8px rgba(0,0,0,.45);}'
-      /* 名字紧贴图标（gap 6px），下面一排圆角小框 */
-      + '.' + PFX + '-sktx{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;}'
-      + '.' + PFX + '-skname{font-size:13px;font-weight:700;color:#f7ecd2;'
-      + 'white-space:nowrap;letter-spacing:.02em;line-height:1.25;}'
-      + '.' + PFX + '-sk.on .' + PFX + '-skname{color:#fff5d8;}'
-      + '.' + PFX + '-skpills{display:flex;gap:3px;flex-wrap:wrap;align-items:center;}'
-      /* ★ 铁律（用户原话：「所有美化都要加圆角矩形小框」）：
-         每一枚标签都必须是圆角矩形小框，不许出现裸文字标签。 */
-      + '.' + PFX + '-pill{display:inline-flex;align-items:center;height:14px;padding:0 5px;'
-      + 'border-radius:4px;font-size:9px;line-height:1;font-weight:600;letter-spacing:.02em;'
-      + 'border:1px solid;white-space:nowrap;}'
-      /* 品阶：金色系（越高越亮） */
-      + '.' + PFX + '-pill-q{color:#f0d79b;border-color:rgba(240,215,155,.45);'
-      + 'background:linear-gradient(180deg,rgba(226,180,96,.22),rgba(226,180,96,.08));}'
-      + '.' + PFX + '-pill-q[data-v="神阶"]{color:#fff3cd;border-color:rgba(255,232,160,.85);'
-      + 'box-shadow:0 0 8px rgba(255,215,120,.5);}'
-      + '.' + PFX + '-pill-q[data-v="凡阶"],.' + PFX + '-pill-q[data-v="黄阶"]{'
-      + 'color:#a99d88;border-color:rgba(170,160,140,.35);background:rgba(255,255,255,.04);}'
-      /* 目标：蓝灰系（范围用紫、自己用青、环境用绿，一眼可分） */
-      + '.' + PFX + '-pill-tgt{color:#9fc2dd;border-color:rgba(140,180,215,.40);'
-      + 'background:linear-gradient(180deg,rgba(90,140,190,.22),rgba(90,140,190,.06));}'
-      + '.' + PFX + '-pill-tgt[data-v="范围"]{color:#c9a6f0;border-color:rgba(180,140,230,.5);'
-      + 'background:linear-gradient(180deg,rgba(150,100,220,.24),rgba(150,100,220,.07));}'
-      + '.' + PFX + '-pill-tgt[data-v="自身"]{color:#8fe3cd;border-color:rgba(120,215,190,.5);'
-      + 'background:linear-gradient(180deg,rgba(70,190,160,.22),rgba(70,190,160,.06));}'
-      + '.' + PFX + '-pill-tgt[data-v="环境"]{color:#a9d98a;border-color:rgba(140,200,110,.5);'
-      + 'background:linear-gradient(180deg,rgba(110,180,80,.22),rgba(110,180,80,.06));}'
-      /* 耗蓝：资源色（足够=蓝、不足=红，由 .sklack 接管红） */
-      + '.' + PFX + '-pill-cost{color:#8fc8e8;border-color:rgba(110,180,220,.45);'
-      + 'background:linear-gradient(180deg,rgba(80,150,200,.22),rgba(80,150,200,.06));}'
-      + '.' + PFX + '-sklack .' + PFX + '-pill-cost{color:#ff8f84;'
-      + 'border-color:rgba(220,90,80,.6);background:linear-gradient(180deg,rgba(200,70,60,.28),rgba(200,70,60,.10));}'
-      + '.' + PFX + '-sklack .' + PFX + '-pill-q,.' + PFX + '-sklack .' + PFX + '-pill-tgt{opacity:.62;}'
-      + '.' + PFX + '-sklack{opacity:.5;filter:grayscale(.55);}'
-      + '.' + PFX + '-sklack .' + PFX + '-skname{color:#a08a7a !important;}'
-      + '.' + PFX + '-sklack .' + PFX + '-skcost{color:#c0564e !important;}'
-      /* 「详」按钮：竖条小键，与技能键同高 */
-      + '.' + PFX + '-see{align-self:stretch !important;padding:0 8px !important;'
-      + 'border-radius:9px !important;font-size:10px !important;font-weight:700 !important;'
-      + 'background:linear-gradient(180deg,#141b23 0%,#0a0e13 100%) !important;'
-      + 'border:1px solid rgba(198,164,102,.26) !important;color:#94a3b0 !important;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,238,196,.08) !important;}'
-      + '.' + PFX + '-see:hover{border-color:rgba(240,215,155,.65) !important;color:#ffeec4 !important;}'
-      /* ④ 「让过一手」与其它底栏小件：同一套玄铁金边语汇 */
-      + '.' + PFX + '-mb{background:linear-gradient(180deg,#161e27 0%,#0a0e13 100%) !important;'
-      + 'border:1px solid rgba(198,164,102,.34) !important;color:#cbbc95 !important;'
-      + 'border-radius:9px !important;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,238,196,.1),0 2px 8px rgba(0,0,0,.5) !important;}'
-      + '.' + PFX + '-mb:hover{border-color:rgba(240,215,155,.7) !important;color:#fff2cc !important;}'
-      /* ══════════════════════════════════════════════════════════════════════
-         ★★★ v162：氛围层重做 —— 布满整个背景，并与「动态阵盘」叠加 ★★★
-         用户：「还是没见特效啊，我要布满整个背景的，和我们的动态时钟叠加的」
-         （「动态时钟」= frame::before 那个同心阵盘）。
-
-         为什么前三版一直「看不见」——两个真因，全是层级/尺寸写错：
-         ① **v160 的 atmoTop 被自己的兄弟规则打死了**：
-            下面有一条 `#frame > *:not(.atmo){position:relative;z-index:2;}`
-            （`#id + .class` 的权重 **高于** 单独的 `#atmoTop`），
-            它把 atmoTop 的 `position:absolute` 改成了 `relative` ⇒
-            这个 div 变成宽度 0 的流内元素 ⇒ 里面 `::before{inset:-18%}` 的雾
-            **实际尺寸接近 0** ⇒ 整层等于不存在。
-         ② v159 的 atmo 只有 z-index:0，压在金阵盘(1)之下、内容(2)之下 ⇒ 只在缝隙漏一点。
-
-         现在的层级（关键）：
-             atmo(2)  ≥  金阵盘(1)   ← 氛围**压在阵盘之上** = 用户要的「叠加」
-             内容(3) > atmo(2)      ← 卡片/战报实色仍遮住它，这没问题
-             atmoTop(4)             ← **全屏流动雾**，真正「布满整个背景」的那层
-
-         三层职责：
-           `atmo`      = 水墨山水（上下两簇远山，贯穿全高，不再只挤在底部）+ 云雾漂移；
-           `atmo::before` = 山脊本体（呼吸 + 横移）；
-           `atmo::after`  = 大团雾气（38s 漂移）；
-           `atmoTop::before` = 压在所有 UI 之上的**流动云气**（46s）；
-           `atmoTop::after`  = 全屏**漂浮尘光**（66s 往返）。
-         ══════════════════════════════════════════════════════════════════════ */
-
-      /* ① 底层：云带横掠（贯穿整个面板，作为山水之间的「气」） */
-      + '.' + PFX + '-atmo{position:absolute;inset:0;pointer-events:none;z-index:2;'
-      + 'overflow:hidden;border-radius:inherit;'
-      + 'background:'
-      + 'linear-gradient(105deg,transparent 0%,rgba(210,228,240,.10) 22%,transparent 40%),'
-      + 'linear-gradient(105deg,transparent 56%,rgba(210,228,240,.085) 70%,transparent 86%),'
-      + 'linear-gradient(78deg,transparent 0%,rgba(196,220,238,.06) 48%,transparent 92%);'
-      + 'background-size:220% 100%,260% 100%,180% 100%;'
-      + 'animation:' + PFX + '-cloud 44s linear infinite;}'
-      + '@keyframes ' + PFX + '-cloud{'
-      + '0%{background-position:0% 0,100% 0,0% 0;}'
-      + '100%{background-position:200% 0,-160% 0,-140% 0;}}'
-
-      /* ② 水墨山水：**上下都有山**，贯穿全高（原来只在底部 58%，上半屏完全空白） */
-      + '.' + PFX + '-atmo::before{content:"";position:absolute;inset:-10% -6%;'
-      + 'transform-origin:50% 100%;'
-      + 'background:'
-      /* 上部：两层淡远山（压得很轻，只做「远」） */
-      + 'radial-gradient(ellipse 46% 13% at 22% 4%,rgba(186,210,226,.26),transparent 72%),'
-      + 'radial-gradient(ellipse 38% 11% at 70% 1%,rgba(186,210,226,.20),transparent 72%),'
-      + 'radial-gradient(ellipse 52% 10% at 46% 13%,rgba(178,204,222,.14),transparent 74%),'
-      /* 中部：两道横向雾带，把上下山连成一片 */
-      + 'radial-gradient(ellipse 70% 9% at 40% 38%,rgba(200,222,238,.13),transparent 76%),'
-      + 'radial-gradient(ellipse 64% 8% at 66% 58%,rgba(200,222,238,.11),transparent 76%),'
-      /* 下部：主山脉（五叠，最浓） */
-      + 'radial-gradient(ellipse 44% 17% at 10% 100%,rgba(176,202,216,.60),transparent 70%),'
-      + 'radial-gradient(ellipse 56% 24% at 32% 100%,rgba(150,180,198,.50),transparent 72%),'
-      + 'radial-gradient(ellipse 48% 19% at 57% 100%,rgba(166,194,210,.54),transparent 70%),'
-      + 'radial-gradient(ellipse 62% 15% at 83% 100%,rgba(144,174,192,.44),transparent 72%),'
-      + 'radial-gradient(ellipse 38% 12% at 100% 100%,rgba(176,202,216,.36),transparent 70%);'
-      + 'animation:' + PFX + '-mtn 26s ease-in-out infinite;}'
-      + '@keyframes ' + PFX + '-mtn{'
-      + '0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.78;}'
-      + '50%{transform:translate3d(-2.6%,0,0) scale(1.06);opacity:1;}}'
-
-      /* ③ 大团雾气（八团，铺满四周与中央，不再只有四个角） */
-      + '.' + PFX + '-atmo::after{content:"";position:absolute;inset:-14%;'
-      + 'background:'
-      + 'radial-gradient(circle at 4% 14%,rgba(216,234,246,.38),transparent 38%),'
-      + 'radial-gradient(circle at 96% 10%,rgba(216,234,246,.34),transparent 36%),'
-      + 'radial-gradient(circle at 84% 82%,rgba(208,228,242,.33),transparent 40%),'
-      + 'radial-gradient(circle at 12% 88%,rgba(208,228,242,.35),transparent 39%),'
-      + 'radial-gradient(circle at 46% 4%,rgba(212,232,246,.24),transparent 34%),'
-      + 'radial-gradient(circle at 50% 98%,rgba(200,222,238,.31),transparent 42%),'
-      + 'radial-gradient(circle at 26% 52%,rgba(206,226,240,.18),transparent 30%),'
-      + 'radial-gradient(circle at 74% 40%,rgba(206,226,240,.17),transparent 30%);'
-      + 'filter:blur(11px);will-change:transform,opacity;'
-      + 'animation:' + PFX + '-smoke 38s ease-in-out infinite alternate;}'
-      + '@keyframes ' + PFX + '-smoke{'
-      + '0%{transform:translate3d(0,0,0) scale(1);opacity:.8;}'
-      + '100%{transform:translate3d(-4%,-2.6%,0) scale(1.09);opacity:1;}}'
-
-      /* 层级：阵盘(1) < 氛围(2) < 内容(3) —— 氛围**压在阵盘之上**，两者叠加可见 */
-      + '#' + PFX + '-frame::before,#' + PFX + '-frame::after{z-index:1 !important;}'
-      + '#' + PFX + '-frame > *:not(.' + PFX + '-atmo){position:relative;z-index:3;}'
-
-      /* ══════════════════════════════════════════════════════════════════════
-         ★★★ v166：**迷雾特效整体移除**（用户：「迷雾特效去掉」）★★★
-         移除的是这两块：
-           ① `-atmoTop` 上层流动云气（v160 加的那层压在所有 UI 之上的雾）；
-           ② `-atmo::after` 四周八团飘渺烟雾。
-         保留的是用户明确要过的两样：**水墨远山（`-atmo::before`）** 与
-         **金色阵盘（`-frame::before/::after`，180s/300s 反向旋转）**，
-         以及 `-atmo` 自身的极淡云带（它不糊画面，只是让山影之间有「气」）。
-         为什么删：雾是半透明白，压在文字与卡片上会降低对比，长时间看发闷。
-         ══════════════════════════════════════════════════════════════════════ */
-      + '#' + PFX + '-atmoTop{display:none !important;}'
-      + '.' + PFX + '-atmo::after{display:none !important;}'
-      + '@media (prefers-reduced-motion: reduce){'
-      + '.' + PFX + '-atmo,.' + PFX + '-atmo::before{animation:none !important;}}'
-
-      /* ══════════════════════════════════════════════════════════════════════
-         ★★★ v168：战报「小框化」+ 按钮配色统一 ★★★
-         用户三条：
-           ①「人名和状态都要用美化小框」→ 战报里的人名 / 招式 / 状态各给一枚圆角小框；
-           ②「美化小框太宽了，我需要字多少就多宽」→ 所有 pill 一律 `flex:0 0 auto`
-             （不被拉伸、不被压扁），宽度完全由字数决定；
-           ③「暂不列阵和返回列阵为什么是红色的，改成金色」→ 取消类按钮从朱砂改鎏金。
-         ══════════════════════════════════════════════════════════════════════ */
-      /* ① 战报内联小框 */
-      + '.' + PFX + '-nmbox{display:inline-block !important;padding:1px 7px !important;'
-      + 'border-radius:4px !important;border:1px solid !important;'
-      + 'font-size:11.5px !important;font-weight:700 !important;line-height:1.5 !important;'
-      + 'white-space:nowrap;vertical-align:baseline;}'
-      + '.' + PFX + '-nmbox.ally{color:#8fdfc9 !important;background:#173029 !important;'
-      + 'border-color:rgba(120,215,190,.46) !important;}'
-      + '.' + PFX + '-nmbox.enemy{color:#ffa893 !important;background:#331e19 !important;'
-      + 'border-color:rgba(220,120,100,.46) !important;}'
-      + '.' + PFX + '-lgkw{color:#9a8f7d !important;font-size:11.5px !important;margin:0 2px;'
-      + 'white-space:nowrap;}'
-      /* ★★ v248【战报美化缺失的真因】：渲染里用了 .xz-jjb-nmbox / -skn / -stbox / -lgkw 这些类，
-         但**整套 CSS 里根本没有它们的定义** —— 只有类名没有样式 ⇒ 玩家看到的就是一行裸字
-         （用户报了 6 次「战报美化没生效」，根因在这里）。
-         按项目铁律补上：标签一律圆角矩形小框，不许裸文字。 */
-      + '.' + PFX + '-nmbox{display:inline-block;margin:0 2px;padding:1px 7px;border-radius:5px;'
-      + 'font-size:12px;font-weight:700;line-height:1.55;white-space:nowrap;border:1px solid #6aa87f;'
-      + 'color:#d8f3e4;background:rgba(106,168,127,.16);}'
-      + '.' + PFX + '-nmbox.enemy{border-color:#c0564d;color:#ffd9d3;background:rgba(192,86,77,.16);}'
-      + '.' + PFX + '-skn{display:inline-block;margin:0 2px;padding:1px 8px;border-radius:5px;'
-      + 'font-size:12px;font-weight:700;line-height:1.55;white-space:nowrap;border:1px solid rgba(226,193,122,.62);'
-      + 'color:#f7ecd2;background:rgba(226,193,122,.14);}'
-      + '.' + PFX + '-stbox{display:inline-block;margin:0 3px 0 0;padding:1px 7px;border-radius:5px;'
-      + 'font-size:11.5px;font-weight:700;line-height:1.55;white-space:nowrap;border:1px solid rgba(212,175,55,.58);'
-      + 'color:#f3d999;background:rgba(212,175,55,.13);}'
-      + '.' + PFX + '-stbox.none{border-color:rgba(150,150,150,.4);color:#9aa4b0;background:rgba(255,255,255,.04);}'
-      + '.' + PFX + '-lgkw{font-size:12px;color:#b8b0a0;}'
-      + '.' + PFX + '-note{font-size:11.5px;color:#8a9496;}'
-      + '.' + PFX + '-lghp{color:#ff8a72 !important;font-weight:800 !important;'
-      + 'font-variant-numeric:tabular-nums;letter-spacing:.02em;}'
-      + '.' + PFX + '-skn{display:inline-block !important;padding:1px 7px !important;'
-      + 'border-radius:4px !important;margin:0 2px;'
-      + 'background:#2a2418 !important;border:1px solid rgba(201,168,106,.44) !important;'
-      + 'color:#e8c98f !important;font-size:11.5px !important;font-weight:700 !important;'
-      + 'line-height:1.5 !important;white-space:nowrap;vertical-align:baseline;}'
-      + '.' + PFX + '-stbox{display:inline-block !important;padding:1px 6px !important;'
-      + 'border-radius:4px !important;margin:0 2px;'
-      + 'background:#1a2a24 !important;border:1px solid rgba(120,205,175,.40) !important;'
-      + 'color:#8fdfc9 !important;font-size:11px !important;font-weight:600 !important;'
-      + 'line-height:1.5 !important;white-space:nowrap;vertical-align:baseline;}'
-      + '.' + PFX + '-stbox.none{background:#1b1f22 !important;'
-      + 'border-color:rgba(148,163,184,.26) !important;color:#7f8b93 !important;}'
-
-      /* ② 所有 pill / 标签：宽度只由字数决定（不拉伸、不压扁、不换行） */
-      + '.' + PFX + '-pill{flex:0 0 auto !important;width:auto !important;'
-      + 'min-width:0 !important;max-width:none !important;}'
-      + '.' + PFX + '-skpills{flex-wrap:wrap !important;gap:2px !important;}'
-      + '.' + PFX + '-skpills .' + PFX + '-pill{font-size:8.5px !important;'
-      + 'padding:0 4px !important;height:13px !important;border-radius:3px !important;}'
-      + '.' + PFX + '-tp-rl{flex:0 0 auto !important;width:auto !important;}'
-
-      /* ③ 取消类按钮：朱砂 → 鎏金（用户：「为什么是红色的，难看死了，改成金色」） */
-      + '.' + PFX + '-tp-cancel{'
-      + 'background:linear-gradient(180deg,#2b2418 0%,#12161a 100%) !important;'
-      + 'border:1px solid rgba(201,168,106,.48) !important;border-radius:9px !important;'
-      + 'color:#c9b98a !important;font-size:12px !important;}'
-      + '.' + PFX + '-tp-cancel:hover{border-color:#e8c98f !important;'
-      + 'color:#ffe9b8 !important;background:linear-gradient(180deg,#3b321f 0%,#181d22 100%) !important;'
-
-      /* ══════════════════════════════════════════════════════════════════════
-         ★★★ v164：选人（点将出阵）+ 翻译（效果转译）两套弹层主题 ★★★
-         用户：「选人界面和翻译界面也要重构前端美化」。
-         口径与主面板完全同源 —— 暖墨底 / 鎏金描边 / 烫金标题 / 朱砂印玺 /
-         圆角矩形小框（铁律：任何标签都不得是裸文字）。
-         翻译界面原来是**纯内联 style**（主题层覆盖不了），v164 已改成 class 驱动。
-         ══════════════════════════════════════════════════════════════════════ */
-      /* ① 遮罩：暖黑 + 中心一圈极淡金晕，读作「阵中开卷」 */
-      + '.' + PFX + '-teamwrap{'
-      + 'background:radial-gradient(circle at 50% 42%,rgba(36,28,16,.86) 0%,rgba(3,5,9,.95) 68%) !important;}'
-
-      /* ② 点将卡片：玄墨玉牌 + 鎏金边 + 顶部金线 + 四角暗压 */
-      + '#' + PFX + '-teamcard{'
-      + 'background:'
-      + 'radial-gradient(ellipse 120% 46% at 50% 0%,rgba(201,168,106,.13),transparent 60%),'
-      + 'linear-gradient(168deg,#1b2119 0%,#0c1014 58%,#080a0e 100%) !important;'
-      + 'border:1px solid rgba(201,168,106,.48) !important;'
-      + 'border-top:2px solid #e8c98f !important;'
-      + 'border-radius:14px !important;'
-      + 'box-shadow:0 26px 72px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,235,195,.14),'
-      + '0 0 0 1px rgba(0,0,0,.55),0 0 34px rgba(201,168,106,.12) !important;}'
-      + '#' + PFX + '-teamhead{'
-      + 'background:linear-gradient(90deg,#2c2418 0%,#151a1e 58%,#101418 100%) !important;'
-      + 'border-bottom:1px solid rgba(201,168,106,.32) !important;'
-      + 'box-shadow:0 6px 18px rgba(0,0,0,.5) !important;padding:11px 14px !important;}'
-      /* 印玺：朱砂底 + 金框 + 外发光（与主面板的「斗」印同一套做法） */
-      + '#' + PFX + '-teamseal{width:26px !important;height:26px !important;'
-      + 'background:linear-gradient(180deg,#8c2f2a,#48140f) !important;'
-      + 'border:1px solid rgba(232,201,143,.78) !important;border-radius:6px !important;'
-      + 'color:#ffe9b8 !important;font-weight:800 !important;font-size:13px !important;'
-      + 'box-shadow:0 0 12px rgba(180,60,50,.55),inset 0 1px 0 rgba(255,210,190,.28) !important;}'
-      /* 标题：烫金渐变字 */
-      + '#' + PFX + '-teamtitle{font-size:14px !important;font-weight:800 !important;'
-      + 'letter-spacing:.26em !important;'
-      + 'background:linear-gradient(180deg,#fff3cd 0%,#d8b678 54%,#8a6f3a 100%) !important;'
-      + '-webkit-background-clip:text !important;background-clip:text !important;'
-      + '-webkit-text-fill-color:transparent !important;color:transparent !important;}'
-      + '#' + PFX + '-teamhint{color:#a89d85 !important;font-size:12px !important;}'
-
-      /* ③ 名单行：玉牌小卡；勾选后转「已点将」的金框态 */
-      + '.' + PFX + '-tp-row{'
-      + 'background:linear-gradient(160deg,#1a2320 0%,#0c1115 100%) !important;'
-      + 'border:1px solid rgba(201,168,106,.20) !important;border-radius:9px !important;'
-      + 'box-shadow:inset 0 1px 0 rgba(255,255,255,.05) !important;'
-      + 'transition:border-color .15s,box-shadow .15s,transform .15s !important;}'
-      + '.' + PFX + '-tp-row:hover{border-color:rgba(232,201,143,.75) !important;'
-      + 'box-shadow:0 0 14px rgba(201,168,106,.26),inset 0 1px 0 rgba(255,255,255,.08) !important;'
-      + 'transform:translateY(-1px);}'
-      /* ★ v324（用户：「选中美化去了」）：`-tp-row:has(:checked)` 那条金边 + 暗金渐变整条删除。
-         勾没勾上，复选框本身已经说得很清楚（accent-color 金色），行背景不必再变一次色。 */
-      + '.' + PFX + '-tp-nm{color:#f6efdd !important;font-size:13.5px !important;}'
-      /* 境界：圆角小框（铁律） */
-      + '.' + PFX + '-tp-rl{padding:2px 7px !important;border-radius:4px !important;'
-      + 'background:#1b2328 !important;border:1px solid rgba(148,163,184,.30) !important;'
-      + 'color:#a2b6bf !important;font-size:10.5px !important;letter-spacing:.02em;}'
-      + '.' + PFX + '-tp-ck{accent-color:#d4af37 !important;width:16px !important;height:16px !important;}'
-      + '.' + PFX + '-tp-empty{padding:22px 4px !important;color:#8b8071 !important;'
-      + 'font-size:12.5px !important;letter-spacing:.06em;}'
-      + '.' + PFX + '-tp-rem{'
-      + 'background:linear-gradient(160deg,#151b1f 0%,#0a0e12 100%) !important;'
-      + 'border:1px solid rgba(148,163,184,.20) !important;border-radius:9px !important;'
-      + 'color:#9aa8b0 !important;font-size:11.5px !important;}'
-
-      /* ④ 按钮：主键鎏金，副键玄铁；取消键朱砂描边 */
-      + '#' + PFX + '-teambtns{gap:9px !important;}'
-      + '.' + PFX + '-tp-main{'
-      + 'background:linear-gradient(180deg,#4a3a19 0%,#1d1608 100%) !important;'
-      + 'border:1.5px solid rgba(232,201,143,.78) !important;border-radius:9px !important;'
-      + 'color:#ffe9b8 !important;font-size:13.5px !important;letter-spacing:.1em !important;'
-      + 'box-shadow:0 0 18px rgba(201,168,106,.30),inset 0 1px 0 rgba(255,235,195,.24) !important;}'
-      + '.' + PFX + '-tp-main:hover{'
-      + 'background:linear-gradient(180deg,#63501f 0%,#2a1f0b 100%) !important;'
-      + 'border-color:#ffe9b8 !important;}'
-      + '.' + PFX + '-tp-sub{'
-      + 'background:linear-gradient(180deg,#1b2329 0%,#0b0f14 100%) !important;'
-      + 'border:1px solid rgba(148,163,184,.34) !important;border-radius:9px !important;'
-      + 'color:#c6d3da !important;font-size:12px !important;}'
-      + '.' + PFX + '-tp-sub:hover{border-color:rgba(232,201,143,.68) !important;color:#ffe9b8 !important;}'
-      + '.' + PFX + '-tp-cancel{'
-      + 'background:linear-gradient(180deg,#2a1614 0%,#120a09 100%) !important;'
-      + 'border:1px solid rgba(200,90,75,.48) !important;border-radius:9px !important;'
-      + 'color:#e3a89c !important;font-size:12px !important;}'
-      + '.' + PFX + '-tp-cancel:hover{border-color:rgba(230,120,100,.85) !important;color:#ffcfc4 !important;}'
-
-      /* ⑤ 翻译卡片（v164 起 class 驱动） */
-      + '.' + PFX + '-trcard{'
-      + 'width:min(700px,94vw) !important;max-height:88vh !important;overflow:auto !important;'
-      + 'padding:0 !important;'
-      + 'background:'
-      + 'radial-gradient(ellipse 120% 42% at 50% 0%,rgba(201,168,106,.12),transparent 58%),'
-      + 'linear-gradient(168deg,#181e23 0%,#0b0f14 58%,#070a0e 100%) !important;'
-      + 'border:1px solid rgba(201,168,106,.46) !important;'
-      + 'border-top:2px solid #e8c98f !important;border-radius:14px !important;'
-      + 'color:#e9e3d3 !important;'
-      + 'box-shadow:0 26px 72px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,235,195,.12),'
-      + '0 0 34px rgba(201,168,106,.12) !important;}'
-      + '.' + PFX + '-trcard::-webkit-scrollbar{width:5px;}'
-      + '.' + PFX + '-trcard::-webkit-scrollbar-thumb{'
-      + 'background:linear-gradient(180deg,#8a6f3a,#d9b877);border-radius:3px;}'
-      + '.' + PFX + '-trcard::-webkit-scrollbar-track{background:#0a0e12;}'
-      + '.' + PFX + '-trhd{display:flex;align-items:center;gap:9px;padding:11px 15px;'
-      + 'background:linear-gradient(90deg,#2c2418 0%,#151a1e 58%,#101418 100%);'
-      + 'border-bottom:1px solid rgba(201,168,106,.30);'
-      + 'box-shadow:0 6px 18px rgba(0,0,0,.5);}'
-      + '.' + PFX + '-trseal{width:26px;height:26px;display:inline-flex;align-items:center;'
-      + 'justify-content:center;border-radius:6px;font-size:13px;font-weight:800;color:#ffe9b8;'
-      + 'background:linear-gradient(180deg,#8c2f2a,#48140f);'
-      + 'border:1px solid rgba(232,201,143,.78);'
-      + 'box-shadow:0 0 12px rgba(180,60,50,.55),inset 0 1px 0 rgba(255,210,190,.28);}'
-      + '.' + PFX + '-trtitle{font-size:14px;font-weight:800;letter-spacing:.26em;'
-      + 'background:linear-gradient(180deg,#fff3cd 0%,#d8b678 54%,#8a6f3a 100%);'
-      + '-webkit-background-clip:text;background-clip:text;'
-      + '-webkit-text-fill-color:transparent;color:transparent;}'
-      + '.' + PFX + '-trrow{margin:10px 14px;padding:10px 12px;border-radius:10px;'
-      + 'border:1px solid rgba(201,168,106,.18);'
-      + 'background:linear-gradient(160deg,#151b20 0%,#0a0e12 100%);'
-      + 'box-shadow:inset 0 1px 0 rgba(255,255,255,.04);}'
-      + '.' + PFX + '-trrowhd{display:flex;align-items:center;gap:8px;margin-bottom:8px;}'
-      + '.' + PFX + '-trname{font-size:13.5px;font-weight:700;color:#f6efdd;letter-spacing:.03em;}'
-      /* 状态标签：圆角小框（铁律），颜色由 --stc/--stbg 注入 */
-      + '.' + PFX + '-trst{font-size:10.5px;padding:2px 9px;border-radius:5px;font-weight:700;'
-      + 'color:var(--stc,#94a3b8);background:var(--stbg,rgba(148,163,184,.13));'
-      + 'border:1px solid var(--stc,#94a3b8);letter-spacing:.02em;}'
-      + '.' + PFX + '-trfp{margin-left:auto;font-size:10px;font-family:monospace;color:#7d7466;'
-      + 'padding:1px 7px;border-radius:4px;background:#11161a;'
-      + 'border:1px solid rgba(148,163,184,.18);}'
-      + '.' + PFX + '-trgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}'
-      + '.' + PFX + '-trlbl{font-size:10px;color:#8b8071;margin-bottom:4px;letter-spacing:.10em;}'
-      + '.' + PFX + '-trtext{font-size:11.5px;line-height:1.7;white-space:pre-wrap;'
-      + 'max-height:118px;overflow:auto;padding:7px 9px;border-radius:8px;'
-      + 'background:#0a0e12;border:1px solid rgba(148,163,184,.16);color:#b9c6cc;}'
-      + '.' + PFX + '-trtext::-webkit-scrollbar{width:4px;}'
-      + '.' + PFX + '-trtext::-webkit-scrollbar-thumb{background:#3a3222;border-radius:2px;}'
-      + '.' + PFX + '-trta{width:100%;box-sizing:border-box;height:118px;resize:vertical;'
-      + 'font-size:11.5px;line-height:1.66;font-family:monospace;'
-      + 'padding:7px 9px;border-radius:8px;background:#0a0e12;color:#e9e3d3;'
-      + 'border:1px solid rgba(201,168,106,.30);outline:none;'
-      + 'transition:border-color .15s,box-shadow .15s;}'
-      + '.' + PFX + '-trta:focus{border-color:rgba(232,201,143,.72);'
-      + 'box-shadow:0 0 0 2px rgba(201,168,106,.16);}'
-      + '.' + PFX + '-trmsg{font-size:11px;min-height:16px;margin:2px 14px 8px;color:#fbbf24;'
-      + 'line-height:1.7;white-space:pre-wrap;}'
-      + '.' + PFX + '-trbtns{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 14px;}'
-      + '.' + PFX + '-trbtns .' + PFX + '-tp-main{flex:1 1 180px;}'
-      + '.' + PFX + '-trlock{filter:saturate(.35) brightness(.8);}'
-      + '@media (max-width:560px){.' + PFX + '-trgrid{grid-template-columns:1fr;}}';
+       ⚠ XZ_JJB_LEGACY 不能删：技能详情 / 丹药 / 增益总览 / 编队 / 翻译面板
+         不在本次换皮范围，样式留在那段里；它们吃的 CSS 变量在新令牌块里都有别名。 */
+    st.textContent = XZ_JJB_SKIN + XZ_JJB_LEGACY;
     /* 只在首次插入；之后每次都只是重写上面那颗的 textContent（见函数开头注释）。 */
     if (!_oldSt) d.head.appendChild(st);
   }
@@ -24930,13 +24179,12 @@ function build() {
       var _n = Number(x.n);
       var _numTxt = (x.n != null && _n > 0) ? (_n >= 999 ? '∞' : String(_n)) : '';
       var num = _numTxt ? ('<i class="' + PFX + '-bfn">' + _numTxt + '</i>') : '';
-      /* ★ v242（用户澄清：「破防百分之几写出来是写在**卡片查看按钮里面**，
-         不是在卡片的 buff 图标里」）：
-         ⇒ 卡片这一行只留「图标 + 层数角标」；带数值与「整场」的长文字
-           放到点「查看」后的增益/状态清单里（buffSecHtml）。
-           title 仍带全文，长按/悬停能看见，但不再撑宽卡面。 */
+      /* ★★★ v433：**把文字补回来**。v242 砍掉它是因为卡面只有 152px 宽、塞不下；
+         现在卡片撑满半场，图 + 名 + 层数三样同时给 —— 只画图标的话
+         「穿防」和「破盾」在玩家眼里都是"一把剑"，得长按才知道是什么。 */
       return '<span class="' + PFX + '-bf ' + x.k + '" title="' + esc(x.t) + '">'
         + '<svg viewBox="0 0 24 24" aria-hidden="true">' + (JJB_ICON_PATHS[key] || JJB_ICON_PATHS.any) + '</svg>'
+        + '<i class="' + PFX + '-bfx">' + esc(x.t) + '</i>'
         + num + '</span>';
     }).join('');
   }
@@ -24948,52 +24196,50 @@ function build() {
     return cls;
   }
 
+  /* ★★★ v433：卡片 = 「立绘带 + 信息区」，信息压在立绘下沿。
+     尺寸不是写死的：容器 `-row` 上挂 is-solo / is-multi 决定用哪一档（见 renderRow）：
+       · 1v1 → is-solo：一张卡撑满半场，立绘吃满
+       · ≥2 → is-multi：常规大小，视口恒等于两张卡，多的往下滑
+     ⚠ 钩子类一个都不能少：-hpf / -hptxt / -mpf / -mptxt / -rlm / -spd / -bfs。
+       updateCard 走的是原地改这些节点 —— 少一个就变成「血条只跳不走」或「数字不更新」，
+       而且**零报错**，看起来像特效没做。 */
   function cardHtml(f) {
     var pct = (f.hp / f.maxHp * 100).toFixed(1);
     var _mMax = (f.maxMp || 0);
     var pctM = _mMax > 0 ? Math.min(100, Math.max(0, ((f.mp || 0) / _mMax) * 100)).toFixed(1) : '0';
-    /* ★ v35.1：会变的那几处全部带上**稳定钩子类**（-hptxt / -rlm / -acts / -trk），
-       这样 updateCard 才能原地改它们 —— 否则只能重建整张卡（那就是老 bug）。 */
+    /* 立绘：PORTRAIT_URLS 那张表里有的才出图，没有就走剪影/光核（法相投影台用的是同一张表） */
+    var purl = '';
+    try { purl = (typeof portraitUrlOf === 'function') ? portraitUrlOf(f.name) : ''; } catch (eP) { purl = ''; }
+    var el = String(f.element || '').trim();
+    var ec = '#c0a97a';
+    try { if (typeof ELEMENT_COLORS !== 'undefined' && ELEMENT_COLORS[el]) ec = ELEMENT_COLORS[el]; } catch (eEl) {}
     return '<div class="' + cardCls(f) + '" data-name="' + esc(f.name) + '">'
-      /* ★ v235（用户）：「查看按钮放到人名的右边」「卡片上默认显示属性，根据属性显示的字颜色不一样，也要美化小框」。
-         ⇒ 名字行变成「名字（可省略号） + 属性小框 + 查看」一行；查看不再独占一行。 */
+      + '<div class="' + PFX + '-u-art">'
+      + (purl ? ('<img class="' + PFX + '-u-pic" src="' + esc(purl) + '" alt="" loading="lazy" onerror="this.remove()">') : '')
+      + '<div class="' + PFX + '-u-sil"><svg viewBox="0 0 200 260" aria-hidden="true">'
+      + '<circle cx="100" cy="72" r="34"/>'
+      + '<path d="M100 106c-30 0-52 22-58 50l-6 104h128l-6-104c-6-28-28-50-58-50z"/>'
+      + '</svg></div>'
+      + '<div class="' + PFX + '-u-core"><span></span></div>'
+      + '</div>'
+      + '<div class="' + PFX + '-u-info">'
       + '<div class="' + PFX + '-top">'
       + '<span class="' + PFX + '-nm ' + f.side + '">' + esc(f.name) + '</span>'
-      + (function () {
-          var el = String(f.element || '').trim();
-          if (!el || el === '无') return '';
-          var ec = '#c0a97a';
-          try { if (typeof ELEMENT_COLORS !== 'undefined' && ELEMENT_COLORS[el]) ec = ELEMENT_COLORS[el]; } catch (eEl) {}
-          return '<span class="' + PFX + '-ebadge" style="color:' + ec + ';border-color:' + ec + '88;background:' + ec + '1f;" title="玄元属性：' + esc(el) + '">' + esc(el) + '</span>';
-        })()
-      + '<span class="' + PFX + '-look" data-jjbunit="' + esc(f.name) + '" role="button" aria-label="查看" '
-      + 'style="flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:22px;'
-      + 'box-sizing:border-box;padding:1px 6px;border:1px solid var(--xz-border);border-radius:5px;'
-      + 'background:rgba(201,168,106,.10);color:var(--xz-gold-bright);font-size:10px;cursor:pointer;'
-      + 'touch-action:manipulation;-webkit-tap-highlight-color:transparent;">查看</span>'
+      + '<span class="' + PFX + '-rlm">' + esc(f.realm) + '</span>'
+      + '<span class="' + PFX + '-spd">速 ' + Math.round(f.spd || 0) + '</span>'
+      + ((el && el !== '无')
+          ? ('<span class="' + PFX + '-ebadge" style="color:' + ec + ';border-color:' + ec + '55;background:' + ec + '1a;" title="玄元属性：' + esc(el) + '">' + esc(el) + '</span>')
+          : '')
+      + '<span class="' + PFX + '-look" data-jjbunit="' + esc(f.name) + '" role="button" aria-label="查看">查看</span>'
       + '</div>'
-      /* ★ v104：血条与灵力条都是「条 + 条内数字」，数字**压在条上**而不是坐在条下。 */
-      + '<div class="' + PFX + '-hp"><div class="' + PFX + '-hpf" style="width:' + pct + '%"></div>'
+      + '<div class="' + PFX + '-hprow"><span class="' + PFX + '-bar-lbl">血</span>'
+      + '<div class="' + PFX + '-hp"><div class="' + PFX + '-hpf" style="width:' + pct + '%"></div></div>'
       + '<span class="' + PFX + '-bar-txt ' + PFX + '-hptxt">' + f.hp + '/' + f.maxHp + '</span></div>'
-      + '<div class="' + PFX + '-mp"><div class="' + PFX + '-mpf" style="width:' + pctM + '%"></div>'
+      + '<div class="' + PFX + '-mprow"><span class="' + PFX + '-bar-lbl">灵</span>'
+      + '<div class="' + PFX + '-mp"><div class="' + PFX + '-mpf" style="width:' + pctM + '%"></div></div>'
       + '<span class="' + PFX + '-bar-txt ' + PFX + '-mptxt">' + (f.mp || 0) + '/' + _mMax + '</span></div>'
-      /* ★ v64：卡内的小时序条（-tbar）**已删除** —— 用户原话：
-         「我说了蓝条下面的小时序条给我去掉」。顶部那条时间轴（#…-rail + 节点）保留，
-         所以「谁快出手」照样一眼看得出来，卡上不用再复读一条细条。
-         只删卡内这一条；rail 与 rail 上的节点一律不动。
-         ★ v104：原来这一行还带着气血/灵力两个复读（-hptxt / -mptxt）——
-           数字已搬进条里，这里再放一份就是同一屏两处数字，且两处会各自更新、迟早漂移。 */
-      + '<div class="' + PFX + '-meta">'
-      + '<span class="' + PFX + '-rlm ' + PFX + '-badge">' + esc(f.realm) + '</span>'
-      + '<span class="' + PFX + '-spd ' + PFX + '-badge">速 ' + Math.round(f.spd || 0) + '</span></div>'
-      /* ★ v234（用户 2026-10-20）：
-         「速度用美化小框」「已出手几次去掉」「条 xxx（=卡片上当前跑条进度）也去掉」。
-         原来这一行是「已出手 N 次 + 条 234」—— 两个数都是过程量，
-         卡面上真正要看的只有境界、速度、气血/灵力、状态。
-         时序进度看顶部时间轴就够了，卡上再复读一遍只会让卡面变吵。 */
-      /* ★ v235：查看已搬到名字行，这一行整块删除。 */
-      /* ★ v43：增益／状态挂在外面（见 jjbBuffsOf 注释）。高度封顶 58px，超出自己滚。 */
       + '<div class="' + PFX + '-bfs">' + jjbBuffHtml(f) + '</div>'
+      + '</div>'
       + '</div>';
   }
 
@@ -25050,6 +24296,12 @@ function build() {
   var ROSTER_ATTR = PFX + '-roster';   /* 不用 data-roster：PFX 前缀避免与外部选择器撞名 */
   function renderRow(host, list) {
     if (!host) return;
+    /* ★★★ v433（用户 2026-10-28）：卡片只有**两档尺寸**，开关就是这个 class ——
+         · 1 个人 → is-solo：一张卡撑满半场（立绘吃满，信息压在立绘下沿）
+         · 2 个以上 → is-multi：常规大小，视口恒等于两张卡的高度，多的人往下滑
+       4v4 也只露 2 个，滑下去才看见另 2 个 —— 尺寸不进第三档，眼睛才不会每次打架都重新适应。 */
+    var mode = PFX + '-row ' + (list.length <= 1 ? 'is-solo' : 'is-multi');
+    if (host.className !== mode) host.className = mode;
     var want = list.map(function (f) { return f.name + ':' + f.side; }).join('|');
     if (host.getAttribute(ROSTER_ATTR) === want && host.children && host.children.length === list.length) {
       for (var i = 0; i < list.length; i++) updateCard(host.children[i], list[i]);
@@ -25228,8 +24480,44 @@ function build() {
     return '<span class="' + PFX + '-hint">时序推进中…（第 <b>' + S.tick + '</b> 息）</span>';
   }
 
+  /* ★★★ v433（用户：「buff 消失了或者新增都要在战报里说一声，这才是有用的战报」）：
+     每次渲染对一遍「谁身上有哪些状态」——
+       多出来的播「获得」，少掉的播「失去」；层数从 3 变 2 不播（改个数字没必要刷屏）。
+     ★ 首帧只记快照不播报：开局那批（兵器 / 血脉 / 玄诀）不是"这一手刚得到的"，
+       否则一开打就刷十几条，真正的变化反而被淹掉。
+     ★ 键用**机制名**（与 jjbBuffsDedup 同一套口径）：同一件事从兵器、血脉、引擎三处
+       同时进来时只会播一条，「穿防」和「破盾」是两个键、各播各的。
+     ★ 只写 S.log，不碰任何战斗数值。 */
+  var _BUFF_SNAP = {};
+  function diffBuffs() {
+    if (!S || !S.fighters) return;
+    for (var i = 0; i < S.fighters.length; i++) {
+      var f = S.fighters[i];
+      if (!f || !f.name) continue;
+      var key = f.side + '|' + f.name;
+      var now = {};
+      var list = jjbBuffsDedup(f);
+      for (var j = 0; j < list.length; j++) {
+        var nm = String(list[j].nm || list[j].t || '');
+        if (nm) now[nm] = String(list[j].t || nm);
+      }
+      var prev = _BUFF_SNAP[key];
+      if (!prev) { _BUFF_SNAP[key] = now; continue; }   /* 首帧：只记账，不播 */
+      for (var a in now) { if (!(a in prev)) pushBuffLog(f, now[a], true); }
+      for (var b in prev) { if (!(b in now)) pushBuffLog(f, prev[b], false); }
+      _BUFF_SNAP[key] = now;
+    }
+  }
+  function pushBuffLog(f, txt, add) {
+    try {
+      S.log.push({ k: 'buff', who: f.name, side: f.side, add: !!add, buff: String(txt || '') });
+      if (S.log.length > 120) S.log.shift();   /* 与其它行同一套上限 */
+    } catch (eB) {}
+  }
+
   function render() {
     if (!S) return;
+    diffBuffs();                 /* ★ v433：状态增减写进战报（放在重建日志之前，当帧就能看到） */
     placeFrame();                 /* ★ v69：定位与渲染同一入口 —— 谁先跑都不会漏掉定位 */
     var a = q('ally'), e = q('enemy'), lg = q('log'), rd = q('round'), bar = q('bar');
     if (!a) return;
@@ -25331,6 +24619,13 @@ function build() {
                    + jjbStatusBox(_mb[4])
                    + '<span class="' + PFX + '-lgkw">状态</span>';
             } else head = jjbLogRest(String(x.t));
+          } else if (x.k === 'buff') {
+            /* ★ v433：状态增减**单独成一条**，不塞进攻击行的折叠区 ——
+               玩家要的是"什么时候掉的、掉的是什么"，藏进细节里等于没说。 */
+            head = '<span class="' + PFX + '-nmbox ' + (x.side === 'enemy' ? 'enemy' : 'ally') + '">' + esc(x.who) + '</span>'
+              + '<span class="' + PFX + '-lgkw">' + (x.add ? '获得' : '失去') + '</span>'
+              + jjbStatusBox(x.buff)
+              + '<span class="' + PFX + '-lgkw">状态</span>';
           } else if (x.k === 'note') {
             /* note 行是引擎播报（含 span style 上色），同样不能再转义 */
             head = '<span class="' + PFX + '-note">（' + String(x.t) + '）</span>';
@@ -25352,7 +24647,7 @@ function build() {
                   }).join('')
                 + '</div>')
             : '';
-          return '<div class="' + PFX + '-lg' + (_hasD ? (' ' + PFX + '-lghas') : '') + '"'
+          return '<div class="' + PFX + '-lg' + (x.k === 'ally' ? ' a' : (x.k === 'enemy' ? ' e' : '')) + (_hasD ? (' ' + PFX + '-lghas') : '') + '"'
             + (_hasD ? (' data-jjblg="1" role="button" title="点击展开 / 收起本行细节"') : '')
             + '><div class="' + PFX + '-l-' + x.k + '">' + head + '</div>' + dHtml + '</div>';
         }).join('');

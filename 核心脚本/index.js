@@ -350,6 +350,76 @@ function portraitUrlOf(name) {
   return '';
 }
 
+/* ═══ v435 · 人名与玄技名的**唯一规范化入口** ═══════════════════════════
+   用户原话（2026-10-28）：
+     「人物名字也他妈生成不规范，禁止生成前缀后缀，只能生成人名，
+       萧诀就是萧诀，而不是剑修·萧诀。」
+     「玄技的名字生成不规范，剑系技能只能这样生成：剑系·xxxx，
+       然后剑系特效就识别这个剑系。」
+
+   ── 为什么要在**读入**时就削，而不是只求模型写对 ────────────────────
+   模型写「剑修·萧诀」有现实原因：正文里需要交代这个人什么路数。
+   只要它还这么写，玩家就一定会看到「剑修·萧诀 用 一剑断江 攻击了 剑修·萧诀」
+   —— 战斗界面是全卡最密的信息界面，这类前缀在战报里会被放大成噪音。
+   所以两道一起做：① 世界书里写死规矩；② 这里做兜底削除（模型不听话也不至于难看）。
+   ⚠ 削除只发生在**战斗显示层**（fighter 构建 + 名单解析），
+     绝不回写变量 —— 变量里的键名是存档主键，改了就把人物档案弄丢了。 */
+
+/* 人名前缀黑名单：职业/身份/势力/称号。
+   ⚠ 只匹配「两个字以上 + 中点」的形状，单字前缀一律不动
+     （「白·素贞」这种写法不存在，误削风险大于收益）。 */
+var XZ_NAME_PREFIX_RE = /^(?:剑修|刀修|枪修|拳修|体修|术修|符修|丹修|器修|阵修|魔修|妖修|鬼修|儒修|佛修|道修|散修|剑客|刀客|剑仙|刀圣|剑圣|真人|道人|上人|长老|执事|弟子|内门|外门|真传|亲传|首席|大天骄|天骄|圣女|圣子|宗主|门主|阁主|族长|城主|山主|宫主|殿下|公子|姑娘|前辈|道友|散人|居士|掌柜|教习|护法|堂主|舵主|杀手|佣兵|护卫|队长|首领|大王|妖王|魔王|少主|公子爷|少爷|小姐|阁下|陛下|师尊|师兄|师姐|师弟|师妹)\s*[·・‧∙]\s*/;
+
+/* 玄技名的「剑系·」族：这是**唯一被承认的剑系标记**（用户 2026-10-28 定）。
+   以前剑系判定是「名字里含『剑』字」—— 于是「万剑归宗」「剑指苍穹」都算剑系，
+   而真正的剑招只要名字不带剑（「霜落」）就吃不到剑弧。改成认前缀之后：
+     · 「剑系·一剑断江」「剑系·霜落」→ 剑系特效
+     · 「万剑归宗」「剑指苍穹」      → 不认（除非也写前缀）
+   兼容保留：不带前缀但**以剑/刀/枪起头**的老存档仍按剑系处理，
+   否则老档一更新特效就全没了（这条是过渡，别当成规范）。 */
+var XZ_SWORD_TAG = '剑系·';
+function xzSkillIsSword(name) {
+  var s = String(name == null ? '' : name);
+  if (!s) return false;
+  if (s.indexOf(XZ_SWORD_TAG) === 0) return true;
+  /* 前缀写法不统一时（「剑系 · X」「剑系.X」「［剑系］X」）也认，但只在**开头**认。 */
+  if (/^[\s\[【（(]*剑系\s*[·・‧∙.。]\s*\S/.test(s)) return true;
+  if (/^[\s\[【（(]*剑系[\s\]】）)]/.test(s)) return true;
+  /* 过渡兼容：以剑起头（剑法/剑诀/剑意…），以及老写法「XX剑法」以外的剑字开头 */
+  if (/^\s*剑/.test(s)) return true;
+  return false;
+}
+/* 把人名里的身份前缀削掉：`剑修·萧诀` → `萧诀`。
+   ★ 只削**开头**那一段，且必须是黑名单里的词 —— 「萧·诀」这种不会被碰。
+   ★ 削完为空（比如整串就是一个「剑修·」）就原样返回，宁可难看也不返回空名。 */
+function xzCleanPersonName(name) {
+  var s = String(name == null ? '' : name).replace(/[\u3000]/g, ' ').trim();
+  if (!s) return s;
+  /* 全角/半角括号包着的身份也削：`【剑修】萧诀` */
+  s = s.replace(/^[\[【（(]\s*(?:剑修|刀修|枪修|拳修|体修|术修|符修|丹修|魔修|妖修|散修|剑客|剑仙|剑圣|刀圣|真人|道人|长老|弟子|真传|天骄|圣女|圣子|宗主|门主|阁主|城主|公子|姑娘|前辈|道友)\s*[\]】）)]\s*/, '');
+  s = s.replace(XZ_NAME_PREFIX_RE, '');
+  s = s.trim();
+  return s || String(name).trim();
+}
+/* 玄技名规范化：把各种「剑」写法统一成 `剑系·原名`。
+   ★ 只做**前缀归一**，不动原名的字 —— 「一剑断江」不许被改写成「剑系·剑」那种。
+   ★ 已经带前缀的原样返回（幂等），所以可以被反复调用。 */
+function xzCleanSkillName(name) {
+  var s = String(name == null ? '' : name).replace(/[\u3000]/g, ' ').trim();
+  if (!s) return s;
+  /* 已经是规范写法 → 不动 */
+  if (s.indexOf(XZ_SWORD_TAG) === 0) return s;
+  /* 「剑系 · X」「剑系.X」「剑系X」→ 统一成「剑系·X」 */
+  var m = /^\[?【?\(?（?\s*剑系\s*[·・‧∙.。]?\s*([\s\S]+?)\s*\]?】?\)?）?$/.exec(s);
+  if (m && m[1]) return XZ_SWORD_TAG + m[1];
+  /* 老写法「剑法·X」「剑诀·X」→ 剑系·X（同一个族，不该在卡面上出现两种前缀） */
+  var m2 = /^\[?【?\(?（?\s*(?:剑法|剑诀|剑术|剑道|剑意)\s*[·・‧∙.。]\s*([\s\S]+?)\s*\]?】?\)?）?$/.exec(s);
+  if (m2 && m2[1]) return XZ_SWORD_TAG + m2[1];
+  /* 不带任何前缀、但确实是剑招（以剑起头）→ 补前缀 */
+  if (/^\s*剑/.test(s)) return XZ_SWORD_TAG + s;
+  return s;
+}
+
 // 法相投影台：全场只此一块，统一挂在对方（敌方栏）上方。
 // 轮到谁就换谁的立绘；没立绘就显示一个大问号。
 /* ===== v41 九州玄幻 · 境界系数（十二境 48 档）=====
@@ -5311,11 +5381,15 @@ function _normalizeSkillItemCore(s, unit) {
      玩家写的对象形 `效果` 落不进 effects ⇒ 增益链 allEffs 里没有它 ⇒ 一个字都不生效。
      v282：那两个废止字段的读取已彻底删除，取法只走 `xzSkillEffFieldOf`。 */
   var effects = parseEffectsList(xzSkillEffFieldOf(s));
-  var isSword = String(s.玄技名 || '').indexOf('剑') !== -1;
+  /* ★★★ v435：「剑系技能只能这样生成：剑系·xxxx，然后剑系特效就识别这个剑系」。
+     原名先归一成 `剑系·X` 再判剑系 —— 判据和卡面上显示的名字必须是**同一个字符串**，
+     否则又会出现「界面上写着剑系·霜落、特效却不走剑弧」那种自相矛盾。 */
+  var skillNameNorm = xzCleanSkillName(s.玄技名 || '');
+  var isSword = xzSkillIsSword(skillNameNorm);
   var style = String(s.流派 || '通用');
 
   return {
-    name: s.玄技名 || '未知玄技',
+    name: skillNameNorm || '未知玄技',
     quality: s.品质 || '黄阶',
     qualityRank: sRank,
     style: style,
@@ -5727,7 +5801,8 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
   if (isPlayer) {
     charObj = pData;
     rawCharObj = pData;
-    realName = pData.姓名 || name || '修仙者';
+    /* ★ v435：「禁止生成前缀后缀，只能生成人名」（用户原话）—— 显示层统一削。 */
+    realName = xzCleanPersonName(pData.姓名 || name) || '修仙者';
     /* ★ v45：境界名先归一（旧名换名 + 大境/档位补全），保证与 REALM_COEFFS / 手数表同源。 */
     realm = xzNormRealmName(pData.境界 || '引玄初期');
     /* ★ v77：原来这里读 `pData.伤势状态`（用户 2026-10-16 定：字段已废除，血量自己说话）。
@@ -5751,10 +5826,22 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
     rawHeart = learnedMapOf(pData, '玄诀');
     rawArtifact = pData.装备武器 || pData.武器 || {};
   } else {
-    charObj = charList[name] || {};
+    /* ★★★ v435：查档案要用**削过前缀的名字**（用户 2026-10-28：
+       「禁止生成前缀后缀，只能生成人名，萧诀就是萧诀，而不是剑修·萧诀」）。
+       模型在 <战斗开始> 里写 `[剑修·萧诀]` 时，变量里的键名是 `萧诀`
+       —— 直接 `charList['剑修·萧诀']` 查不到人 ⇒ 境界/四维/玄技/武器**全部走兜底**，
+       这个人会变成一个没有属性的空壳（战报上却是正常名字，极难发现）。
+       ⇒ 原始名与削后名**都试一遍**，先精确、再削后的、再模糊包含。
+       ⚠ 顺序不能反：先把原始名查一遍，是因为真有可能存在一个叫「剑修·萧诀」的人设条目
+         （比如玩家自己起的名字），那种情况下原始名才是对的。 */
+    var _cleanName435 = xzCleanPersonName(name);
+    charObj = charList[name] || charList[_cleanName435] || {};
     if (!charObj.姓名) {
       for (var k in charList) {
-        if (k === name || (charList[k] && charList[k].姓名 === name)) {
+        if (k === name || k === _cleanName435
+          || (charList[k] && charList[k].姓名 === name)
+          || (charList[k] && charList[k].姓名 === _cleanName435)
+          || (charList[k] && xzCleanPersonName(charList[k].姓名) === _cleanName435)) {
           charObj = charList[k]; break;
         }
       }
@@ -5762,9 +5849,12 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
     rawCharObj = charObj;
     // ===== 优先读正文 <人物面板>，读不到再回退到变量 人物列表 =====
     var panelMap = getPanelCache();
-    var panelObj = panelMap[name];
+    var panelObj = panelMap[name] || panelMap[_cleanName435];
     if (!panelObj) {
-      for (var pk in panelMap) { if (pk === name || panelMap[pk].姓名 === name) { panelObj = panelMap[pk]; break; } }
+      for (var pk in panelMap) {
+        if (pk === name || pk === _cleanName435
+          || panelMap[pk].姓名 === name || panelMap[pk].姓名 === _cleanName435) { panelObj = panelMap[pk]; break; }
+      }
     }
     if (panelObj) {
       charObj = {
@@ -5790,7 +5880,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
         装备武器: panelObj.装备武器 || charObj.装备武器 || {}
       };
     }
-    realName = charObj.姓名 || name;
+    realName = xzCleanPersonName(charObj.姓名 || name);
     /* ★ v45：同上 —— <人物面板>/人物列表 里的境界名也先归一。 */
     realm = xzNormRealmName(charObj.境界 || '引玄初期');
     xzNormTermKeys(charObj);
@@ -20811,7 +20901,9 @@ var XZJJ = (function () {
           try {
             push('〔特效分支〕' + (actor && actor.name ? actor.name : '?') + ' → ' + (target && target.name ? target.name : '?')
               + ' ｜ 招式「' + (sk && sk.name ? sk.name : '（普攻）') + '」'
-              + ' ｜ 走：' + ((sk && /剑/.test(String(sk.name || ''))) ? '剑效 _JJ_FX2.sword' : '命中 _JJ_FX2.hit')
+              /* ★ v435：判据统一走 xzSkillIsSword —— 诊断行必须和真正生效的那条判据同源，
+                 否则会出现「诊断说走剑效、实际命中没有剑弧」这种查不出来的错配。 */
+              + ' ｜ 走：' + ((sk && xzSkillIsSword(sk.name)) ? '剑效 _JJ_FX2.sword' : '命中 _JJ_FX2.hit')
               + ' ｜ 范围：' + (fxAoe ? '是' : '否'), 'note');
           } catch (eDiag) {}
         }
@@ -20840,15 +20932,16 @@ var XZJJ = (function () {
               sk.name, sk.quality || sk.品质 || '凡阶',
               actor.side === 'ally',
               xzElementOf(sk, actor),
-              /* v256：原来硬编码 false ⇒ 剑招的「· 剑诀」副标题永远不显示。 */
-              !!(sk && /剑/.test(String(sk.name || ''))),
+              /* v256：原来硬编码 false ⇒ 剑招的「· 剑诀」副标题永远不显示。
+                 ★ v435：判据换成 xzSkillIsSword（认「剑系·」前缀），与特效同一个函数。 */
+              !!(sk && xzSkillIsSword(sk.name)),
               (typeof xzOverlayHost === 'function') ? xzOverlayHost() : d0().getElementById('xz-jjb-overlay')
             );
           }
         } catch (eBn) {}
         _JJ_FX2.attack(actor.name, target.name, fxElem, {
           isAoe: fxAoe, isCrit: fxCrit,
-          isSword: !!(sk && /剑/.test(String(sk.name || ''))),
+          isSword: !!(sk && xzSkillIsSword(sk.name)),
           /* ★ v298：剑弧道数靠它算（凡2…神7）。战斗内的招式对象上品质叫 `quality`。 */
           quality: (sk && (sk.quality || sk.品质)) || '凡阶',
           skillName: sk && sk.name
@@ -22645,10 +22738,22 @@ var XZ_JJB_SKIN = `
   border:1px solid var(--xz-line);font-variant-numeric:tabular-nums;
 }
 
-/* ── 对阵区 ───────────────────────────────────────────────────────────── */
+/* ── 对阵区 ─────────────────────────────────────────────────────────────
+   ★★★ v435（用户 2026-10-28）：「一开始卡片会变大，随着战报增多逐渐变小，
+   然后变小到一个值就没了 —— 一刚开始就要是那个大小，不能逐渐变小，
+   要固定卡片区和战报区的大小。」
+   病根是 flex 分配：「-sides」 是 「flex:1 1 auto」，战报 「-log」 是 「flex:0 1 auto」
+   + 「max-height:34%」。刚开战时战报是空的（高度≈0），空出来的全给了对阵区
+   ⇒ 卡片被撑到最大；战报一行行长起来，它按比例抢高度，对阵区被一路挤扁，
+   直到 「-log」 顶到 34% 上限才停 —— 玩家看到的「卡越打越小」就是这条曲线。
+   ⇒ 改成**两区各占固定比例**：对阵区 「flex:1 1 58%」、战报 「flex:1 1 42%」，
+     两边都 「min-height:0」 且**不设 max-height**，谁也抢不走谁的高度。
+     实测整块面板高度由 placeFrame 钉死（真视口 − 12px），所以比例 = 像素，恒定。
+   ⚠ 别在这里改回 「flex:1」（=1 1 0%）：那会让有内容的一侧按内容多少分配，
+     卡片尺寸又会随战报条数漂移，正是这次要消掉的症状。 */
 #xz-jjb-sides{
   display:flex;flex-direction:row;align-items:stretch;
-  flex:1 1 auto;min-height:0;position:relative;z-index:2;
+  flex:1 1 58%;min-height:0;position:relative;z-index:2;
 }
 .xz-jjb-side{
   flex:1 1 50%;min-width:0;min-height:0;
@@ -22672,11 +22777,14 @@ var XZ_JJB_SKIN = `
 .xz-jjb-row.is-multi{overflow-y:auto;overscroll-behavior:contain;padding-right:3px;}
 .xz-jjb-row.is-multi::-webkit-scrollbar{width:4px;}
 .xz-jjb-row.is-multi::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:99px;}
-/* 多打多：视口恒等于两张卡 —— 4 个人也只露 2 个，往下滑看另 2 个 */
-.xz-jjb-row.is-multi .xz-jjb-card{flex:0 0 calc((100% - 10px) / 2);min-height:0;}
-.xz-jjb-row.is-multi .xz-jjb-bf{height:18px;font-size:9px;gap:3px;padding:0 5px 0 4px;}
+/* 多打多：视口恒等于两张卡 —— 4 个人也只露 2 个，往下滑看另 2 个。
+   ★ v435：加一条 min-height:150px —— 手机竖屏（≈560px 高）时「两张卡塞进半场」
+   算出来每张只剩 99px，立绘带 + 名字 + 两条 + buff 栏根本铺不开，卡面会糊成一团。
+   压到 150 以下就不许再压：宁可让这一列**往下滑**，也不许把卡压扁。 */
+.xz-jjb-row.is-multi .xz-jjb-card{flex:0 0 calc((100% - 10px) / 2);min-height:150px;}
+.xz-jjb-row.is-multi .xz-jjb-bf{width:18px;height:18px;font-size:9px;padding:0;}
 .xz-jjb-row.is-multi .xz-jjb-bf svg{width:11px;height:11px;}
-.xz-jjb-row.is-multi .xz-jjb-bfs{gap:4px;}
+.xz-jjb-row.is-multi .xz-jjb-bfs{gap:4px;height:20px;min-height:20px;max-height:20px;}
 .xz-jjb-row.is-multi .xz-jjb-u-info{padding-bottom:9px;margin-top:-24px;}
 
 /* ── 角色卡：立绘带 + 信息区（信息压在立绘下沿）──────────────────────── */
@@ -22801,40 +22909,71 @@ var XZ_JJB_SKIN = `
   font-variant-numeric:tabular-nums;font-family:var(--xz-num);
 }
 
-/* ── 状态：图标 + 文字 + 层数角标 ──────────────────────────────────────── */
+/* ── 状态：**只有图标**（+ 层数角标），一栏高，横向可滑 ──────────────────
+   ★★★ v435（用户 2026-10-28）：「buff 图标就只要图标，不要显示 buff 的效果」。
+   上一版把文字（「-bfx」）补回来了，理由是「穿防/破盾只画图标分不清」——
+   但卡面上一排带字的胶囊比血条还宽，图标本身反而看不清。现在文字只留在
+   「title」（桌面悬停）与点击弹出的「增益总览」里，卡面回到纯图标。
+
+   ★ 布局要点（踩过的坑写在这里，别再改回去）：
+     · 「flex-wrap:nowrap」 + 「overflow-x:auto」 —— 换行会把卡面撑高，
+       而卡面高度被两档尺寸钉死，结果就是「buff 一多，血条被挤出去」。
+       不换行、横向滑，卡面高度永远只有一栏。
+     · 高度写成**常量**（single 24px / multi 20px），不是 「min/max」 组合：
+       「min-height」 留着会让空状态（「无状态」那行字）也占两行高。
+     · iOS 需要 「-webkit-overflow-scrolling:touch」 才有惯性滑动；
+       滚轮/触控两条路都要，所以 「overscroll-behavior-x:contain」 单独给。 */
 .xz-jjb-bfs{
-  display:flex;flex-wrap:wrap;gap:6px;margin-top:2px;min-height:18px;
-  max-height:46px;overflow-y:auto;overscroll-behavior:contain;
+  display:flex;flex-wrap:nowrap;align-items:center;gap:6px;margin-top:2px;
+  height:24px;min-height:24px;max-height:24px;
+  overflow-x:auto;overflow-y:hidden;
+  overscroll-behavior-x:contain;overscroll-behavior-y:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  /* 右侧留 2px：最后那枚图标的 border 不被裁掉半条 */
+  padding:0 2px 0 0;
 }
-.xz-jjb-bfs::-webkit-scrollbar{width:3px;}
-.xz-jjb-bfs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:2px;}
+.xz-jjb-bfs::-webkit-scrollbar{display:none;}
 .xz-jjb-bf{
-  position:relative;display:inline-flex;align-items:center;gap:4px;
-  height:21px;padding:0 7px 0 5px;border-radius:4px;border:1px solid;
+  position:relative;display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 auto;width:21px;height:21px;padding:0;border-radius:4px;border:1px solid;
   font-size:10.5px;letter-spacing:.03em;line-height:1;
   transition:filter .15s,border-color .15s;
 }
 .xz-jjb-bf svg{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
   stroke-linecap:round;stroke-linejoin:round;}
 .xz-jjb-bf:hover{filter:brightness(1.18);}
+/* 层数角标：压在图标**内部**右下角，不占宽度也不越界。
+   原来是 flex 里的一个 i（给 min-width:12px，每枚图标白占 16px 宽）；
+   v435 一度改成 bottom:-5px 的外挂角标 —— 它比 21px 的方块高出 5px，
+   于是 24px 的 buff 栏 scrollHeight 变成 28px，**竖着溢出**，
+   明明只有一栏却出现了竖向滚动条（实测就是这条）。现在收在框内。 */
 .xz-jjb-bfn{
-  flex:none;min-width:12px;font-style:normal;font-family:var(--xz-num);
-  font-size:9px;line-height:1;opacity:.72;font-variant-numeric:tabular-nums;
+  position:absolute;right:-1px;bottom:-1px;
+  min-width:11px;padding:0 1.5px;border-radius:5px;
+  font-style:normal;font-family:var(--xz-num);
+  font-size:8.5px;line-height:10px;height:10px;text-align:center;
+  background:#0b1017;border:1px solid currentColor;
+  opacity:.95;font-variant-numeric:tabular-nums;
+  pointer-events:none;
 }
 .xz-jjb-bf.good{color:#7fe0b0;border-color:rgba(127,224,176,.28);background:rgba(127,224,176,.08);}
 .xz-jjb-bf.bad{color:#f08a84;border-color:rgba(240,138,132,.28);background:rgba(240,138,132,.08);}
 .xz-jjb-bf.neutral{color:#e6bd76;border-color:rgba(230,189,118,.26);background:rgba(230,189,118,.07);}
-.xz-jjb-bfnone{font-size:10px;color:var(--xz-ink-3);opacity:.6;}
-/* 图标右边那行字。v242 砍掉它是因为 152px 卡面塞不下；卡片变大之后补回来 ——
-   只画图标的话「穿防」和「破盾」在玩家眼里都是"一把剑"，得靠长按才知道是什么。 */
-.xz-jjb-bfx{
-  flex:none;font-style:normal;white-space:nowrap;
-  max-width:132px;overflow:hidden;text-overflow:ellipsis;
-}
+.xz-jjb-bfnone{font-size:10px;color:var(--xz-ink-3);opacity:.6;flex:0 0 auto;}
+/* 「-bfx」（图标右边那行字）已不再生成 —— 见 jjbBuffHtml。
+   保留这条是为了老卡/旧存档里残留的 DOM 不至于变成「一行裸正文」。 */
+.xz-jjb-bfx{display:none;}
 
-/* ── 战报：左边一根竖线 + 每行一个圆点 ───────────────────────────────── */
+/* ── 战报：左边一根竖线 + 每行一个圆点 ─────────────────────────────────
+   ★ v435：高度从「≤34% 的弹性」改成**固定 42% 的占比**。
+   旧写法 「flex:0 1 auto; max-height:34%」 有三个后果，用户全撞上了：
+     ① 空战报占 0 高 ⇒ 对阵区吃掉全部剩余 ⇒ 卡片一开局是最大号；
+     ② 战报长起来按比例抢 ⇒ 卡片一路被压小（「越打越小」的直接来源）；
+     ③ 顶到 34% 就再不长了，而多出来的日志被裁在滚动区外。
+   现在两边各占固定份（5:4 左右），谁也挤不动谁；战报自己滚，卡片恒尺寸。 */
 #xz-jjb-log{
-  flex:0 1 auto;min-height:64px;max-height:34%;overflow-y:auto;
+  flex:1 1 42%;min-height:0;max-height:none;overflow-y:auto;
   position:relative;z-index:2;padding:0 18px;min-width:0;
   border-top:1px solid var(--xz-line);
   scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;
@@ -22887,15 +23026,34 @@ var XZ_JJB_SKIN = `
 .xz-jjb-lopen .xz-jjb-lgd{display:block;}
 .xz-jjb-lgdline{font-size:11px;line-height:1.7;color:#8a8278;}
 
-/* ── 底栏 ─────────────────────────────────────────────────────────────── */
+/* ── 底栏 ───────────────────────────────────────────────────────────────
+   ★★★ v435（用户 2026-10-28）：「一开始卡片会变大，随着战报增多逐渐变小…
+   要固定卡片区和战报区的大小」。
+   真凶**不在卡片区**，在这一条。底栏有两个互斥分支：
+     · 轮到你   → 技能键一排 + 四个功能键（实测 92.92px）
+     · 别人回合 → 一行「时序推进中…」（实测 53.25px）
+   底栏是 「flex:none」（高度按内容），于是它一涨一落，上面两个 flex 区
+   就跟着被抽走/还回 40px ⇒ 卡片一会儿大一会儿小，而且**逐手跳**。
+   战报那边同样被牵着走（251.75 ↔ 268.38），用户看到的「卡片逐渐变小」
+   其实是「底栏偶尔变高」，两个区一起被压。
+   ⇒ 底栏高度**钉死成常量**（桌面 96px / 手机 104px），内部两个分支都撑满它。
+     这样无论哪个分支在显示、无论技能有几门，卡片区与战报区的可用高度都是常数。
+   ⚠ 96 是量出来的：技能键 60 + 上下 padding 15 + 边框 ≈ 92.92，留 3px 余量。
+     改这里的数必须先跑 _v435_layout_probe，别凭感觉调。 */
 #xz-jjb-bar{
   flex:none;position:relative;z-index:2;
-  display:flex;gap:8px;align-items:stretch;min-width:0;flex-wrap:wrap;
+  /* ★ v435：**不换行**。旧写法 flex-wrap:wrap 在 720px 里放不下「3 门技能 + 4 个功能键」时
+     会折成两行 —— 而两行是 92.92px、一行是 53.25px，高度一涨一落正是卡片区跳动的来源。
+     现在改成单行 + 技能区横滑（与 buff 栏同一套办法），高度恒为 96px。 */
+  display:flex;gap:8px;align-items:stretch;min-width:0;flex-wrap:nowrap;
+  height:96px;min-height:96px;max-height:96px;
   padding:9px 16px calc(6px + env(safe-area-inset-bottom,0px));
   border-top:1px solid var(--xz-line);
   background:linear-gradient(180deg,rgba(255,255,255,.012),transparent);
+  overflow:hidden;
 }
-.xz-jjb-skwrap{display:flex;align-items:stretch;gap:6px;flex:1 1 380px;min-width:min(100%,520px);}
+/* 技能滑轨那一坨：占满剩余宽度，**不换行**（换行会顶破 96px 的定高） */
+.xz-jjb-skwrap{display:flex;align-items:stretch;gap:6px;flex:1 1 auto;min-width:0;}
 .xz-jjb-skrow{
   display:flex;gap:8px;flex:1 1 auto;min-width:0;
   overflow-x:auto;scrollbar-width:none;padding-bottom:2px;
@@ -22973,11 +23131,17 @@ var XZ_JJB_SKIN = `
   color:var(--xz-ink);border-color:var(--xz-line-2);background:rgba(255,255,255,.03);
 }
 #xz-jjb-flee{color:#c98d86;border-color:rgba(255,107,107,.22);}
-#xz-jjb-flee:hover{color:#ff8a8a;border-color:rgba(255,107,107,.45);}
+#xz-jjb-flee:hover:not(:disabled){color:#ff8a8a;border-color:rgba(255,107,107,.45);}
+/* ★ v435：「逃跑」改成常驻按钮（不再按回合出现/消失），非你回合时置灰。
+   置灰样式必须写出来 —— 否则按钮看着还是可点的红色，玩家会一直点它。 */
+#xz-jjb-flee:disabled{color:var(--xz-ink-3);border-color:var(--xz-line);opacity:.42;cursor:not-allowed;}
+#xz-jjb-flee:disabled:hover{color:var(--xz-ink-3);border-color:var(--xz-line);background:transparent;}
 .xz-jjb-mb.on{color:var(--xz-gold-2);border-color:rgba(201,168,106,.45);background:rgba(201,168,106,.07);}
+/* 「时序推进中…」占位行：底栏定高 96px 只剩它一个时，垂直居中 —— 
+   否则那行字贴在顶上、下面空 40px，看着像"按钮没渲染出来"。 */
 .xz-jjb-hint{
   display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--xz-ink-3);
-  padding:10px 0;
+  padding:10px 0;flex:1 1 auto;min-width:0;align-self:center;
 }
 .xz-jjb-hint b{font-family:var(--xz-num);color:var(--xz-gold-2);font-weight:700;}
 
@@ -23025,9 +23189,16 @@ var XZ_JJB_SKIN = `
   .xz-jjb-rlm{font-size:10.5px;}
   .xz-jjb-hprow,.xz-jjb-mprow{gap:7px;margin-bottom:5px;}
   .xz-jjb-bar-txt{font-size:10px;}
-  .xz-jjb-bf{height:19px;font-size:9.5px;padding:0 6px 0 4px;gap:3px;}
+  /* ★ v435：手机端 buff 栏比桌面再高 2px（22px）——手指点中 19px 的方块太难，
+     但**仍只有一栏**，靠横滑看后面的。绝不换行。 */
+  .xz-jjb-bfs{height:22px;min-height:22px;max-height:22px;gap:5px;}
+  .xz-jjb-bf{width:20px;height:20px;}
   .xz-jjb-bf svg{width:12px;height:12px;}
-  #xz-jjb-log{max-height:32%;padding:0 12px;}
+  .xz-jjb-row.is-multi .xz-jjb-bfs{height:19px;min-height:19px;max-height:19px;gap:3px;}
+  .xz-jjb-row.is-multi .xz-jjb-bf{width:19px;height:19px;}
+  /* ★ v435：手机端战报只留 38%（屏幕矮，卡片区更需要高度）；
+     这里**不许写 max-height** —— 那会重新引入「战报抢高度」的老毛病。 */
+  #xz-jjb-log{flex:1 1 38%;max-height:none;padding:0 12px;}
   .xz-jjb-lg{font-size:11.5px;padding:4px 0 4px 17px;}
   .xz-jjb-lg::before{top:9px;width:8px;height:8px;}
   #xz-jjb-bar{gap:7px;padding:9px 10px calc(10px + env(safe-area-inset-bottom,0px));}
@@ -24179,12 +24350,13 @@ function build() {
       var _n = Number(x.n);
       var _numTxt = (x.n != null && _n > 0) ? (_n >= 999 ? '∞' : String(_n)) : '';
       var num = _numTxt ? ('<i class="' + PFX + '-bfn">' + _numTxt + '</i>') : '';
-      /* ★★★ v433：**把文字补回来**。v242 砍掉它是因为卡面只有 152px 宽、塞不下；
-         现在卡片撑满半场，图 + 名 + 层数三样同时给 —— 只画图标的话
-         「穿防」和「破盾」在玩家眼里都是"一把剑"，得长按才知道是什么。 */
+      /* ★★★ v435（用户 2026-10-28）：「buff图标就只要图标，不要显示buff的效果」。
+         v433 曾把文字补回来（理由是「穿防/破盾都是同一把剑」），但实测一排带字的胶囊
+         比血条还宽、卡片被撑得只剩图标缝 —— 卡面回到**纯图标**。
+         文字没有丢：① 桌面悬停看 `title`；② 「增益总览」弹层里仍是全称 + 描述。
+         层数角标（`-bfn`）保留：∞/数字是**状态强度**，不是效果描述。 */
       return '<span class="' + PFX + '-bf ' + x.k + '" title="' + esc(x.t) + '">'
         + '<svg viewBox="0 0 24 24" aria-hidden="true">' + (JJB_ICON_PATHS[key] || JJB_ICON_PATHS.any) + '</svg>'
-        + '<i class="' + PFX + '-bfx">' + esc(x.t) + '</i>'
         + num + '</span>';
     }).join('');
   }
@@ -24471,11 +24643,21 @@ function build() {
         /* ★ v198（用户原话：「新增一个按钮，打不过就可以跑，点击后没有条件，
            直接可以写入当天血量和蓝量和当前战报，这就是主角特权，按钮就两个字，逃跑。」）
            主角特权 = 无条件、不看谁强谁弱、不掷骰、不判定是否成功，按一下立刻脱身。
-           只在**轮到自己**时出现 —— 那是玩家唯一能决策的时刻，也免得敌方回合点错。 */
-        + ((S && S.waiting && S.waiting.isPlayer)
-          ? '<button type="button" id="' + PFX + '-flee" data-jjbflee="1"'
-          + ' title="打不过就跑：无条件脱身，立刻按当前气血与蓝量结算并写入战报">逃跑</button>'
-          : '');
+           ★★★ v435（用户 2026-10-28：「一开始卡片会变大…要固定卡片区和战报区的大小」）：
+           这个按钮原来是**按需渲染**的（只在轮到你时出现）——
+           于是「轮到玩家 / 不是玩家」两态之间，底栏的按钮数从 4 变 3，
+           一排按钮挤不下就换行，底栏高度 92.92px ↔ 53.25px 来回跳，
+           上面两个区跟着被抽走 40px ⇒ 卡片一会儿大一会儿小。
+           **实测数据**（_v435_layout_probe，900×800）：
+             轮到你时 底栏 92.92 / 对阵区 347.33 / 卡高 299.58
+             别人回合 底栏 53.25 / 对阵区 370.38 / 卡高 322.63
+           ⇒ 改成**永远渲染**，不在你回合时置灰（`disabled`）。
+             底栏高度从此恒定，卡片区与战报区不再随回合跳。 */
+        + '<button type="button" id="' + PFX + '-flee" data-jjbflee="1"'
+        + ((S && S.waiting && S.waiting.isPlayer) ? '' : ' disabled')
+        + ' title="' + ((S && S.waiting && S.waiting.isPlayer)
+          ? '打不过就跑：无条件脱身，立刻按当前气血与蓝量结算并写入战报'
+          : '轮到你出手时才能抽身') + '">逃跑</button>';
     }
     return '<span class="' + PFX + '-hint">时序推进中…（第 <b>' + S.tick + '</b> 息）</span>';
   }
@@ -25150,26 +25332,55 @@ function build() {
           ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
         }
       } else if (o.type === 'slashmark') {
-        /* ★ v253：命中剑痕 —— 两道交叉斜斩，随爆闪出现再淡出。 */
+        /* ★ v253：命中剑痕 —— 两道交叉斜斩，随爆闪出现再淡出。
+           ★★★ v435（用户 2026-10-28 第二次报同一件事）：
+             「剑系特效太抽象了，我叫你把剑弧延长，你他妈在干嘛呢，就这么短？」
+           上一版（v401）只把**时长**从 0.40 拉到 1.05、长度基数 1.35，
+           实拍仍然是「目标身上戳着一撮短刺」—— 因为真正决定视觉长度的是这里：
+             `LM = (30 + pr * 18) * len` ⇒ 玄阶 4 道只有 107px，
+             而一张卡宽 300px 上下，107px 连卡面都切不穿，读起来就是"短"。
+           ⇒ 三件事一起改，缺一样都不够长：
+             ① 基准长度 30+18 → **86+64**（约 3 倍）；
+             ② `len` 基数同步上调（见 playAttack），只是乘数，不动它也能到 300px+；
+             ③ **真的画成弧**（quadraticCurveTo + 法向 bow）——
+                直线加长只是"更长的一根刺"，弧才是"剑气斩痕"。
+           时序也一起放宽：前 45% 生长、后 55% 淡出 —— 一挥而就没有"留下"的感觉。 */
         var ttM = o.t - (o.delay || 0);
         if (ttM < 0) return;
         var pr = Math.min(1, ttM / o.dur);
-        var fadeM = 1 - pr;
+        /* 生长曲线：0→~0.45 快速甩出（easeOut），之后保持，整体透明度由 fadeM 收 */
+        var grow = Math.min(1, pr / 0.45);
+        grow = 1 - (1 - grow) * (1 - grow);
+        var fadeM = 1 - Math.pow(pr, 1.6);
         if (fadeM <= 0) return;
         ctx.strokeStyle = o.color;
         ctx.lineCap = 'round';
         ctx.save();
         ctx.translate(o.x, o.y);
         ctx.rotate(o.ang || 0);
-        /* v298：`o.len` / `o.w` 由品阶决定（越高越长越粗） */
-        var LM = (30 + pr * 18) * (o.len || 1);
-        ctx.globalAlpha = fadeM * 0.95;
-        ctx.lineWidth = 3.4 * (o.w || 1);
-        ctx.beginPath(); ctx.moveTo(-LM * 0.5, -LM * 0.34); ctx.lineTo(LM * 0.5, LM * 0.34); ctx.stroke();
-        ctx.globalAlpha = fadeM * 0.58;
-        ctx.lineWidth = 2.0;
-        ctx.beginPath(); ctx.moveTo(-LM * 0.42, LM * 0.30); ctx.lineTo(LM * 0.42, -LM * 0.30); ctx.stroke();
+        /* v298：`o.len` / `o.w` 由品阶决定（越高越长越粗）
+           v435：基准从 (30+pr*18) 提到 (86+64*grow)，乘 len 之后玄阶约 320px、神阶约 520px */
+        var LM = (86 + 64 * grow) * (o.len || 1) * (0.35 + 0.65 * grow);
+        /* 弧的弯度：正负交替（每道斩痕弯的方向不同，交叉后像"×"而不是"#"） */
+        var bowM = LM * 0.17 * ((o.idx || 0) % 2 ? 1 : -1);
+        var _drawSweep = function (dx1, dy1, dx2, dy2, alpha, lw, bow) {
+          ctx.globalAlpha = alpha;
+          ctx.lineWidth = lw;
+          ctx.beginPath();
+          ctx.moveTo(dx1, dy1);
+          /* 二次贝塞尔：控制点在中点、沿法向偏移 bow ⇒ 一道真正的弧 */
+          var mx = (dx1 + dx2) / 2 + bow * 0.18, my = (dy1 + dy2) / 2 - bow;
+          ctx.quadraticCurveTo(mx, my, dx2, dy2);
+          ctx.stroke();
+        };
+        /* 主斩：从一侧劈到另一侧（不是"中点向两边"，要有明确的来势与去势） */
+        _drawSweep(-LM * 0.5, -LM * 0.34, LM * 0.5, LM * 0.34,
+          fadeM * 0.95, 3.6 * (o.w || 1), bowM);
+        /* 副斩：反向交叉，略短略细 —— 两道才叫"斩"，一道只是"一条线" */
+        _drawSweep(-LM * 0.42, LM * 0.30, LM * 0.42, -LM * 0.30,
+          fadeM * 0.58, 2.1 * (o.w || 1), -bowM * 0.7);
         ctx.restore();
+        ctx.globalAlpha = 1;
       } else if (o.type === 'bladeRing') {
         /* ★ v298：剑系专属的命中波 —— **横向拉长的椭圆**，不是非剑系那个正圆环。
            形状不同才叫「两套」：同一个圆环换个颜色，玩家根本分不出来。 */
@@ -25470,7 +25681,15 @@ function build() {
         /* ★★★ v401：剑痕**时间与尺寸全面加大**（用户 2026-10-26：
              「剑系攻击特效打到人身上的斩击太短太短了，根本看不出来有特效，要大幅度延长」）
            原来：dur 0.40s / life D+0.50s / len 0.85+b*0.14 / w 1+b*0.06
-           现在：dur 1.05s（≈2.6×）/ life D+1.20s / len 1.35+b*0.22（≈1.6×）/ w 1.6+b*0.10
+           现在：dur 1.05s（≈2.6×）/ life D+1.35s / len 1.85+b*0.13 / w 1.6+b*0.10
+           ★★★ v435（用户 2026-10-28 第二次报：「剑弧延长，你他妈在干嘛呢，就这么短？」
+                并明确「我说的剑弧是攻击特效，不是飞行那个」）：
+             v401 只动了时长和 1.35 的倍率 —— 落在屏幕上仍是 107px 的短刺
+             （真实长度 = (30+18) × len ≈ 48 × 2.23），连一张 300px 的卡面都切不穿。
+             这次直接改**基准长度**（86+64 ⇒ 150，约 3.1×）并让 `len` 继续随品阶长：
+               凡 2 道 ≈ 316px｜玄 4 道 ≈ 356px｜神 7 道 ≈ 414px
+             —— 一斩横穿整张卡，这才是「斩击」。绘制侧同时改成二次贝塞尔弧
+             （见 slashmark 分支的 `_drawSweep`），不再是"更长的直线"。
            ⚠ 三道参数一起动的原因：
              · 只延长 dur 不动 life ⇒ 对象在动画播完前就被回收，等于白改
              · 只延长时长不加长 ⇒ 屏幕上是一条「慢慢淡出的短痕」，还是看不清
@@ -25484,8 +25703,11 @@ function build() {
               ang: _ang + (_mi - (_blades - 1) / 2) * 0.34,
               dur: 1.05,
               delay: D + _mi * 0.045,
-              len: 1.35 + _blades * 0.22,
+              len: 1.85 + _blades * 0.13,
               w: 1.6 + _blades * 0.10,
+              /* v435：弧的弯向逐道交替（偶数道向左弯、奇数道向右弯）——
+                 全朝同一边会读成"一把梳子"，交替才是交叉斩。 */
+              idx: _mi,
               color: col, t: 0, life: D + 1.35 + _mi * 0.045
             });
           }
@@ -28712,10 +28934,10 @@ function xzParseBattleTag(text) {
    旧代码只认方括号 ⇒ parsedEnemies 为空 ⇒ 直接 return，一句提示都没有。 */
 function xzNamesFromLine(line) {
   var arr = (typeof parseNamesFromBracketList === 'function') ? parseNamesFromBracketList(line) : [];
-  if (arr && arr.length) return arr;
+  if (arr && arr.length) return arr.map(xzCleanPersonName).filter(function (x) { return !!x; });
   return String(line || '').split(/[、，,；;\/|]+|\s+和\s+|\s+与\s+/).map(function (s) {
     return String(s).replace(/[\[\]【】（）()<>]/g, '').replace(/^\s*(?:以及|和|与)\s*/, '').trim();
-  }).filter(function (s) { return !!s && s.length <= 16; });
+  }).map(xzCleanPersonName).filter(function (s) { return !!s && s.length <= 16; });
 }
 /* ⑤ 「有名单、没标签」的兜底（v205）。
    用户实测：「完全检测不到标签」，而模型经常只写

@@ -321,12 +321,56 @@ const FOUR = [
 
 let total = 0, bad = 0;
 const diffs = [];
+/* ══════════ ★★★ v452：`kind` 是**标签**，不是算式 ★★★ ══════════
+   这道闸验的是「抽出来的引擎，跟当初写在卡里的算式算得一模一样」。
+   而 v452 用户定案把 `kind` 的**取值**从行为名（`buff`/`debuff`/`dot`/`cond`…）
+   改成了 6 大类归属（`伤害`/`召唤`/`常驻增益`/`常驻减益`/`条件增益`/`条件减益`），
+   具体行为移到了新字段 `beh`。
+
+   后果：对照物是 04 改造前的**历史快照**（.bak-v394-CDN改造前 / .bak-v452-改6类前），
+   里面的 `kind` 必然还是旧值 ⇒ 25 格 `_v75ParseEffect` 全红。
+   那个红**不是引擎算错了**，是"标签改名了"—— 判据过期，不是 bug。
+
+   ⚠ 但绝不能因此放宽整道闸：算数部分（dmgPct / dmgFlat / dur / sub / isBuff…
+     以及所有 calcDamage 类的数值格）必须仍然逐格全等。
+   ⇒ 做法：比对前把两边结果里的 `kind` 归一化成一个固定占位符，
+     **`beh` 与其余全部字段照常比** —— 行为一个字节都藏不住。
+   ⚠ 别把 `beh` 也归一化：`beh` 才是"怎么算"，那正是本闸要守的东西。
+   ⚠ 别把整条 `_v75ParseEffect` 从比对里删掉：它覆盖 25 格解析结果，
+     删掉等于把解析器的回归网剪了。 */
+function normalizeKind(v) {
+  if (Array.isArray(v)) return v.map(normalizeKind);
+  if (v && typeof v === 'object') {
+    const o = {};
+    for (const k of Object.keys(v)) {
+      if (k === 'kind') { o[k] = '<KIND>'; continue; }
+      /* ★ v452：`beh` 是**新增字段**，对照物（历史快照）里根本没有它。
+         两边都有的字段照常比；只有新引擎单边才有 `beh` 时，把它置成占位符
+         —— 否则"新增一个字段"会永久红，而那不是算错了。
+         ⚠ 但一旦两边都有 `beh`（下一份快照就会有），就必须逐字相等 ——
+           所以这里不是"永远跳过 beh"，而是"缺了才跳过"。
+         ⚠ 绝不允许反过来：不许因为 `beh` 是新的就把它的**取值**也豁免掉。 */
+      o[k] = normalizeKind(v[k]);
+    }
+    return o;
+  }
+  return v;
+}
+/* 只在**一侧缺 beh** 时补占位符，两侧都有就照原样比 */
+function alignBeh(a, b) {
+  const hasA = a && typeof a === 'object' && 'beh' in a;
+  const hasB = b && typeof b === 'object' && 'beh' in b;
+  if (hasA && !hasB) { b = Object.assign({}, b, { beh: '<NEW>' }); a = Object.assign({}, a, { beh: '<NEW>' }); }
+  else if (hasB && !hasA) { a = Object.assign({}, a, { beh: '<NEW>' }); b = Object.assign({}, b, { beh: '<NEW>' }); }
+  return [a, b];
+}
 function cmp(label, a, b) {
   total++;
-  const sa = JSON.stringify(a), sb = JSON.stringify(b);
+  const pair = alignBeh(a, b);
+  const sa = JSON.stringify(normalizeKind(pair[0])), sb = JSON.stringify(normalizeKind(pair[1]));
   if (sa !== sb) {
     bad++;
-    if (diffs.length < 40) diffs.push(label + '\n      卡内: ' + String(sa).slice(0, 200) + '\n      独立: ' + String(sb).slice(0, 200));
+    if (diffs.length < 40) diffs.push(label + '\n      卡内: ' + String(sa).slice(0, 300) + '\n      独立: ' + String(sb).slice(0, 300));
   }
 }
 /* 两边都要能调；沙箱那边用 vm 求值，避免把对象跨上下文传坏 */

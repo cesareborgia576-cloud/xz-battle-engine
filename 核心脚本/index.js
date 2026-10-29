@@ -990,6 +990,44 @@ try {
   if (typeof globalThis !== 'undefined') { globalThis.V81_EFFECT_CAP = V81_EFFECT_CAP; globalThis.v81CapEffectKeys = v81CapEffectKeys; }
 } catch (eV81) {}
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★★ v468：取**这个单位最好的那门玄技是什么品质** ★★★
+   唯一消费者 = 普攻的定档锚（见 calcDamage 里「普通攻击改成玄技的一半」）。
+
+   ── 为什么要"最好的那门"，而不是固定一档 ──────────────────────────────
+   用户的诉求是「普攻 ≈ 玄技的一半」。如果固定用黄阶：
+     · 低境界玩家（只有黄阶招）→ 50%，正好；
+     · 高境界玩家（已经天阶招）→ 普攻按黄阶算，占天阶招的 28%，又变回"过低"。
+   固定用天阶则反过来：一门黄阶招都没有的玩家，普攻反超主武器。
+   ⇒ 取「他自己最好的那门」的一半，两种情况下都成立，而且**不随境界漂移**。
+
+   ⚠ 只看 `skills`（玄技），**不看 `passive`/`artifact`**：玄诀与兵器没有"一击伤害"
+     这个概念（它们是常驻增益），拿它们的品质当锚会把普攻抬到不该有的高度。
+   ⚠ 取不到任何玄技时返回 `'黄阶'` —— 与 07 `emptyItem` 的默认品质同源。
+     开局第 3 页默认就是黄阶，玩家打法一致。
+   ══════════════════════════════════════════════════════════════════════════ */
+var XZ_QUAL_RANK_OF = { '凡阶': 0, '黄阶': 1, '玄阶': 2, '地阶': 3, '天阶': 4, '神阶': 5 };
+function xzBestSkillQualityOf(f) {
+  try {
+    var list = (f && Array.isArray(f.skills)) ? f.skills : [];
+    var best = -1, bestQ = '';
+    for (var i = 0; i < list.length; i++) {
+      var q = String((list[i] && (list[i].quality || list[i].品质)) || '').trim();
+      if (!q) continue;
+      var r = XZ_QUAL_RANK_OF[q];
+      if (r === undefined) {
+        /* 「黄」这种没带「阶」的写法也认 —— 与 qualityPowerOf 的兼容口径一致 */
+        r = XZ_QUAL_RANK_OF[q.replace(/阶$/, '') + '阶'];
+        if (r !== undefined) q = q.replace(/阶$/, '') + '阶';
+      }
+      if (r === undefined) continue;
+      if (r > best) { best = r; bestQ = q; }
+    }
+    return bestQ || '黄阶';
+  } catch (eBQ) { return '黄阶'; }
+}
+try { if (typeof globalThis !== 'undefined') globalThis.xzBestSkillQualityOf = xzBestSkillQualityOf; } catch (eBQ2) {}
+
 function realmRank(realm) {
   var r = String(realm == null ? '' : realm).trim();
   if (!r) return -1;
@@ -5751,6 +5789,52 @@ function xzEffectSetHitsFoe(eff, ownerName, skillName) {
   return false;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★★ v468：**目标名唯一归一入口** ★★★
+   用户 2026-10-30 定的新四类（开局脚本第 3 页那个下拉，与本函数同源）：
+     敌方单体 / 敌方范围 / 我方群体 / 自身
+   与他点名下架、改名的：
+     · 「环境」→ **正式下架**（「目标为环境删掉吧，正式下架」）
+     · 「单体」→ 敌方单体  「范围」→ 敌方范围
+     · 新增「我方群体」（原来没有这个落点）
+
+   ── 为什么必须有一个归一函数，而不是各处直接比字符串 ─────────────────────
+   目标名会**三处并存**：卡内变量的存量数据（老存档写着「单体」）、
+   AI 现写的（可能写新名，也可能照世界书旧版写旧名）、07 界面的下拉。
+   三处各比各的 ⇒ 同一句话在三条路上判出三个结果，而且**都不报错** ——
+   这正是本项目最贵的病（「同一件事两处实现只改一处」）。
+   ⇒ 全仓判目标**只许**调 `xzTargetOf()`，别处一律不许再写 `=== '范围'`。
+
+   ── 归一表（左 = 任意历史写法，右 = 新四类之一）────────────────────────
+     '自身' / '自己' / '我方自身'          → 自身
+     '我方群体' / '友方' / '己方' / '队友' / '群体' → 我方群体
+     '敌方范围' / '范围' / '群体伤害'      → 敌方范围
+     其余（含 '敌方单体' / '单体' / 空串 / 未知）→ 敌方单体   ← **兜底打人**
+   ⚠ 兜底必须是「敌方单体」而不是「自身」：空目标的老档里绝大多数是攻击招，
+     兜成自身会让它们全部变成自伤（v348 那次事故的形状）。防御性默认要选"不会反噬"的那个。
+   ⚠ '环境' **不在映射表里**，故意让它落进兜底 = 敌方单体。下架的含义是
+     「这场合打谁不再由它决定」，不是「让它们变成哑巴、一个目标都没有」——
+     老存档里写过「环境」的招仍然要能出手，落成敌方单体最接近它当年的行为
+     （当年「环境」本来也没有独立结算，只在按钮上显示一枚标签）。
+   ══════════════════════════════════════════════════════════════════════════ */
+var XZ_TARGET_CANON = {
+  '自身': '自身', '自己': '自身', '我方自身': '自身',
+  '我方群体': '我方群体', '友方': '我方群体', '己方': '我方群体',
+  '队友': '我方群体', '群体': '我方群体', '我方范围': '我方群体',
+  '敌方单体': '敌方单体', '单体': '敌方单体',
+  '敌方范围': '敌方范围', '范围': '敌方范围', '群体伤害': '敌方范围'
+};
+function xzTargetOf(t) {
+  var s = String(t == null ? '' : t).trim();
+  return XZ_TARGET_CANON[s] || '敌方单体';
+}
+/* 这个目标是不是打敌人的（含范围） */
+function xzTargetIsFoe(t) { var c = xzTargetOf(t); return c === '敌方单体' || c === '敌方范围'; }
+/* 这个目标是不是打多个（只对敌方范围成立；我方群体是"给我方多人"，不走 aoe 伤害链） */
+function xzTargetIsAoe(t) { return xzTargetOf(t) === '敌方范围'; }
+/* 落点是自己（含我方群体里施术者自己那一条） */
+function xzTargetIsSelfSide(t) { var c = xzTargetOf(t); return c === '自身' || c === '我方群体'; }
+
 /* 这门招打不打敌人（唯一的出手判据）
    ★★ v216b：ownerName 是**施术者名字**。必须传 —— 伤害可能只写在战前翻译的机制名
       （`伤害:9`）里，而招式 `效果` 原文是纯叙事（比如「刀锋过处，赤焰翻卷」）。
@@ -5759,8 +5843,11 @@ function xzEffectSetHitsFoe(eff, ownerName, skillName) {
 function xzSkillHitsFoe(s, ownerName) {
   try {
     if (!s || typeof s !== 'object') return false;      /* 空对象/空值：不是招式，别当成攻击技 */
-    var t = String(s.目标 || '').trim();
-    if (t === '自身' || t === '友方' || t === '己方' || t === '队友') return false;
+    /* ★ v468：目标判据收进 `xzTargetOf`（唯一入口）。原来是一串字面量比较，
+       加一个目标名就得在这里补一条 —— 加漏了的下场是「新目标静默当成打人的」。
+       ⚠ 这一条是**硬判据**：写着「自身 / 我方群体」的招，不管效果里写了多少伤害，
+         都不许走打人那条路（否则就是用户报的"打自己"）。 */
+    if (xzTargetIsSelfSide(s.目标)) return false;
     var nm = String(s.name || s.玄技名 || '');
     var trAtoms = [];
     if (ownerName) {
@@ -5890,8 +5977,13 @@ function _normalizeSkillItemCore(s, unit) {
            明确写「范围 / 范围式」。这是**设计上更正确**的方向 ——
            旧机制允许「单体招因为抽到范围机制名而偷偷变成群体」，本就是名不副实。 */
       try {
-        var _declared = (s.目标 === '范围' || s.攻击类型 === '范围' || s.v2pos === '范围式' || s.pos === '范围式');
-        return (sType === '增益') ? '增益' : (_declared ? '范围' : '单体');
+        /* ★ v468：判据收进 `xzTargetOf` —— 旧写法是四个字面量或来或去，
+           而且 `s.目标 === '范围'` 在新名字下永远不成立 ⇒ 范围招静默退化成单体。 */
+        var _declared = xzTargetIsAoe(s.目标) || s.攻击类型 === '范围' || s.v2pos === '范围式' || s.pos === '范围式';
+        /* ★ v468：`我方群体` 虽然也是"打多个"，但它不是进攻 —— 归 `增益`（走 executeBuffSkill）。
+           不然一门「群体回血」会被判成范围攻击，然后在目标身上找血加。 */
+        if (sType === '增益' || xzTargetIsSelfSide(s.目标)) return '增益';
+        return _declared ? '范围' : '单体';
       } catch (e) {
         return (sType === '增益' ? '增益' : '单体');
       }
@@ -7563,7 +7655,7 @@ function prepareBattle(allyNames, enemyNames) {  var statData = getRawStatData()
           _sk.skillType = _hit ? '进攻' : '增益';
           if (!_hit) _sk.atkType = '增益';
           else if (String(_sk.atkType) === '增益') {
-            _sk.atkType = (String(_sk.目标 || '') === '范围' || _sk.v2pos === '范围式') ? '范围' : '单体';
+            _sk.atkType = (xzTargetIsAoe(_sk.目标) || _sk.v2pos === '范围式') ? '范围' : '单体';
           }
         } catch (eRHit) {}
       });
@@ -9404,7 +9496,43 @@ function internalWoundBacklash(actor, skill) {
   return true;
 }
 
-function executeBuffSkill(actor, skill, shownAs) {
+function executeBuffSkill(actor, skill, shownAs, forUnit) {
+  /* ══════════════════════════════════════════════════════════════════════
+     ★★★ v468：`我方群体` 的**唯一**展开点 ★★★
+     用户 2026-10-30：「新增一个我方群体」。
+     在这之前目标只有 自身 / 单体 / 范围 / 环境 —— 「给我方多人加 buff」**没有落点**：
+     写「自身」只加自己，写「范围」会被当成对敌的群攻（`atkType='范围'` → 走伤害链）。
+
+     ── 为什么在这里展开、而不是在调用方写一个 for 循环 ──────────────────
+     调用方有 5 处（AI 出手 / 玩家出手 / 演武 / 变身 / 道具），
+     每处各写一遍 = 5 份会漂的实现；而且**手级结算 `processHandBuffs` 会跑 5 次**
+     （每跑一次就替所有单位结算一手 buff，等于凭空多推 4 手节奏）。
+     ⇒ 在这里展开：进入时先判一次，逐人递归，`processHandBuffs` 只走最外层那一次。
+
+     ⚠ 递归时必须带第 4 个参数 `forUnit`：它就是「这一轮替谁接招」。
+       不带的话会无限递归（每个友方都再展开一遍全体）。
+     ⚠ 落点仍然走**原来的 applyV75Effects**，一条新分支都不加 ——
+       另写一套群体施加逻辑，就是本项目最贵那个病（同一件事两处实现）的温床。
+     ══════════════════════════════════════════════════════════════════════ */
+  if (!forUnit && xzTargetOf(skill && skill.目标) === '我方群体') {
+    var _grp = [];
+    try {
+      var _side = (actor && actor.side) || 'ally';
+      var _all = (typeof BattleState !== 'undefined' && BattleState)
+        ? ((_side === 'ally') ? BattleState.allies : BattleState.enemies) : null;
+      if (Array.isArray(_all)) _grp = _all.filter(function (u) { return u && u.alive; });
+    } catch (eGrp) { _grp = []; }
+    /* 傻大个兜底：连自己都取不到时，至少给施术者加一份（不然这一手是纯空的） */
+    if (!_grp.length) _grp = [actor];
+    for (var _gi = 0; _gi < _grp.length; _gi++) {
+      /* ⚠ 第 3 个参数传空：`shownAs` 是「召唤物替主人放」那条语义，
+         群体施加时写成「炎灵 为 每个队友 施展」会刷屏且语义错。 */
+      try { executeBuffSkill(actor, skill, '', _grp[_gi]); } catch (eGrpOne) {}
+    }
+    return;
+  }
+  /* 这一手真正接招的单位：群体展开时是队友，其余情况就是施术者自己 */
+  var _holderRoot = forUnit || actor;
   /* ★ v255：增益技也是「一次出手」，手级结算同样要走一次（与 executeAttack 对称）。 */
   try { if (typeof processHandBuffs === 'function') processHandBuffs(actor); } catch (eHbb) {}
   showSkillBannerFx(skill.name, skill.品质 || skill.quality, actor.side === 'ally',
@@ -9512,7 +9640,10 @@ function executeBuffSkill(actor, skill, shownAs) {
       if (typeof _v75ParseEffect !== 'function' || typeof applyV75Effects !== 'function') return;
       var _p = _v75ParseEffect(String(eff));
       if (!_p || _p.beh === 'narrative' || _p.beh === 'damage') return;   /* 增益技不该有伤害条目 */
-      var _holder = actor;
+      /* ★ v468：`我方群体` 展开后，这一手接招的是 `_holderRoot`（队友），不是施术者。
+         原来写死 `actor` ⇒ 群奶/群盾会把每一份都加到施术者一个人身上
+         （玩家看到的是「写了群体，只有自己回血」）。 */
+      var _holder = _holderRoot || actor;
       if (_p.beh === 'heal') {
         var _hv = _p.dmgFlat > 0 ? _p.dmgFlat : Math.max(1, Math.round((_holder.maxHp || 1) * (_p.dmgPct || 0)));
         /* ★ v297：治疗也吃升级区间 —— **这条才是玩家放奶技真正走的路**，
@@ -9665,8 +9796,9 @@ function executeBuffSkill(actor, skill, shownAs) {
         var p = (typeof _v75ParseEffect === 'function') ? _v75ParseEffect(txt) : null;
         if (!p || p.beh === 'damage' || p.beh === 'narrative') return;   /* 增益技不该有伤害条目 */
         /* ★ 落点：`holder` = 自己；`单体型增益` 由调用方传 teammate 进来。
-           这里只看一个口径 —— 「目标」写自身/友方 ⇒ 落点就是施术者/受术者，绝不落到敌人身上。 */
-        var holder = actor;
+           这里只看一个口径 —— 「目标」写自身/友方 ⇒ 落点就是施术者/受术者，绝不落到敌人身上。
+           ★ v468：`我方群体` 展开后接招的是 `_holderRoot`（队友），见函数头那段说明。 */
+        var holder = _holderRoot || actor;
         if (p.beh === 'heal') {
           var hv = p.dmgFlat > 0 ? p.dmgFlat : Math.max(1, Math.round((holder.maxHp || 1) * (p.dmgPct || 0)));
           hv = xzClampHealShield(hv, skill, actor, 'heal');     /* ★ v297 区间封顶 */
@@ -10430,7 +10562,8 @@ var XZ_ATOM_TYPES = {
        ④ 敌方数量  敌多增伤 / 敌少增伤
        ⑤ 自身速度  快攻增伤 / 慢攻增伤
        ⑧ 对方速度  敌快增伤 / 敌慢增伤
-     （⑥ 溅射 → `溅射`；⑦ 叠层兑换 → `叠爆`，两者见下方各自登记处） */
+     （⑥ 溅射 → `溅射`；⑦ 叠层兑换 → `叠满换伤`，两者见下方各自登记处）
+     ⚠ v468：⑦ 的机制名由 `叠爆` 改名为 `叠满换伤`（用户点名），旧名走 `XZ_ATOM_RETIRED` 重定向。 */
   /* ★ v452：条件类**按结果方向**分到「条件增益 / 条件减益」——
      不再笼统一个 `cond`。名字里带「减伤」的落在条件增益（自己挨打更轻），
      其余落在条件增益（自己出手更重）；`to:'dr'` 由 XZ_COND_TYPES 决定落点。 */
@@ -10454,17 +10587,59 @@ var XZ_ATOM_TYPES = {
   '溅射': { kind: '常驻增益', beh: 'splash' },
 
   /* ═══ ★ v448：叠层兑换（用户第 ⑦ 条「叠层到一定数量就进行兑换」）═══
-     `叠爆:5` = 每次命中 +1 层，满 5 层自动兑换（伤害 + 增益 + 减益三样齐发），然后清零。
-     `叠爆:5/伤害` = 只兑换伤害；`叠爆:5/伤害+减益` = 两样；
-     `叠爆:5:8` = 8 手内没叠满就散（手数见下方 `xzStackTick`）。
-     ⚠ 名字 2 字，在 `XZ_ATOM_LINE_RE` 的 `[一-龥]{1,4}` 之内。
+     `叠满换伤:5` = 每次命中 +1 层，满 5 层自动兑换（伤害 + 增益 + 减益三样齐发），然后清零。
+     `叠满换伤:5/伤害` = 只兑换伤害；`叠满换伤:5/伤害+减益` = 两样；
+     `叠满换伤:5:8` = 8 手内没叠满就散（手数见下方 `xzStackTick`）。
+     ⚠ 名字 4 字，正好在 `XZ_ATOM_LINE_RE` 的 `[一-龥]{1,4}` 之内（★ v468 用户改名：
+       「叠爆你倒是改成叠满换伤啊」。原名 2 字也合规，改名纯粹是为了读得出意思）。
      ⚠ **不能复用 V2_STATES**：那张表是「挂在谁身上就一直挂到到期」的势种，
        而这条要的是「攒够就清空」，语义不同。表里唯一带 `full` 质变的
        `v2FullOnce` 又是**每场每状态只触发一次** —— 用它就只能爆一次。
      ⚠ 兑换的输出**全部走已有活通道**（`applyDirectDamage` / 势种 `增伤` / 势种 `破甲`），
        不新建任何"有读无写"的键。这是本项目最贵那类 bug 的预防：
        新写一个 ~~`stackDmgPct`~~ 之类的键，没人消费 = 玩家写了却毫无反应。 */
-  '叠爆': { kind: '条件增益', beh: 'stack' },
+  '叠满换伤': { kind: '条件增益', beh: 'stack' },
+  /* ══════════════════════════════════════════════════════════════════════
+     ★★★ v468：叠层增伤 / 叠层减伤（用户点名要的两条）★★★
+     用户原话：「然后还有你妈的我的叠层减益呢，倒是给叠层增益和叠层减益
+       写进对应的条件增益和条件减益里啊。所有可以叠层的增益或减益全部重写一遍，
+       比如"叠层增伤"」。
+
+     ── 它们和「增伤 / 减伤」差在哪 ────────────────────────────────────
+     `增伤:20:3` 是**一次性给 20%**，三层手就没了。
+     `叠层增伤:20:3` 是**每命中一次叠一层**，层数各自还有追加效果，
+     攒满还触发满层质变 —— 走的是势种 `增伤`（V2_STATES 里 dmg/track 都有真消费点）。
+
+     ── 为什么必须走势种，不能自己记账 ────────────────────────────────
+     「叠层」这件事引擎里只有两套真实现：
+       · 势种 `V2_STATES`（挂到到期，有满层质变，`v2Add`/`v2StateVal` 一对读写）
+       · `_xzStack`（攒够清零再攒，只有 `叠满换伤` 在用）
+     自己新写一个 ~~stackDmgPct~~ 之类的键 = 有读无写，玩家写了毫无反应 ——
+     （用删除线是因为那个名字**故意不存在**：它是"别这么写"的反面举例。
+       闸 `_v404_stale_refs` 会把反引号里的词当成"必须存在的符号"，
+       不划掉就报「注释指向不存在的符号」，而那条红的真实含义是"我举了个假例子"。）
+     本项目最贵那类 bug（见 v448 叠爆那段注释里的同款警告）。
+     ⇒ 增益叠层落势种 `增伤`，减益叠层落势种 `破甲`（vuln 易伤，真在算的乘区）。
+
+     ── 为什么 kind 是「条件」而不是「常驻」 ──────────────────────────
+     用户把分类口径说死了：「按照我的常驻增益和条件增益，常驻减益和条件减益去分类」。
+     常驻 = 挂上就一直有、不看条件；条件 = **要看场上发生什么才涨**。
+     叠层要看「命中几次」，与条件缩放（看血量比/人数比）同一个性质 ⇒ 归条件。
+     ⚠ `叠层增伤` 归条件增益、`叠层减伤` 归条件减益 —— 一涨一消，两边对立。
+     ⚠ 名字 4 字，在 `XZ_ATOM_LINE_RE` 的 `[一-龥]{1,4}` 之内，合规。 */
+  '叠层增伤': { kind: '条件增益', beh: 'v2stack', sub: '增伤' },
+  /* ★ v468 修正：`叠层减伤` 原先被我归成「条件减益」并 sub:'破甲' —— **两处都错**：
+       ① 它的落点是给自己叠「减伤」（dr 减伤乘区），受益人是自己 ⇒ 归条件增益；
+       ② `sub` 指向 `破甲`（对方易伤）会让玩家看到「叠层减伤」却给敌人挂易伤，
+          方向完全反了，而且不报错 —— 正是本项目最贵那类。
+     ⇒ sub 必须是 `减伤`（V2_STATES 里 side:'self', dr:0.05）。 */
+  '叠层减伤': { kind: '条件增益', beh: 'v2stack', sub: '减伤' },
+  /* ★ v468：给对面挂的两支叠层（用户点名要的「叠层减益」）——
+     引擎里 foe 侧真有消费点的势种只有这两支，所以只登记这两条。
+     `破甲` → vuln 易伤（xzVulnOf 里 pj*0.06）；`减速` → slow 退条 + outCut 削伤。 */
+  '叠层破甲': { kind: '条件减益', beh: 'v2stack', sub: '破甲' },
+  '叠层减速': { kind: '条件减益', beh: 'v2stack', sub: '减速' },
+
 
   /* ══════════════════════════════════════════════════════════════════════
      ★★★ v450：这批是**机制名**，不是招式名 —— 从 `XZ_BUFF_MECH` 里升格上来的 ★★★
@@ -10491,7 +10666,7 @@ var XZ_ATOM_TYPES = {
        `驱散`   ← 破法                （散掉对方增益）
        `乱序`   ← 奇门                （推退对方行动条）
        `换命`   ← 换命                （与同伴交换气血比例）
-       `焚身`   ← 焚身诀              （割血换增伤）
+       `牺牲`   ← 焚身诀              （割血换增伤；★ v468 用户点名改名）
        `剑意`   ← 凝意守心 / 剑意潮生 / 剑冢领域（蓄养剑意层）
        `势种`   ← 领域 / 通明领域      （每回合自生本路势种）
      ⚠ 名字全在 4 个汉字以内（`XZ_ATOM_LINE_RE` 是 `[一-龥]{1,4}`），超了匹配不上。
@@ -10507,7 +10682,7 @@ var XZ_ATOM_TYPES = {
        `净化:1` / `驱散:1` = 清一条（数值即条数，0/省略按 1 算）
        `乱序:200`  = 对方全体退条 200
        `换命:30`   = 与同伴交换气血比例（数值为可交换的最大百分点差）
-       `焚身:20:2` = 割 20% 气血，两手内增伤
+       `牺牲:20:2` = 割 20% 气血，两手内增伤
        `剑意:1:2`  = 两手内每次命中额外蓄养 1 层剑意
        `势种:3`    = 三手内每回合自生 1 层本路势种 */
   '反震': { kind: '常驻增益', beh: 'buff', sub: 'thorns' },
@@ -10517,7 +10692,7 @@ var XZ_ATOM_TYPES = {
   '驱散': { kind: '常驻增益', beh: 'buff', sub: 'dispel' },
   '乱序': { kind: '常驻增益', beh: 'buff', sub: 'shuffle' },
   '换命': { kind: '常驻增益', beh: 'buff', sub: 'swapHp' },
-  '焚身': { kind: '常驻增益', beh: 'buff', sub: 'burnSelf' },
+  '牺牲': { kind: '常驻增益', beh: 'buff', sub: 'burnSelf' },
   '剑意': { kind: '常驻增益', beh: 'buff', sub: 'swordStack' },
   '势种': { kind: '常驻增益', beh: 'buff', sub: 'v2seed' }
 };
@@ -10545,7 +10720,21 @@ var XZ_ATOM_RETIRED = {
      ⚠ 这段注释里**不许**写出浏览器存储 API 的那个名字：`工具/_extract_battle.mjs`
        的纯度断言拿它当「沾宿主」的判据，注释里出现一次就会把本常量判成脏、
        整个抽取失败（`_v397b` 也栽过同款 —— 注释里的例子被当成真代码）。 */
-  '敌多增伤': '敌众增伤'
+  '敌多增伤': '敌众增伤',
+  /* ★★★ v468：`焚身` → `牺牲` / `叠爆` → `叠满换伤`（用户点名改名）★★★
+     为什么必须走这张表、不能硬删（同 v449 `敌多增伤` 那条的理由，一字不差）：
+     翻译缓存是**持久化**的（存在卡内变量与玩家本地），玩家翻一次就永久存着。
+     硬删之后旧缓存里的 `焚身:20:2` / `叠爆:5` 会落进自然语言兜底 ——
+     而自然语言那条路认不出「割血换增伤」也认不出「攒够层数再兑付」，
+     表现是：翻过的老卡，改名当天这两条机制**静默失效**，玩家看不出、也查不到。
+     走退役表则一行字都不用重翻，旧串直接重定向到新键。
+     ⚠ 重定向只发生在**机制名**这一层。`焚身` 还有一个身份是**玩家自起的
+       持续伤害叫法**（`{焚身:"持续伤害:5:3"}`）—— 那条走 `xzEffKeyOf` 的
+       effKey 分支，根本不查这张表（也不该查：那是玩家起的名，不是机制名）。
+       所以「焚身」作为 DOT 别名的老数据不会被这张表改写，照旧各自结算。
+     ⚠ 这段注释里**不许**写出浏览器存储 API 的那个名字（理由见上面 敌多增伤 那段）。 */
+  '焚身': '牺牲',
+  '叠爆': '叠满换伤'
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -10907,12 +11096,26 @@ function _v75ParseEffect(text) {
         r.isBuff = true;
         r.dmgPct = _val / 100;
         break;
+      case 'v2stack':
+        /* ═══ ★ v468：叠层增伤 / 叠层减伤 ═══
+           `叠层增伤:20:3` = 三手内每次命中往势种「增伤」里叠，数值 20 是**每层的强度**。
+           `叠层减伤:20:3` = 同理叠势种「减伤」。
+
+           ⚠ 这里**不新建任何字段**，全部落回势种（`sub` 就是势种名）。
+             理由见原子表那段注释：新写一个 ~~stackDmgPct~~ = 有读无写 = 玩家写了没反应。
+           ⚠ 必须与 `buff` 分开：buff 分支会把 20 当成**一次性 +20%** 直接挂上，
+             那就退化成普通的增伤/减伤，叠层这个卖点整个没了（而且不报错）。
+           ⚠ `r.dmgPct` 存的是**每层强度**（0.20）；实际叠几层由分发器按命中次数给，
+             这里只负责把数值和量纲留下来。 */
+        r.isBuff = true;
+        r.dmgPct = _val / 100;
+        break;
       case 'stack':
         /* ★ v448：叠层兑换（用户第 ⑦ 条）。
-           格式：`叠爆:5`           = 攒 5 层，三样齐发（默认）
-                 `叠爆:5/伤害`      = 只兑换伤害
-                 `叠爆:5/伤害+减益` = 两样（`+` 或 `、` 或 `,` 都认）
-                 `叠爆:5:8`         = 8 手内没攒满就散（第二个裸数字仍是手数）
+           格式：`叠满换伤:5`           = 攒 5 层，三样齐发（默认）
+                 `叠满换伤:5/伤害`      = 只兑换伤害
+                 `叠满换伤:5/伤害+减益` = 两样（`+` 或 `、` 或 `,` 都认）
+                 `叠满换伤:5:8`         = 8 手内没攒满就散（第二个裸数字仍是手数）
            ⚠ 这里 **手动从原始串里再抠一次 `/` 后面那段** —— 上面对 `｜`
              的切割只切了一次，而 `/` 是**同一行里的第二个分隔符**，
              不单独处理的话「伤害+减益」会被当成手数或落进自然语言。
@@ -13790,9 +13993,66 @@ function calcDamage(attacker, defender, skill, isAoe) {
     _attrFix = _attrCap * 2;
   }
   var _attrPart = Math.round((_mainAttr + _attrFix) * 10 * _lvCoeff);
-  var netDmg = (isSkill && typeof skill._evOverride === 'number' && skill._evOverride > 0)
-    ? Math.round(skill._evOverride + _attrPart)        // ★ v94：技能伤害 + 属性部分
-    : Math.max(1, _attrPart);                          // 普攻：只有属性部分
+  /* ══════════════════════════════════════════════════════════════════════
+     ★★★ v468：普通攻击改成「玄技定档伤害的一半」 ★★★
+     用户 2026-10-30：「普通攻击伤害过低，改为玄技伤害的一半吧。」
+
+     ── 旧口径为什么在两头都不对（实测数字，不是感觉）──────────────────
+     旧公式：普攻 = 属性部分 = (力量+属性修正) × 10 × 层级系数，只有这一项。
+     招式   = 定档值(品质威力 × 境界系数) + 同一份属性部分。
+       ⇒ 普攻 与 招式的差距 = 定档值的大小。而这两项的**增长速度差 6 倍**：
+
+         境界   四维上限×10×层级系数   品质威力×境界系数(黄阶)   普攻/黄阶招
+         引玄        5                     26                    16%
+         玄枢       24                     73                    36%
+         尊玄       59                    130                    45%
+         玄宗      327                    577                    57%
+         帝境      497                    911                    55%
+
+       四维驱动的那项从 5 涨到 497（约 99 倍），招式威力只从 26 涨到 911（35 倍）。
+       ⇒ 低境界普攻近乎只能挠痒（引玄打黄阶招的 16%），
+         高境界普攻却逼近招式的一半（55%），甚至跟玄阶招（41%）打平。
+       **一个「退路」不该随境界自己变强到威胁主武器。** 这就是用户看到的"过低"
+       （他开局在引玄，16% 确实等于没有）。
+
+     ── 新口径：绑定「同样的算式」，再 × 0.5 ──────────────────────────────
+     玄技一击 = 定档值(品质威力 × 境界系数) + 属性部分(四维 × 10 × 层级系数)
+     普攻    = round( (定档值 + 属性部分) × 0.5 )
+
+     ⇒ **任何境界都是精确的 50%**，因为它算的是同一个式子的同一半。
+       一开始我写成「只用定档值 × 0.5」（不含属性部分），实测比例是 22%~48% ——
+       因为属性部分在高境界占招式伤害的一半以上，漏掉它就不是"一半"了。
+
+     ⚠ 为什么取「最高品质」而不是固定一档：
+       玩家的招式品质是跟着境界一起升的（08 会让人设里的招式换品质）。
+       固定用黄阶，后期玩家的招已经天阶、普攻还按黄阶算 = 又变回"过低"；
+       固定用天阶，低境界玩家一门黄阶招都没有 = 普攻反超。
+       取"他自己最好的那门的一半"在两种情况下都成立。
+
+     ⚠ 这个改动**只碰普攻那一支**（`!isSkill`），招式公式一个字节不动 ——
+       招式那边是世界书《数值表》第 123 行的定档口径，动了就是两套数值。
+     ══════════════════════════════════════════════════════════════════════ */
+  var netDmg;
+  if (isSkill && typeof skill._evOverride === 'number' && skill._evOverride > 0) {
+    netDmg = Math.round(skill._evOverride + _attrPart);   // ★ v94：技能伤害 + 属性部分
+  } else if (isSkill) {
+    netDmg = Math.max(1, _attrPart);                     // 招式但没有定档值（叙述型）：照旧
+  } else {
+    /* 普攻 = 玄技那一整个式子的一半（定档 + 属性），见上方推导 */
+    /* ⚠ 境界系数必须走 `realmMultByName` —— 那个函数的真名是它，不是
+         `realmCoeffOf`（v79 就在这里踩过一次：守卫恒假、系数静默落 1.0）。 */
+    var _puQ = '黄阶';
+    try {
+      if (typeof xzBestSkillQualityOf === 'function') _puQ = xzBestSkillQualityOf(attacker) || '黄阶';
+    } catch (ePuQ) { _puQ = '黄阶'; }
+    var _puAnchor = 0;
+    try {
+      var _puRf = realmMultByName(attacker && (attacker.境界 || attacker.realm || attacker.realmKey));
+      if (!(isFinite(_puRf) && _puRf > 0)) _puRf = 1;
+      _puAnchor = Math.round(qualityPowerOf(_puQ) * _puRf);
+    } catch (ePuA) { _puAnchor = 0; }
+    netDmg = Math.max(1, Math.round((_puAnchor + _attrPart) * 0.5));
+  }
 
   /* ★ v277：**rootAtkFactor 已删**（原 `var rootAtkFactor = 0.85 + 0.15 * (attacker.rootRank || 1.0);`）。
      它是 v45 之前「玄元属性品阶影响攻击」的遗留：品阶废除后 rootRank 恒为 1.00，
@@ -15298,7 +15558,7 @@ function applyV75Effects(attacker, target, skill) {
         }
         case 'stack': {
           /* ═══ ★ v448：叠层兑换落地（用户第 ⑦ 条）═══
-             `叠爆:5` = 攒满 5 层自动兑换（伤害/增益/减益三样齐发）。
+             `叠满换伤:5` = 攒满 5 层自动兑换（伤害/增益/减益三样齐发）。
 
              ⚠ 落点是 attacker **自己**（这是"我的层数"），不看 `目标` 字段 ——
                与 buff/cond/splash 同一套口径（v257 用户定：
@@ -15319,6 +15579,59 @@ function applyV75Effects(attacker, target, skill) {
           }).join('+');
           BattleState.logs.push(an + (_stNew ? ' 起势【叠爆】—— ' : ' 续【叠爆】—— ')
             + '每次命中叠一重，满 <b>' + _stCur.need + '</b> 重即兑换（' + _stLab + '）'
+            + (_isPerm ? '（整场）' : ('，' + xzDurText(dur))) + '）');
+          break;
+        }
+        case 'v2stack': {
+          /* ═══ ★ v468：叠层增益 / 叠层减益的落地 ═══
+             `叠层增伤:20:3` → 三手内每次命中 `v2Add(self, '增伤')`。
+             `叠层减伤:20:3` → 同理叠「减伤」。
+
+             ── 为什么落在**施加这一刻**而不是每次命中 ────────────────────
+             这一条是「挂上之后，接下来的命中会自己叠层」的**开关**，
+             与溅射（`_xzSplash` 挂着，命中时由 `xzSplashOnHit` 消费）同构：
+             施加时先给 1 层（让玩家立刻看见效果），再挂一个逐手计时，
+             由逐手推进那一块（`processHandBuffs` 里的 `_xzV2Stack` 循环）
+             每手补 1 层 —— 消费点只有那一处（v401 铁律）。
+             ⚠ 原来这里写的函数名 ~~xzV2StackTick~~ **不存在**（那是设计时的暂定名，
+               实现最终并进了 `processHandBuffs` 的一小段）。留着会被
+               `_v404_stale_refs` 判成「注释指向不存在的符号」——
+               而那条红是真的：接手的人会去 grep 一个永远搜不到的函数。
+
+             ⚠ 落点必须是真在算的势种：
+               `增伤` 有 dmg（14292 增伤乘区）与 track（v2Add 里前拉行动条）；
+               `减伤` 有 dr（14301 / 14343 减伤乘区）。
+               别往 `V2_STATES` 里加新键 —— 加一个没有消费点的键 = 假机制。
+             ⚠ `_isPerm` 时挂 0 = 整场不走计时；否则按 dur 手递减。
+             ⚠ 同一机制**刷新不叠加**：重挂只延长时间、不把层数直接顶满
+               （顶满 = 一发叠层招换五层，比直接写「增伤:100」还猛，破坏平衡）。 */
+          var _vsKey = String(e.sub || '');
+          if (!_vsKey || !(typeof V2_STATES !== 'undefined' && V2_STATES[_vsKey])) {
+            try { console.warn('[施加] 叠层机制「' + String(e.key || '?') + '」指向未知势种「' + _vsKey + '」，已跳过'); } catch (eVs0) {}
+            break;
+          }
+          if (!attacker._xzV2Stack) attacker._xzV2Stack = {};
+          var _vsOld = attacker._xzV2Stack[_vsKey];
+          var _vsRounds = _isPerm ? 0 : dur;
+          if (_vsOld) {
+            /* 常驻一旦挂上就保持常驻（重挂一次临时的不该把它降级） */
+            if (_isPerm) { _vsOld._perm = true; _vsOld.rounds = 0; }
+            else { _vsOld.rounds = Math.max(Number(_vsOld.rounds) || 0, _vsRounds); }
+            BattleState.logs.push(an + ' 续【' + esc(e.key) + '】—— 每击仍在蓄养势种「'
+              + esc(_vsKey) + '」' + (_isPerm ? '（整场）' : ('，' + xzDurText(dur))) + '）');
+            break;
+          }
+          attacker._xzV2Stack[_vsKey] = {
+            rounds: _vsRounds,
+            /* ★ 常驻用布尔标记，不用 rounds===0 当哨兵（0 有歧义，见逐手递减那段） */
+            _perm: _isPerm,
+            pct: Math.min(1, Number(e.pct) || 0)
+          };
+          /* 当场先给一层：不然「挂了但这一手没打中」看起来毫无动静 */
+          var _vsGain = 0;
+          try { _vsGain = (typeof v2Add === 'function') ? v2Add(attacker, _vsKey, 1, attacker) : 0; } catch (eVs1) { _vsGain = 0; }
+          BattleState.logs.push(an + ' 起势【' + esc(e.key) + '】—— 此后每次命中蓄养势种「'
+            + esc(_vsKey) + '」一重' + (_vsGain > 0 ? ('（当前 ' + _vsGain + ' 重）') : '')
             + (_isPerm ? '（整场）' : ('，' + xzDurText(dur))) + '）');
           break;
         }
@@ -15976,6 +16289,37 @@ function processHandBuffs(fighter) {
         }
       }
     } catch (eSpTick) {}
+    /* ★★★ v468：叠层增益／叠层减益的逐手推进 ★★★
+       与条件机制名/溅射/叠爆**同一节奏、同一处**（谁出手谁走一手）。
+       每走一手补 1 层（`v2Add`），到期整个删掉。
+       ⚠ rounds === 0 是**常驻哨兵**（整场有效），写成 0 会把「三手叠层」
+         偷升级成「永久叠层」—— 与溅射那条一模一样的坑，别踩第二次。
+       ⚠ 补层走 v2Add，因此**层数上限与满层质变全部免费继承**（V2_STATES.max / full），
+         自己写一套计数就享受不到满层质变，也不受上限约束（会叠到 99 层）。
+       ⚠ 与「叠满换伤」的区别：这条是**积少成多、不兑付**；
+         叠满换伤是**攒够清零再攒**。两条可以同时挂，各算各的。 */
+    try {
+      var _vsMap = fighter._xzV2Stack;
+      if (_vsMap) {
+        Object.keys(_vsMap).forEach(function (_vk) {
+          var _vo = _vsMap[_vk];
+          if (!_vo) return;
+          /* 每手先补一层（常驻与临时都补）—— 这才是"叠层"的本体 */
+          try { if (typeof v2Add === 'function') v2Add(fighter, _vk, 1, fighter); } catch (eVg1) {}
+          /* 常驻：`_perm` 显式为 true 就永不删。
+             ⚠ **不许拿 rounds===0 当常驻哨兵**：0 同时能表示"还剩 0 手"，
+               那条歧义会让「三手叠层」在第一手就被当成过期删掉
+               （或者反过来，把三手偷升级成永久）。用布尔，不留解释空间。 */
+          if (_vo._perm === true) return;
+          _vo.rounds = (Number(_vo.rounds) || 0) - 1;
+          if (_vo.rounds > 0) return;
+          delete _vsMap[_vk];
+          BattleState.logs.push('<span style="color:#94a3b8">' + esc(fighter.name)
+            + ' 的【叠层·' + esc(_vk) + '】势尽，不再自行蓄养。</span>');
+        });
+        if (!Object.keys(_vsMap).length) delete fighter._xzV2Stack;
+      }
+    } catch (eVsTick) {}
     /* ★★★ v448：叠爆的手数递减（与条件机制名/溅射同一节奏、同一处）★★★
        ⚠ 到期要**连层数一起作废**（xzStackTick 已处理），不能只清 rounds ——
          只清 rounds 的话下一击随便打一下就会爆，等于白送一轮兑换。 */
@@ -21121,7 +21465,7 @@ var XZJJ = (function () {
             _sk.skillType = _hit ? '进攻' : '增益';
             if (!_hit) _sk.atkType = '增益';
             else if (String(_sk.atkType) === '增益') {
-              _sk.atkType = (String(_sk.目标 || '') === '范围' || _sk.v2pos === '范围式') ? '范围' : '单体';
+              _sk.atkType = (xzTargetIsAoe(_sk.目标) || _sk.v2pos === '范围式') ? '范围' : '单体';
             }
           } catch (eRHit2) {}
         });
@@ -24411,13 +24755,19 @@ var XZ_JJB_SKIN = `
   display:block;font-size:12.5px;font-weight:700;letter-spacing:.02em;color:var(--xz-ink);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:0;
 }
-.xz-jjb-skpills{display:flex;align-items:center;gap:5px;font-size:9.5px;color:var(--xz-ink-3);}
+/* ★ v468：目标名从 2 字（单体/范围）变成 4 字（敌方单体/敌方范围/我方群体），
+   一枚标签多出约 19px。技能键宽 190px 且名字那行是 ellipsis，标签这行原来没有出
+   兜底 —— 窄屏上「敌方单体 + 天阶 + 无耗」会顶破右边界。
+   ⇒ 容器给 「min-width:0「（flex 子项默认 min-width:auto，不给就永远不缩），
+     目标这枚允许被截断，价格那枚 「margin-left:auto「 保证不被挤出。
+     名字完整版仍在 title 里，玩家悬停能看到全文。 */
+.xz-jjb-skpills{display:flex;align-items:center;gap:5px;font-size:9.5px;color:var(--xz-ink-3);min-width:0;}
 .xz-jjb-pill{
   font-size:9.5px;letter-spacing:0;color:var(--xz-ink-3);
   padding:0;border:0;background:none;white-space:nowrap;
 }
-.xz-jjb-pill-q{color:var(--xz-ink-3);}
-.xz-jjb-pill-tgt{color:var(--xz-ink-3);}
+.xz-jjb-pill-q{color:var(--xz-ink-3);flex:none;}
+.xz-jjb-pill-tgt{color:var(--xz-ink-3);min-width:0;overflow:hidden;text-overflow:ellipsis;}
 .xz-jjb-pill-cost{margin-left:auto;color:var(--xz-mp-a);font-family:var(--xz-num);font-variant-numeric:tabular-nums;}
 .xz-jjb-sk .xz-jjb-pill-cost{color:var(--xz-mp-a);}
 .xz-jjb-see{
@@ -24645,7 +24995,321 @@ var XZ_JJB_LEGACY = `
 @keyframes xz-jjb-smoke{0%{transform:translate3d(0,0,0) scale(1);opacity:.8;}100%{transform:translate3d(-4%,-2.6%,0) scale(1.09);opacity:1;}}
 .xz-jjb-tp-rl{flex:0 0 auto !important;width:auto !important;}
 .xz-jjb-tp-cancel{background:linear-gradient(180deg,#2b2418 0%,#12161a 100%) !important;border:1px solid rgba(201,168,106,.48) !important;border-radius:9px !important;color:#c9b98a !important;font-size:12px !important;}
-.xz-jjb-tp-cancel:hover{border-color:#e8c98f !important;color:#ffe9b8 !important;background:linear-gradient(180deg,#3b321f 0%,#181d22 100%) !important;.xz-jjb-teamwrap{background:radial-gradient(circle at 50% 42%,rgba(36,28,16,.86) 0%,rgba(3,5,9,.95) 68%) !important;}#xz-jjb-teamcard{background:radial-gradient(ellipse 120% 46% at 50% 0%,rgba(201,168,106,.13),transparent 60%),linear-gradient(168deg,#1b2119 0%,#0c1014 58%,#080a0e 100%) !important;border:1px solid rgba(201,168,106,.48) !important;border-top:2px solid #e8c98f !important;border-radius:14px !important;box-shadow:0 26px 72px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,235,195,.14),0 0 0 1px rgba(0,0,0,.55),0 0 34px rgba(201,168,106,.12) !important;}#xz-jjb-teamhead{background:linear-gradient(90deg,#2c2418 0%,#151a1e 58%,#101418 100%) !important;border-bottom:1px solid rgba(201,168,106,.32) !important;box-shadow:0 6px 18px rgba(0,0,0,.5) !important;padding:11px 14px !important;}#xz-jjb-teamseal{width:26px !important;height:26px !important;background:linear-gradient(180deg,#8c2f2a,#48140f) !important;border:1px solid rgba(232,201,143,.78) !important;border-radius:6px !important;color:#ffe9b8 !important;font-weight:800 !important;font-size:13px !important;box-shadow:0 0 12px rgba(180,60,50,.55),inset 0 1px 0 rgba(255,210,190,.28) !important;}#xz-jjb-teamtitle{font-size:14px !important;font-weight:800 !important;letter-spacing:.26em !important;background:linear-gradient(180deg,#fff3cd 0%,#d8b678 54%,#8a6f3a 100%) !important;-webkit-background-clip:text !important;background-clip:text !important;-webkit-text-fill-color:transparent !important;color:transparent !important;}#xz-jjb-teamhint{color:#a89d85 !important;font-size:12px !important;}.xz-jjb-tp-row{background:linear-gradient(160deg,#1a2320 0%,#0c1115 100%) !important;border:1px solid rgba(201,168,106,.20) !important;border-radius:9px !important;box-shadow:inset 0 1px 0 rgba(255,255,255,.05) !important;transition:border-color .15s,box-shadow .15s,transform .15s !important;}.xz-jjb-tp-row:hover{border-color:rgba(232,201,143,.75) !important;box-shadow:0 0 14px rgba(201,168,106,.26),inset 0 1px 0 rgba(255,255,255,.08) !important;transform:translateY(-1px);}.xz-jjb-tp-nm{color:#f6efdd !important;font-size:13.5px !important;}.xz-jjb-tp-rl{padding:2px 7px !important;border-radius:4px !important;background:#1b2328 !important;border:1px solid rgba(148,163,184,.30) !important;color:#a2b6bf !important;font-size:10.5px !important;letter-spacing:.02em;}.xz-jjb-tp-ck{accent-color:#d4af37 !important;width:16px !important;height:16px !important;}.xz-jjb-tp-empty{padding:22px 4px !important;color:#8b8071 !important;font-size:12.5px !important;letter-spacing:.06em;}.xz-jjb-tp-rem{background:linear-gradient(160deg,#151b1f 0%,#0a0e12 100%) !important;border:1px solid rgba(148,163,184,.20) !important;border-radius:9px !important;color:#9aa8b0 !important;font-size:11.5px !important;}#xz-jjb-teambtns{gap:9px !important;}.xz-jjb-tp-main{background:linear-gradient(180deg,#4a3a19 0%,#1d1608 100%) !important;border:1.5px solid rgba(232,201,143,.78) !important;border-radius:9px !important;color:#ffe9b8 !important;font-size:13.5px !important;letter-spacing:.1em !important;box-shadow:0 0 18px rgba(201,168,106,.30),inset 0 1px 0 rgba(255,235,195,.24) !important;}.xz-jjb-tp-main:hover{background:linear-gradient(180deg,#63501f 0%,#2a1f0b 100%) !important;border-color:#ffe9b8 !important;}.xz-jjb-tp-sub{background:linear-gradient(180deg,#1b2329 0%,#0b0f14 100%) !important;border:1px solid rgba(148,163,184,.34) !important;border-radius:9px !important;color:#c6d3da !important;font-size:12px !important;}.xz-jjb-tp-sub:hover{border-color:rgba(232,201,143,.68) !important;color:#ffe9b8 !important;}.xz-jjb-tp-cancel{background:linear-gradient(180deg,#2a1614 0%,#120a09 100%) !important;border:1px solid rgba(200,90,75,.48) !important;border-radius:9px !important;color:#e3a89c !important;font-size:12px !important;}.xz-jjb-tp-cancel:hover{border-color:rgba(230,120,100,.85) !important;color:#ffcfc4 !important;}.xz-jjb-trcard{width:min(700px,94vw) !important;max-height:88vh !important;overflow:auto !important;padding:0 !important;background:radial-gradient(ellipse 120% 42% at 50% 0%,rgba(201,168,106,.12),transparent 58%),linear-gradient(168deg,#181e23 0%,#0b0f14 58%,#070a0e 100%) !important;border:1px solid rgba(201,168,106,.46) !important;border-top:2px solid #e8c98f !important;border-radius:14px !important;color:#e9e3d3 !important;box-shadow:0 26px 72px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,235,195,.12),0 0 34px rgba(201,168,106,.12) !important;}.xz-jjb-trcard::-webkit-scrollbar{width:5px;}.xz-jjb-trcard::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#8a6f3a,#d9b877);border-radius:3px;}.xz-jjb-trcard::-webkit-scrollbar-track{background:#0a0e12;}.xz-jjb-trhd{display:flex;align-items:center;gap:9px;padding:11px 15px;background:linear-gradient(90deg,#2c2418 0%,#151a1e 58%,#101418 100%);border-bottom:1px solid rgba(201,168,106,.30);box-shadow:0 6px 18px rgba(0,0,0,.5);}.xz-jjb-trseal{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;font-weight:800;color:#ffe9b8;background:linear-gradient(180deg,#8c2f2a,#48140f);border:1px solid rgba(232,201,143,.78);box-shadow:0 0 12px rgba(180,60,50,.55),inset 0 1px 0 rgba(255,210,190,.28);}.xz-jjb-trtitle{font-size:14px;font-weight:800;letter-spacing:.26em;background:linear-gradient(180deg,#fff3cd 0%,#d8b678 54%,#8a6f3a 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}.xz-jjb-trrow{margin:10px 14px;padding:10px 12px;border-radius:10px;border:1px solid rgba(201,168,106,.18);background:linear-gradient(160deg,#151b20 0%,#0a0e12 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);}.xz-jjb-trrowhd{display:flex;align-items:center;gap:8px;margin-bottom:8px;}.xz-jjb-trname{font-size:13.5px;font-weight:700;color:#f6efdd;letter-spacing:.03em;}.xz-jjb-trst{font-size:10.5px;padding:2px 9px;border-radius:5px;font-weight:700;color:var(--stc,#94a3b8);background:var(--stbg,rgba(148,163,184,.13));border:1px solid var(--stc,#94a3b8);letter-spacing:.02em;}.xz-jjb-trfp{margin-left:auto;font-size:10px;font-family:monospace;color:#7d7466;padding:1px 7px;border-radius:4px;background:#11161a;border:1px solid rgba(148,163,184,.18);}.xz-jjb-trgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}.xz-jjb-trlbl{font-size:10px;color:#8b8071;margin-bottom:4px;letter-spacing:.10em;}.xz-jjb-trtext{font-size:11.5px;line-height:1.7;white-space:pre-wrap;max-height:118px;overflow:auto;padding:7px 9px;border-radius:8px;background:#0a0e12;border:1px solid rgba(148,163,184,.16);color:#b9c6cc;}.xz-jjb-trtext::-webkit-scrollbar{width:4px;}.xz-jjb-trtext::-webkit-scrollbar-thumb{background:#3a3222;border-radius:2px;}.xz-jjb-trta{width:100%;box-sizing:border-box;height:118px;resize:vertical;font-size:11.5px;line-height:1.66;font-family:monospace;padding:7px 9px;border-radius:8px;background:#0a0e12;color:#e9e3d3;border:1px solid rgba(201,168,106,.30);outline:none;transition:border-color .15s,box-shadow .15s;}.xz-jjb-trta:focus{border-color:rgba(232,201,143,.72);box-shadow:0 0 0 2px rgba(201,168,106,.16);}.xz-jjb-trmsg{font-size:11px;min-height:16px;margin:2px 14px 8px;color:#fbbf24;line-height:1.7;white-space:pre-wrap;}.xz-jjb-trbtns{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 14px;}.xz-jjb-trbtns .xz-jjb-tp-main{flex:1 1 180px;}.xz-jjb-trlock{filter:saturate(.35) brightness(.8);}@media (max-width:560px){.xz-jjb-trgrid{grid-template-columns:1fr;}}
+.xz-jjb-tp-cancel:hover{border-color:#e8c98f !important;color:#ffe9b8 !important;background:linear-gradient(180deg,#3b321f 0%,#181d22 100%) !important;}
+/* ══════════════════════════════════════════════════════════════════════════════
+   ★★★ v467（用户 2026-10-30）：「选人界面和翻译界面的美化，重构，同款战斗界面」★★★
+
+   ── 为什么要重写，而不是再调一次变量 ─────────────────────────────────────────
+   v452 那次叫「同步」，实际只做了**别名改指向**（--xz-border → var(--xz-line)），
+   结构和字面值一个没动。落地效果就是现在这样：
+     战斗界面  #xz-jjb-head      细线 + 冷底 + 标题 15px/700 实色 #e9e5dc
+     选人面板  #xz-jjb-teamhead  暖棕渐变 + 标题 14px/800 **金色渐变裁剪字**
+     翻译面板  #xz-jjb-trcard    圆角 12px、内联 style 写死底色（CSS 盖不住）
+
+   而且这次查出更硬的一层：「.xz-jjb-tp-cancel:hover{」 少了闭合括号，
+   把**整批 team/tr 皮肤**嵌进了 :hover —— 鼠标一移开就退回旧色板。
+   ⇒ 这批规则以前从没真正生效过，所以「改过美化」和「看起来没变」并不矛盾。
+
+   ── 本次口径：结构照抄战斗界面，不只是配色 ────────────────────────────────
+   三个界面统一成同一套「骨 + 皮」：
+     骨  外框 → 氛围层(atmo) → 顶栏(head: 印章 + 标题 + 右侧按钮) → 内容区 → 底栏按钮
+     皮  底色 linear-gradient(180deg,#0b1017,#080b10 60%)
+         边框 1px var(--xz-line-2)，圆角 14px
+         顶栏 border-bottom 1px var(--xz-line) + 左上角微妙暖光
+         印章 30×30、1px 金边、透明底、金字（**不再是红底发光方块**）
+         标题 15px/700、letter-spacing .22em、**实色 --xz-ink**（不做渐变裁剪字）
+         按钮 透明底 + 1px 细边，hover 才亮（不常驻金色渐变块）
+
+   ⚠ 变量必须在本段**重新声明一遍**：这两个弹层挂在 body 上、不在 overlay 内，
+     「var(--xz-line)」 在它们身上取不到值（会整条声明失效，不是回落默认色）。
+     所以 「.xz-jjb-teamwrap」 自己也带一份完整令牌 —— 与 overlay 那份**逐字相同**，
+     改一处必须同时改另一处（「工具/_v467_skin3.mjs」 会量出来）。
+   ⚠ 翻译卡的底色写死在 JS 内联 style 里（「card.style.cssText」），
+     只有 「!important」 能盖住。别把这些声明改成非 important。
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── ① 遮罩层：统一成 overlay 那层 near-black，不做棕色径向 ───────────────── */
+.xz-jjb-teamwrap{
+  --xz-bg:#05070a; --xz-panel:#0c1016; --xz-panel-2:#11161e;
+  --xz-ink:#e9e5dc; --xz-ink-2:#9c968c; --xz-ink-3:#615c55;
+  --xz-gold:#c9a86a; --xz-gold-2:#e8cb92; --xz-gold-dim:rgba(201,168,106,.16);
+  --xz-line:rgba(255,255,255,.065); --xz-line-2:rgba(255,255,255,.12);
+  --xz-me:#5eead4; --xz-foe:#ff6b6b;
+  --xz-font:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif;
+  background:rgba(3,6,10,.82) !important;
+  padding:16px !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+/* ★ v467：这两个弹层挂在 body 上，吃不到 #xz-jjb-overlay * 那条 border-box 统一规则。
+   不补这条，所有"宽度看着一样"的元素都会因为多算 2px 边框而宽一圈 ——
+   这是「三界面看起来像三套皮」里最隐蔽的一层（肉眼看不出原因，只觉得不对劲）。 */
+.xz-jjb-teamwrap,.xz-jjb-teamwrap *{box-sizing:border-box !important;}
+
+/* ── ② 外框：与 #xz-jjb-frame 同一条渐变、同一档圆角、同一层影 ─────────────── */
+#xz-jjb-teamcard,
+#xz-jjb-trwrap,
+#xz-jjb-trcard{
+  position:relative;
+  background:linear-gradient(180deg,#0b1017,#080b10 60%) !important;
+  border:1px solid var(--xz-line-2) !important;
+  border-top:1px solid var(--xz-line-2) !important;   /* 取消原来那道 2px 金顶边 */
+  border-radius:14px !important;
+  box-shadow:0 24px 80px -20px rgba(0,0,0,.9),0 0 0 1px rgba(0,0,0,.6) !important;
+  color:var(--xz-ink-2) !important;
+  overflow:hidden !important;
+  isolation:isolate;
+}
+/* 氛围层：与 #xz-jjb-atmo::before 同一条底部暖雾，让弹层和主面板是同一个"空间" */
+#xz-jjb-teamcard::before,
+#xz-jjb-trwrap::before,
+#xz-jjb-trcard::before{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:44%;z-index:0;
+  pointer-events:none;
+  background:
+    radial-gradient(70% 120% at 26% 108%,rgba(96,120,132,.13),transparent 62%),
+    radial-gradient(56% 100% at 62% 112%,rgba(96,120,132,.10),transparent 60%),
+    linear-gradient(180deg,transparent,rgba(6,9,13,.55));
+  filter:blur(.5px);
+}
+/* 内容压在氛围层之上 */
+#xz-jjb-teamhead,#xz-jjb-teambody,
+#xz-jjb-trhd,#xz-jjb-trbody,
+#xz-jjb-trcard > *{position:relative;z-index:1;}
+
+/* 宽度：与主面板一致走 min(720px,94vw) 这一档；翻译要左右两栏所以同宽 */
+#xz-jjb-teamcard{width:min(460px,94vw) !important;max-height:calc(100vh - 32px) !important;}
+#xz-jjb-trwrap,#xz-jjb-trcard{width:min(720px,94vw) !important;max-height:calc(100vh - 32px) !important;}
+
+/* ── ③ 顶栏：印章 30px + 标题 15/700 实色 + 细底边（照 #xz-jjb-head）──────── */
+#xz-jjb-teamhead,.xz-jjb-trhd{
+  display:flex;align-items:center;gap:10px;
+  padding:13px 16px 12px !important;
+  background:linear-gradient(90deg,#12100b 0%,#0d1117 56%,#0b0f14 100%) !important;
+  border-bottom:1px solid var(--xz-line) !important;
+  box-shadow:none !important;
+}
+#xz-jjb-teamseal,.xz-jjb-trseal{
+  width:30px !important;height:30px !important;flex:none;
+  /* ⚠ box-sizing 必须是 border-box：战斗面板在 #xz-jjb-overlay * 里已经统一成 border-box，
+     而这两个弹层挂在 body 上、吃不到那条规则 ⇒ 30px + 1px 边 = 实测 32px，
+     比主面板的印章大一圈（探针量出来的唯一一处不一致）。
+     不写这条，"尺寸对齐"就永远差 2px，而且肉眼看不出来、只会觉得"哪里不对"。 */
+  box-sizing:border-box !important;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:rgba(201,168,106,.05) !important;      /* 撤销红底发光块 */
+  border:1px solid var(--xz-gold-dim) !important;
+  border-radius:5px !important;
+  color:var(--xz-gold) !important;                  /* 金字，不是 #ffe9b8 */
+  font-size:15px !important;font-weight:700 !important;
+  box-shadow:none !important;
+}
+#xz-jjb-teamtitle,.xz-jjb-trtitle{
+  font-size:15px !important;font-weight:700 !important;
+  letter-spacing:.22em !important;
+  color:var(--xz-ink) !important;                    /* 实色，撤销渐变裁剪字 */
+  background:none !important;
+  -webkit-background-clip:border-box !important;background-clip:border-box !important;
+  -webkit-text-fill-color:currentColor !important;
+  white-space:nowrap;
+}
+
+/* ── ④ 内容区 ─────────────────────────────────────────────────────────────── */
+#xz-jjb-teambody,#xz-jjb-trbody{padding:12px 16px 14px !important;}
+#xz-jjb-teamhint{
+  margin:0 0 10px !important;font-size:12px !important;line-height:1.6 !important;
+  color:var(--xz-ink-3) !important;text-align:left !important;   /* 原来居中，和主面板左对齐不一致 */
+  letter-spacing:.02em;
+}
+
+/* ── ⑤ 列表行：细线卡 + hover 才亮（照 #xz-jjb-frame 内的卡片质感）────────── */
+.xz-jjb-tp-row{
+  background:rgba(255,255,255,.022) !important;
+  border:1px solid var(--xz-line) !important;
+  border-radius:var(--xz-r,10px) !important;
+  box-shadow:none !important;
+  padding:10px 12px !important;
+  margin-bottom:7px !important;
+  transition:border-color .16s,background .16s,box-shadow .16s !important;
+}
+.xz-jjb-tp-row:hover{
+  border-color:rgba(201,168,106,.34) !important;
+  background:rgba(201,168,106,.055) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04) !important;
+  transform:none !important;                        /* 撤销 translateY 位移 */
+}
+.xz-jjb-tp-nm{color:var(--xz-ink) !important;font-size:13.5px !important;font-weight:600 !important;}
+.xz-jjb-tp-rl{
+  padding:2px 7px !important;border-radius:4px !important;
+  background:transparent !important;
+  border:1px solid var(--xz-line-2) !important;
+  color:var(--xz-ink-3) !important;
+  font-size:10.5px !important;letter-spacing:.06em !important;
+}
+.xz-jjb-tp-ck{accent-color:var(--xz-gold) !important;width:15px !important;height:15px !important;cursor:pointer;}
+.xz-jjb-tp-empty{
+  padding:26px 4px !important;color:var(--xz-ink-3) !important;
+  font-size:12px !important;letter-spacing:.1em !important;text-align:center;
+}
+.xz-jjb-tp-rem{
+  background:rgba(255,255,255,.022) !important;
+  border:1px solid var(--xz-line) !important;
+  border-radius:var(--xz-r,10px) !important;
+  color:var(--xz-ink-3) !important;font-size:11.5px !important;
+  padding:9px 12px !important;margin:10px 0 12px !important;
+}
+
+/* ── ⑥ 按钮：与 #xz-jjb-head > button / #xz-jjb-endturn 同一套 ─────────────
+   主按钮：金边透明底（不是常驻金色渐变块）；hover 才把金边提亮。
+   次按钮：灰细边；取消：暗红细边（沿用战斗界面 --xz-foe 的语义色）。 */
+.xz-jjb-tp-main{
+  background:rgba(201,168,106,.10) !important;
+  border:1px solid rgba(201,168,106,.62) !important;
+  border-radius:8px !important;
+  color:var(--xz-gold-2) !important;
+  font-size:13px !important;font-weight:700 !important;letter-spacing:.08em !important;
+  padding:9px 0 !important;
+  box-shadow:none !important;
+  transition:background .16s,border-color .16s,color .16s !important;
+}
+.xz-jjb-tp-main:hover{
+  background:rgba(201,168,106,.20) !important;
+  border-color:var(--xz-gold-2) !important;
+  color:#fff3cd !important;
+}
+.xz-jjb-tp-sub{
+  background:transparent !important;
+  border:1px solid var(--xz-line-2) !important;
+  border-radius:8px !important;
+  color:var(--xz-ink-2) !important;
+  font-size:12px !important;font-weight:600 !important;letter-spacing:.04em !important;
+  padding:9px 0 !important;
+  box-shadow:none !important;
+  transition:background .16s,border-color .16s,color .16s !important;
+}
+.xz-jjb-tp-sub:hover{
+  background:rgba(255,255,255,.045) !important;
+  border-color:rgba(201,168,106,.42) !important;
+  color:var(--xz-ink) !important;
+}
+.xz-jjb-tp-cancel{
+  background:transparent !important;
+  border:1px solid rgba(255,107,107,.26) !important;
+  border-radius:8px !important;
+  color:#c98d86 !important;
+  font-size:12px !important;font-weight:600 !important;
+  box-shadow:none !important;
+  transition:background .16s,border-color .16s,color .16s !important;
+}
+.xz-jjb-tp-cancel:hover{
+  background:rgba(255,107,107,.09) !important;
+  border-color:rgba(255,107,107,.46) !important;
+  color:#ff8a8a !important;
+}
+
+/* ── ⑦ 翻译面板：条目卡 / 双栏 / 文本域 ───────────────────────────────────── */
+/* ★ v467：翻译面板的内容区**没有 body 包裹层**（条目卡和按钮都是 trcard 的直接子节点），
+   所以不能只靠 .xz-jjb-trbtns 的 padding:0 —— 那样条目卡和按钮都贴到卡片边缘，
+   按钮会超出圆角（截图里「返回列阵」压到框外就是这个）。
+   ⇒ 用 trcard 的 padding 给左右留出 16px，再把各段的上边距压成 0。 */
+.xz-jjb-trcard{padding:0 !important;}   /* 头部自己带 padding，内容区下面单独给 */
+.xz-jjb-trrow,.xz-jjb-trbtns,.xz-jjb-trmsg{margin-left:16px !important;margin-right:16px !important;}
+.xz-jjb-trrow:first-of-type{margin-top:12px !important;}
+/* ⚠ v467：trgrid 的网格定义原来只在旧皮肤里，整段替换后必须补回来 ——
+   漏了它就是「原文」和「规范机制名」上下堆成一列、卡片高度翻倍
+   （看着像"翻译界面变成一条长条"，而实际只是少了一条 grid-template-columns）。 */
+.xz-jjb-trgrid{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+}
+.xz-jjb-trrow{
+  margin:0 0 8px !important;padding:10px 12px !important;
+  border:1px solid var(--xz-line) !important;
+  border-radius:var(--xz-r,10px) !important;
+  background:rgba(255,255,255,.022) !important;
+  box-shadow:none !important;
+}
+.xz-jjb-trrowhd{display:flex;align-items:center;gap:8px;margin-bottom:8px !important;}
+.xz-jjb-trname{font-size:13.5px !important;font-weight:600 !important;color:var(--xz-ink) !important;letter-spacing:.02em;}
+.xz-jjb-trst{
+  font-size:10px !important;padding:2px 8px !important;border-radius:4px !important;
+  font-weight:600 !important;letter-spacing:.04em;
+}
+.xz-jjb-trfp{
+  margin-left:auto !important;font-size:10px !important;
+  font-family:var(--xz-num,monospace) !important;
+  color:var(--xz-ink-3) !important;
+  padding:1px 7px !important;border-radius:4px !important;
+  background:transparent !important;border:1px solid var(--xz-line) !important;
+}
+.xz-jjb-trlbl{font-size:10px !important;color:var(--xz-ink-3) !important;margin-bottom:4px !important;letter-spacing:.12em;}
+/* ⚠ v467：overflow:auto 不能漏。原来的内联样式里有它，我在改写成 class 时漏了 ——
+   后果是 max-height 仍然生效（盒子不变高），但内容**溢出盒子继续往下画**，
+   直接压到下一张条目卡上（截图里"道基甲"三个字叠在两段原文之间就是这么来的）。
+   max-height 和 overflow 是一对：只写前者，等于"盒子截短了但内容还在"。 */
+.xz-jjb-trtext{
+  font-size:11.5px !important;line-height:1.7 !important;
+  max-height:118px !important;overflow:auto !important;
+  padding:7px 9px !important;
+  border-radius:7px !important;
+  background:rgba(0,0,0,.34) !important;
+  border:1px solid var(--xz-line) !important;
+  color:var(--xz-ink-2) !important;
+  white-space:pre-wrap !important;
+  word-break:break-word !important;
+}
+.xz-jjb-trta{
+  /* ⚠ 原来这里是内联 style 里的 「width:100%;box-sizing:border-box;「，
+     改写成 class 时漏掉了 ⇒ textarea 用浏览器默认 cols≈20 撑成窄条，
+     右栏只占了半格宽（截图右半留白就是这么来的）。textarea 不像 div 会自动撑满，
+     必须显式给 width:100%。 */
+  width:100% !important;box-sizing:border-box !important;display:block !important;
+  height:118px !important;resize:vertical;
+  font-size:11.5px !important;line-height:1.66 !important;
+  font-family:var(--xz-num,monospace) !important;
+  padding:7px 9px !important;border-radius:7px !important;
+  background:rgba(0,0,0,.34) !important;
+  color:var(--xz-ink) !important;
+  border:1px solid var(--xz-line-2) !important;
+  outline:none !important;
+  transition:border-color .16s,box-shadow .16s !important;
+}
+.xz-jjb-trta:focus{
+  border-color:rgba(201,168,106,.62) !important;
+  box-shadow:0 0 0 2px var(--xz-gold-dim) !important;
+}
+.xz-jjb-trmsg{
+  font-size:11px !important;min-height:16px !important;
+  margin:2px 0 8px !important;color:#d9b877 !important;
+  line-height:1.7 !important;white-space:pre-wrap;
+}
+.xz-jjb-trbtns{padding:0 0 14px !important;gap:8px !important;display:flex !important;flex-wrap:wrap !important;}
+.xz-jjb-trbtns .xz-jjb-tp-main{flex:1 1 180px !important;}
+.xz-jjb-trlock{filter:saturate(.4) brightness(.86) !important;}
+
+/* ── ⑧ 滚动条：与 #xz-jjb-log 一致（细金条，不是银灰）─────────────────────── */
+#xz-jjb-teambody::-webkit-scrollbar,
+#xz-jjb-trbody::-webkit-scrollbar,
+#xz-jjb-trcard::-webkit-scrollbar{width:6px !important;}
+#xz-jjb-teambody::-webkit-scrollbar-thumb,
+#xz-jjb-trbody::-webkit-scrollbar-thumb,
+#xz-jjb-trcard::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.14) !important;border-radius:99px !important;
+}
+#xz-jjb-teambody::-webkit-scrollbar-track,
+#xz-jjb-trbody::-webkit-scrollbar-track,
+#xz-jjb-trcard::-webkit-scrollbar-track{background:transparent !important;}
+
+/* ── ⑨ 窄屏：只压密度，不换风格（同一套分区）─────────────────────────────── */
+@media (max-width:560px){
+  .xz-jjb-teamwrap{padding:8px !important;align-items:flex-start !important;}
+  #xz-jjb-teamcard{width:100% !important;max-height:calc(100vh - 16px) !important;}
+  #xz-jjb-trwrap,#xz-jjb-trcard{width:100% !important;max-height:calc(100vh - 16px) !important;}
+  #xz-jjb-teamhead,.xz-jjb-trhd{padding:11px 13px !important;}
+  #xz-jjb-teamtitle,.xz-jjb-trtitle{font-size:14px !important;letter-spacing:.16em !important;}
+  #xz-jjb-teambody,#xz-jjb-trbody{padding:10px 12px 12px !important;}
+  .xz-jjb-trgrid{grid-template-columns:1fr !important;}
+  .xz-jjb-trtext,.xz-jjb-trta{height:96px !important;max-height:96px !important;}
+}
 `;
 
   function ensureStyle() {
@@ -25885,11 +26549,12 @@ function build() {
            「被判成什么无所谓，去掉判成什么样，方便维护」—— 效果本来就写在招式详情里，
            技能键上那枚标签只是猜，猜错了反而误导。
            目标的四类（自身/单体/范围/环境）是**变量字段里真有的**，照它显示即可。 */
-        var _tgtRaw = String((sk && (sk.目标 || sk.attackTarget)) || '单体');
-        var _tgt = '单体';
-        if (_tgtRaw === '自身' || _tgtRaw === '自己') _tgt = '自身';
-        else if (_tgtRaw === '范围' || (sk && (sk.atkType === '范围' || sk.v2pos === '范围式'))) _tgt = '范围';
-        else if (_tgtRaw === '环境') _tgt = '环境';
+        /* ★★★ v468：目标标签改成**新四类**（敌方单体 / 敌方范围 / 我方群体 / 自身）★★★
+           用户 2026-10-30：「单体改成敌方单体，范围改成敌方范围，新增一个我方群体，
+           自身改为保持自身，（目标为）环境删掉，正式下架。」
+           ⚠ 归一必须走 `xzTargetOf`：老存档里写着「单体/范围/环境」，
+             直接显示原文就是「界面上一套、结算另一套」。 */
+        var _tgt = xzTargetOf(sk && (sk.目标 || sk.attackTarget));
         var pill = function (cls, txt) {
           return '<span class="' + PFX + '-pill ' + PFX + '-pill-' + cls + '" data-v="' + esc(txt) + '">' + esc(txt) + '</span>';
         };
@@ -29696,17 +30361,24 @@ function build() {
         while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
         var card = d.createElement('div');
         card.id = PFX + '-trcard';
-        card.style.cssText = 'max-width:680px;width:min(680px,94vw);max-height:86vh;overflow:auto;'
-          + 'background:linear-gradient(180deg,#151a24,#0b0f18);'
-          + 'border:1px solid rgba(201,168,106,.42);border-radius:12px;padding:14px 14px 12px;'
-          + 'color:#e8e6e1;box-shadow:0 18px 60px rgba(0,0,0,.62)';
+        /* ★★★ v467（用户 2026-10-30）：「翻译界面重构，同款战斗界面」★★★
+           ── 为什么把这一整块内联样式删掉 ────────────────────────────────────
+           原来是 `card.style.cssText` 写死底色/边框/圆角/阴影。内联样式**优先级最高**，
+           于是样式表里那批 `.xz-jjb-trcard{... !important}` 得靠 !important 硬压，
+           而且每加一条就要多一个 !important —— 越改越乱，也正是
+           「说改过美化、看起来没变」的来源之一（改的是 CSS，画的是内联）。
+           ⇒ 现在只留「尺寸/滚动」，皮全部交给样式表（`#xz-jjb-trcard` 那一组规则）。
+           ⚠ 尺寸也要与战斗面板对齐（min(720px,94vw)）—— 原来写死 680px，
+             比主面板窄 40px，并排看就是"小一号"，用户说的"不同款"有它一份。 */
+        card.className = PFX + '-trcard';
+        card.style.cssText = 'width:min(720px,94vw);max-width:720px;max-height:calc(100vh - 32px);overflow:auto;';
 
         var notReady = [];
-        var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-          + '<span style="width:26px;height:26px;border-radius:7px;display:inline-flex;'
-          + 'align-items:center;justify-content:center;background:rgba(201,168,106,.18);'
-          + 'color:#d4af37;font-weight:800;font-size:14px">译</span>'
-          + '<span style="font-weight:800;letter-spacing:2px;font-size:14px">效 果 转 译</span>'
+        /* ★ 头部也改成外层 div + class（原来是内联 style 拼的）：
+           这样印章/标题的字号字距与战斗面板走同一份规则，不用两处同步。 */
+        var h = '<div class="' + PFX + '-trhd">'
+          + '<span class="' + PFX + '-trseal">译</span>'
+          + '<span class="' + PFX + '-trtitle">效 果 转 译</span>'
           + '</div>'
           /* ★ v171（用户第三次点名）：整段使用说明**删除**。
              「左边是原文…用法…右边怎么写…卡在还差时…」一个字不留。
@@ -29717,37 +30389,35 @@ function build() {
         cur.forEach(function (p, i) {
           var st = ST[p.status] || ST.missing;
           if (p.status !== 'ready') notReady.push(p.name);
-          h += '<div style="border:1px solid rgba(148,163,184,.22);border-radius:9px;'
-            + 'padding:9px 10px;margin-bottom:8px;background:rgba(9,13,24,.55)">'
-            + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;flex-wrap:wrap">'
-            +   '<span style="font-weight:700;font-size:13px">' + esc(p.name) + '</span>'
-            +   '<span data-jjbpill="' + i + '" style="font-size:10.5px;padding:1px 8px;border-radius:999px;'
-            +   'color:' + st.c + ';background:' + st.bg + ';border:1px solid ' + st.c + '">' + st.t + '</span>'
-            +   '<span style="font-size:10px;opacity:.45;margin-left:auto;font-family:monospace">'
-            +   '指纹 ' + esc(p.fp) + '</span>'
+          /* ★ v467：全部改走 class（原来是十几条内联 style 拼的）。
+             内联样式会让样式表里的规则失效，也就没法"和战斗界面同一套皮" ——
+             每次改色要改两处、还会互相盖。现在结构与皮肤分离：
+             这里只决定「哪个元素是什么」，长什么样全部在样式表里。 */
+          h += '<div class="' + PFX + '-trrow">'
+            + '<div class="' + PFX + '-trrowhd">'
+            +   '<span class="' + PFX + '-trname">' + esc(p.name) + '</span>'
+            /* 状态小框保留 inline 的色（st.c / st.bg 是**按状态算出来的**，
+               不是设计令牌，天然该内联）；其它尺寸/圆角走 .xz-jjb-trst */
+            +   '<span data-jjbpill="' + i + '" class="' + PFX + '-trst"'
+            +   ' style="color:' + st.c + ';background:' + st.bg + ';border:1px solid ' + st.c + '">'
+            +   st.t + '</span>'
+            +   '<span class="' + PFX + '-trfp">指纹 ' + esc(p.fp) + '</span>'
             + '</div>'
-            + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+            + '<div class="' + PFX + '-trgrid">'
             +   '<div>'
-            +     '<div style="font-size:10px;opacity:.55;margin-bottom:3px">原文（只读）</div>'
-            +     '<div style="font-size:11px;line-height:1.65;white-space:pre-wrap;max-height:130px;'
-            +       'overflow:auto;padding:6px 7px;border-radius:6px;background:rgba(255,255,255,.04);'
-            +       'border:1px solid rgba(255,255,255,.08)">' + esc(p.text) + '</div>'
+            +     '<div class="' + PFX + '-trlbl">原文（只读）</div>'
+            +     '<div class="' + PFX + '-trtext">' + esc(p.text) + '</div>'
             +   '</div>'
             +   '<div>'
-            +     '<div style="font-size:10px;opacity:.55;margin-bottom:3px">规范机制名（可改）</div>'
-            +     '<textarea data-jjbtrans="' + i + '" spellcheck="false"'
-            +       ' style="width:100%;box-sizing:border-box;height:130px;resize:vertical;'
-            +       'font-size:11.5px;line-height:1.6;font-family:monospace;padding:6px 7px;'
-            +       'border-radius:6px;background:rgba(0,0,0,.34);color:#e8e6e1;'
-            +       'border:1px solid rgba(201,168,106,.30);outline:none">'
+            +     '<div class="' + PFX + '-trlbl">规范机制名（可改）</div>'
+            +     '<textarea data-jjbtrans="' + i + '" spellcheck="false" class="' + PFX + '-trta">'
             +       esc(safeAtoms(p)) + '</textarea>'
             +   '</div>'
             + '</div></div>';
         });
 
-        h += '<div id="' + PFX + '-trmsg" style="font-size:11px;min-height:16px;margin:2px 0 8px;'
-          + 'color:#fbbf24;white-space:pre-wrap"></div>';
-        h += '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        h += '<div id="' + PFX + '-trmsg" class="' + PFX + '-trmsg"></div>';
+        h += '<div class="' + PFX + '-trbtns">'
           + '<button type="button" id="' + PFX + '-trrun" class="' + PFX + '-tp-sub">✦ 翻译/重翻</button>'
           /* ★★★ v321【开战键**不再 disabled**】★★★
              原来是 `(notReady.length ? ' disabled' : '')`：还差人没翻时按钮是死的。

@@ -23843,26 +23843,47 @@ var XZ_JJB_SKIN = `
   /* ── 旧令牌别名：不能删 ──
      增益总览（-bfov）、技能详情（-skpop）、丹药（-miscpop）、编队（-team*）、
      翻译面板（-tp*）这些**不是本次换皮范围**的界面，样式留在 legacy 段里，
-     但它们吃的是下面这批变量。删掉 = 那些弹层变成透明/纯黑。 */
-  --xz-void:#05080c;
-  --xz-card:linear-gradient(145deg, rgba(18, 26, 33, 0.97) 0%, rgba(10, 15, 20, 0.95) 100%);
-  --xz-card-hover:linear-gradient(145deg, rgba(24, 35, 43, 0.98) 0%, rgba(13, 20, 26, 0.96) 100%);
-  --xz-border:rgba(208, 220, 226, 0.10);
-  --xz-border-strong:rgba(208, 220, 226, 0.26);
-  --xz-gold-bright:#e8c98f;
-  --xz-gold-glow:rgba(201, 168, 106, 0.16);
+     但它们吃的是下面这批变量。删掉 = 那些弹层变成透明/纯黑。
+
+     ★★★ v452 修（用户 2026-10-29）：「选人界面和翻译界面的美化现在同步战斗界面的美化」★★★
+     病历：这批别名原来全是**旧皮肤的字面量**：
+       --xz-border        = rgba(208,220,226,0.10)   ← 冷灰蓝，新皮肤没有这个色
+       --xz-border-strong = rgba(208,220,226,0.26)
+       --xz-gold-bright   = #e8c98f
+       --xz-text          = #eef2f4                  ← 偏冷白
+       --dhl-stage/-reading/-header = 蓝黑渐变（#0a1016 / #0c131a / #080e14）
+     而战斗界面（本次换皮范围）早就在用新令牌：
+       --xz-line / --xz-line-2 / --xz-gold-2 / --xz-ink / --xz-panel
+     ⇒ 同一个面板里，战斗区是暖金+中性白，弹出选人/翻译就变成冷灰蓝+旧金，
+       **一眼两套皮**。这就是用户说的「没同步」。
+     ⇒ 修法：**别名不改名、只改指向** —— 全部指到新令牌上（var(...) 可以引用同块里
+       前面已定义的变量）。这样 legacy 段那几十条规则**一条都不用动**，
+       颜色自动跟着新皮肤走，将来再换皮也只改这一处。
+     ⚠ 为什么不直接删别名、让 legacy 规则改用新令牌：
+       legacy 段有 478 处引用，逐个改是本项目最忌讳的"大面积手改"（必漏必错）。
+       别名层本来就是为这件事存在的，把它的**值**换掉就是最小改动面。
+     ⚠ 必须保留变量**名字**：删了名字，那些 'var(--xz-border)' 会整条声明失效
+       （不是回落成默认色，是这条 CSS 直接被丢弃），弹层会变成没有边框的透明块。 */
+  --xz-void:var(--xz-bg);
+  --xz-card:linear-gradient(145deg, var(--xz-panel-2) 0%, var(--xz-panel) 100%);
+  --xz-card-hover:linear-gradient(145deg, #182028 0%, var(--xz-panel-2) 100%);
+  --xz-border:var(--xz-line);
+  --xz-border-strong:var(--xz-line-2);
+  --xz-gold-bright:var(--xz-gold-2);
+  --xz-gold-glow:var(--xz-gold-dim);
   --xz-jade:#6fbfae;--xz-cyan:#7fd4c1;--xz-purple:#c58fa0;--xz-crimson:#b5545c;
-  --xz-text:#eef2f4;--xz-text-2:#a8b6bc;--xz-muted:#6f8188;
-  --dhl-stage:radial-gradient(circle at 78% 10%, rgba(127, 212, 193, 0.07), transparent 26%), linear-gradient(180deg, #0a1016 0%, #05080c 100%);
-  --dhl-reading:linear-gradient(180deg, rgba(12, 19, 26, 0.96), rgba(6, 10, 14, 0.98));
-  --dhl-card:linear-gradient(145deg, rgba(18, 26, 33, 0.97) 0%, rgba(10, 15, 20, 0.95) 100%);
-  --dhl-card-hover:linear-gradient(145deg, rgba(24, 35, 43, 0.98) 0%, rgba(13, 20, 26, 0.96) 100%);
-  --dhl-header:linear-gradient(90deg, rgba(8, 14, 20, 0.99), rgba(14, 22, 29, 0.97) 52%, rgba(24, 20, 20, 0.99));
-  --dhl-button-active:linear-gradient(180deg, rgba(201, 168, 106, 0.20), rgba(10, 16, 22, 0.34));
-  --dhl-gold:#c9a86a;--dhl-gold-bright:#e8c98f;
-  --dhl-border:rgba(208, 220, 226, 0.10);--dhl-border-strong:rgba(208, 220, 226, 0.26);
-  --dhl-shadow:0 10px 30px rgba(0, 4, 8, 0.72);
-  --dhl-glow:0 0 10px rgba(201, 168, 106, 0.12);
+  --xz-text:var(--xz-ink);--xz-text-2:var(--xz-ink-2);--xz-muted:var(--xz-ink-3);
+  --dhl-stage:radial-gradient(circle at 78% 10%, rgba(94,234,212,.05), transparent 26%), linear-gradient(180deg, var(--xz-panel) 0%, var(--xz-bg) 100%);
+  --dhl-reading:linear-gradient(180deg, var(--xz-panel) 0%, var(--xz-bg) 100%);
+  --dhl-card:linear-gradient(145deg, var(--xz-panel-2) 0%, var(--xz-panel) 100%);
+  --dhl-card-hover:linear-gradient(145deg, #182028 0%, var(--xz-panel-2) 100%);
+  /* 头部渐变：与战斗界面顶栏同一条（左侧暖金 → 中间暗 → 右端微微偏红） */
+  --dhl-header:linear-gradient(90deg, #241d13 0%, var(--xz-panel-2) 56%, var(--xz-panel) 100%);
+  --dhl-button-active:linear-gradient(180deg, rgba(201,168,106,.20), rgba(10,16,22,.34));
+  --dhl-gold:var(--xz-gold);--dhl-gold-bright:var(--xz-gold-2);
+  --dhl-border:var(--xz-line);--dhl-border-strong:var(--xz-line-2);
+  --dhl-shadow:0 10px 30px rgba(0,4,8,.72);
+  --dhl-glow:0 0 10px var(--xz-gold-dim);
 
   position:fixed;inset:0;z-index:2147483646;
   background:rgba(3,6,10,.82);
@@ -23954,7 +23975,21 @@ var XZ_JJB_SKIN = `
   display:grid;place-items:center;border-radius:50%;background:#0d1117;
   font-size:9.5px;line-height:1;letter-spacing:0;color:var(--xz-ink-2);
   border:1px solid rgba(255,255,255,.22);
-  transition:left .55s cubic-bezier(.4,0,.2,1),box-shadow .3s,transform .3s;
+  /* ★★★ v452 修（用户 2026-10-29）：「时序条一直在瞬移，总是一瞬间就闪现了」★★★
+     这一行原来是 left .55s cubic-bezier(.4,0,.2,1) —— 就是"瞬移"的全部原因。
+     力学：GAP_TICK = 42（见 XZJJ 开头），引擎**每 42ms** 调一次 updateRail 改 left。
+        · 过渡时长 550ms **远长于**步进间隔 42ms ⇒ 每 42ms 就有一个新目标，
+          上一段动画永远走不完就被打断 ⇒ 圆点**永远停在起点附近**，
+          只在某次更新"走得够远"时才突然落到新位置 ⇒ 肉眼看到的就是闪现，不是滑动。
+        · 而且 cubic-bezier(.4,0,.2,1) 是**缓动**：两端慢中间快，
+          42ms 的短步被缓动压成"几乎不动"，累积到一定量再一次弹出 ⇒ 一顿一顿的。
+     这**不是新问题**，v108 就定过口径（见 GAP_TICK 那段注释，原文留着）：
+        过渡时长必须 = GAP_TICK，且必须 linear。
+     后来换美化时这条被整体覆盖成 .55s + cubic-bezier ⇒ 回归。
+     ⚠ 改这里必须与 GAP_TICK 同步：42ms。写成别的值就再坏一次。
+     ⚠ 只把 left 那条改掉，box-shadow / transform 保留 .3s ——
+       它们是"状态变化"（成为当前行动者时放大发光），不是逐帧位移，慢一点才对。 */
+  transition:left 42ms linear,box-shadow .3s,transform .3s;
 }
 .xz-jjb-node.ally{color:#9fe8dc;border-color:rgba(94,234,212,.45);}
 .xz-jjb-node.enemy{color:#f4b8b3;border-color:rgba(255,107,107,.45);}
@@ -24034,13 +24069,40 @@ var XZ_JJB_SKIN = `
   opacity:.75;
 }
 .xz-jjb-card.enemy::before{background:linear-gradient(180deg,var(--xz-foe),transparent 72%);}
+/* ★★★ v452 修（用户 2026-10-29）：「我方的卡片的顶部为什么没有绿绿的，对方顶部是红红的，
+   ……搞的好像卡片其实很长，但是显示不全被截断一样」★★★
+   病历：卡片只有 '::before' 那一根**左侧竖线**（2px，top:0→bottom:0）。
+   而敌方卡在可选目标时带 '.pick'（整圈 border-color 变红）——
+   于是观感变成「敌方是完整的框，我方只有左边一根线、上面是开口的」，
+   看起来像卡片被从上面裁掉了一截。
+   实测量过：两边的卡片外形尺寸**完全一致**（不是真的被裁），纯粹是装饰不对称。
+   ⇒ 两侧各补一条**顶部横线**，谁都不缺边：
+      · 我方 = 青绿（--xz-me），敌方 = 红（--xz-foe），与左侧竖线同一个色源，不另起一套颜色；
+      · 用 '::after' 而不是改 border —— '.pick' 已经在用 '::after' 画右上角标记，
+        会和它抢。所以顶部线也画在 '::after' 上，靠 'border-top' 而不是 background，
+        这样 '.pick' 那条角标规则不会把它整个覆盖掉（它只改 left/top/width/height）。
+      · 'pointer-events:none' 必须有：它盖在卡片顶上，否则最上面一行点不到。 */
+.xz-jjb-card::after{
+  content:"";position:absolute;left:0;right:0;top:0;height:2px;z-index:3;
+  pointer-events:none;border-radius:2px;
+  background:linear-gradient(90deg,var(--xz-me),rgba(94,234,212,.06) 72%);
+  opacity:.75;
+}
+.xz-jjb-card.enemy::after{background:linear-gradient(90deg,var(--xz-foe),rgba(255,107,107,.06) 72%);}
 .xz-jjb-card:hover{border-color:var(--xz-line-2);}
-/* 可击：不画整圈红框（那看着像报错），只把左边那条线点亮 + 一枚角 */
+/* 可击：不画整圈红框（那看着像报错），只把左边那条线点亮 + 一枚角
+   ★ v452：角标从 '::after' 挪到 '::before' 的**同一元素上不好做**（那是竖线），
+     所以角标改用 '.pick' 自带的 'box-shadow' 画角 —— 把 '::after' 让给顶部横线。
+     原来这里是一条独立规则覆盖 '::after'，会把顶部线的 'background' 一起清掉
+     （同一个伪元素只能有一份 content/定位），结果「敌人可选时顶部线消失」，
+     正是用户报的「对方顶部红红的、我方没有」那种不对称。
+     ⇒ 现在：'::after' 只画顶部线（由上面的通用规则给，两侧同一条），
+        可击状态用 'border' + 一个左上角的 'box-shadow' 折角表示。 */
 .xz-jjb-card.pick{border-color:rgba(255,107,107,.34);}
 .xz-jjb-card.pick::after{
-  content:"";position:absolute;left:-1px;top:-1px;width:14px;height:14px;
-  border-left:1px solid var(--xz-foe);border-top:1px solid var(--xz-foe);
-  border-top-left-radius:10px;opacity:.85;
+  /* 保留顶部线，只在可击时把它加亮一点，强调"这张能打" */
+  background:linear-gradient(90deg,var(--xz-foe),rgba(255,107,107,.30) 82%);
+  opacity:1;
 }
 .xz-jjb-card.dead{opacity:.34;filter:grayscale(1);}
 .xz-jjb-card.hit{animation:xz-jjb-shake .32s;}
@@ -24231,8 +24293,19 @@ var XZ_JJB_SKIN = `
   font-weight:600;font-size:12px;line-height:1;padding:2px 0;
   border-bottom:1px solid transparent;
 }
-.xz-jjb-nmbox.ally{color:var(--xz-ink);border-bottom-color:rgba(94,234,212,.45);}
-.xz-jjb-nmbox.enemy{color:var(--xz-ink);border-bottom-color:rgba(255,107,107,.45);}
+/* ★★★ v452 修（用户 2026-10-29）：「战报里的双方名字颜色美化又掉了」★★★
+   病历：这两条原来都写 'color:var(--xz-ink)' —— 也就是**两侧同一个颜色**（米白），
+   只靠 'border-bottom-color' 的青/红来区分。截图里看起来就是「名字全白、
+   只有下划线有点颜色」，玩家判定为「美化掉了」。
+   而这一屏的其它地方（血条、时序圆点、卡片左边那条线）都是青绿 vs 红 ——
+   ⇒ 名字跟着阵营走才是一致的表达，也是用户要的。
+   ⚠ 不能直接写 'color:var(--xz-me)'：那是**亮青**（#5eead4），
+     12px 中文正文用亮色在深底上会发飘、闪眼。
+     用同色系的**下沉一档**（青 : #7fd6c8 / 红 : #e79b93），
+     既明显是"我方/敌方"，又不抢技能名（金色）的重点。
+     下划线保留 —— 它是"这是个人名"的记号，跟颜色是两件事，别一起删。 */
+.xz-jjb-nmbox.ally{color:#7fd6c8;border-bottom-color:rgba(94,234,212,.55);}
+.xz-jjb-nmbox.enemy{color:#e79b93;border-bottom-color:rgba(255,107,107,.55);}
 .xz-jjb-lgkw{color:var(--xz-ink-3);font-size:11.5px;}
 .xz-jjb-skn{
   color:var(--xz-gold-2);font-weight:600;font-size:12px;
@@ -24482,7 +24555,7 @@ var XZ_JJB_LEGACY = `
 .xz-jjb-miscitem{font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 10px;border-radius:7px;cursor:pointer;text-align:left;min-height:34px;background:rgba(201,168,106,.14);border:1px solid rgba(201,168,106,.40);color:#e8c98f;}
 .xz-jjb-miscitem:hover{background:rgba(201,168,106,.26);border-color:#d4af37;}
 .xz-jjb-miscitem.off{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);color:#6f7783;cursor:not-allowed;}
-.xz-jjb-teamwrap{position:fixed;inset:0;z-index:2147483647;background:rgba(3,13,20,.78);margin:0;max-width:none;max-height:none;width:100%;height:100%;border:0;outline:none;display:flex;align-items:center;justify-content:center;padding:8px;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;--xz-void:#05080c;--xz-bg:#0a1016;--xz-border:rgba(208,220,226,0.10);--xz-border-strong:rgba(208,220,226,0.26);--xz-gold:#c9a86a;--xz-gold-bright:#e8c98f;--xz-gold-glow:rgba(201,168,106,0.16);--xz-text:#eef2f4;--xz-text-2:#a8b6bc;--xz-muted:#6f8188;--xz-font:"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;--dhl-stage:radial-gradient(circle at 78% 10%, rgba(127,212,193,0.07), transparent 26%), linear-gradient(180deg,#0a1016 0%,#05080c 100%);--dhl-reading:linear-gradient(180deg, rgba(12,19,26,0.96), rgba(6,10,14,0.98));--dhl-header:linear-gradient(90deg, rgba(8,14,20,0.99), rgba(14,22,29,0.97) 52%, rgba(24,20,20,0.99));--dhl-button-active:linear-gradient(180deg, rgba(201,168,106,0.20), rgba(10,16,22,0.34));font-family:var(--xz-font);}
+.xz-jjb-teamwrap{position:fixed;inset:0;z-index:2147483647;background:rgba(3,6,10,.82);margin:0;max-width:none;max-height:none;width:100%;height:100%;border:0;outline:none;display:flex;align-items:center;justify-content:center;padding:8px;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;/* v452：色板同步战斗界面（这些值必须与 #xz-jjb-overlay 里那批令牌逐字相同，因为本层挂在 body 上、不在 overlay 内，var(--xz-line) 在这里取不到） */--xz-void:#05070a;--xz-bg:#05070a;--xz-border:rgba(255,255,255,.065);--xz-border-strong:rgba(255,255,255,.12);--xz-gold:#c9a86a;--xz-gold-bright:#e8cb92;--xz-gold-glow:rgba(201,168,106,.16);--xz-text:#e9e5dc;--xz-text-2:#9c968c;--xz-muted:#615c55;--xz-font:"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;--dhl-stage:radial-gradient(circle at 78% 10%, rgba(94,234,212,.05), transparent 26%), linear-gradient(180deg,#0c1016 0%,#05070a 100%);--dhl-reading:linear-gradient(180deg,#0c1016 0%,#05070a 100%);--dhl-header:linear-gradient(90deg,#241d13 0%,#11161e 56%,#0c1016 100%);--dhl-button-active:linear-gradient(180deg, rgba(201,168,106,0.20), rgba(10,16,22,0.34));font-family:var(--xz-font);}
 #xz-jjb-teamcard{width:min(440px,92vw);max-height:calc(100vh - 16px);overflow:hidden;display:flex;flex-direction:column;background:var(--dhl-stage);border:1px solid var(--xz-border);border-top:2px solid var(--xz-gold-bright);border-radius:12px;box-shadow:0 16px 45px rgba(0,4,8,.75), inset 0 1px 0 rgba(255,255,255,.06);color:var(--xz-text-2);}
 @media (max-width:560px){.xz-jjb-teamwrap{align-items:flex-start;padding-top:8px;}}
 #xz-jjb-teamhead{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--dhl-header);border-bottom:1px solid var(--xz-border);box-shadow:0 4px 15px rgba(0,0,0,.45);}
@@ -26183,7 +26256,32 @@ function build() {
     if (tag) tag.textContent = '';
     var host = q('nodes');
     if (!host) return;
-    host.innerHTML = S.fighters.filter(function (f) { return f.alive; }).map(function (f) {
+    var live = S.fighters.filter(function (f) { return f.alive; });
+
+    /* ★★★ v452 修（用户 2026-10-29）：「时序条一直在瞬移，总是一瞬间就闪现了」★★★
+       ── 真正的病根在这里，不在 CSS（CSS 那条 .55s 也一起改了，两条都要改）──
+       本函数原来**无条件** `host.innerHTML = …` 重建全部圆点。
+       而它被 `render()` 调用，`render()` 又是**每一息、每一次出手**都跑（见 step / act）。
+       ⇒ 圆点是一个**新建的 DOM 节点**，`left` 在创建时就是终值 ——
+         浏览器认为"它一直就在那儿"，CSS transition **一次都不会跑**。
+       ⇒ 玩家看到的必然是"凭空出现在新位置"= 瞬移。
+       这与 CSS 里那句「走一息只调 left、不重建 DOM」的注释**互相矛盾**：
+         注释写的是设计意图，`updateRail()` 也确实只改 left ——
+         但主路径根本不走 updateRail，而是每息重建。
+       ⇒ 修法：**名单没变就不重建**，只调 updateRail()（它只改 left/now/title）。
+         名单变了（有人死了 / 新召唤 / 换局）才重建 —— 那时节点数量本来就变了，
+         重建是正确的，而且新节点应当**直接出现在正确位置**（不要从最左边飞过来）。
+       ⚠ 签名必须含 `alive` 与 `side`：只看名字的话，
+         同名的单位复活/换边不会触发重建，圆点会残留在错误的一侧。
+       ⚠ 不许用"节点数量"当唯一判据：1v1 换人时数量不变，但人是不同的。 */
+    var sig = live.map(function (f) { return f.side + '|' + f.name; }).join('\u0001');
+    if (host.getAttribute('data-rail-sig') === sig
+        && host.childElementCount === live.length) {
+      updateRail();
+      return;
+    }
+    host.setAttribute('data-rail-sig', sig);
+    host.innerHTML = live.map(function (f) {
       var pct = Math.min(100, Math.max(0, (f.track / TRACK_MAX) * 100));
       var cls = PFX + '-node ' + f.side + (f.track >= TRACK_MAX ? ' now' : '');
       return '<span class="' + cls + '" data-node="' + esc(f.name) + '" style="left:' + pct.toFixed(1) + '%" title="'
@@ -26203,6 +26301,12 @@ function build() {
         var pct = Math.min(100, Math.max(0, (f.track / TRACK_MAX) * 100));
         nodes[i].style.left = pct.toFixed(1) + '%';
         if (f.track >= TRACK_MAX) nodes[i].classList.add('now'); else nodes[i].classList.remove('now');
+        /* ★ v452：title 也在这里刷 —— 既然不重建 DOM 了，行内 title 就会变旧。
+           它是悬停提示里唯一能看「条 xx/100、还剩几手」的地方，不能停在开局那一刻。 */
+        try {
+          nodes[i].setAttribute('title', f.name + ' · ' + (f.realm || '') + ' · ' + handsOf(f)
+            + ' 手 · 条 ' + Math.round(f.track) + '/' + TRACK_MAX);
+        } catch (eT) {}
       }
     } catch (e) {}
   }

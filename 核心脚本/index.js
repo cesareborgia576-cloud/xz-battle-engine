@@ -9960,7 +9960,7 @@ function popupDamageNumber(targetId, dmg, isCrit, isDodge, attackerSide, cut) {
     var sideCol = '#ef4444';
     var sideGlow = 'rgba(239,68,68,';
     /* 名字同款字体（衬线 + 700；--xz-font 没定义时用同名兜底栈） */
-    var NAME_FONT = 'font-family:var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);font-weight:700;letter-spacing:.5px;';
+    var NAME_FONT = 'font-family:var(--xz-font,"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif);font-weight:700;letter-spacing:.5px;';
 
     if (isDodge) {
       pop.innerText = '残影闪避';
@@ -10199,7 +10199,7 @@ function showDivineFx(actor, skill, target) {
   var inner = '';
   for (var ci = 0; ci < chars.length; ci++) {
     var sep = (chars[ci] === '·' || chars[ci] === '·');
-    inner += '<span style="display:block;font-family:var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);font-size:' + (sep ? 24 : (isMobile ? 34 : 52)) + 'px;font-weight:' + (sep ? 700 : 900) + ';line-height:1.06;letter-spacing:2px;color:#f1ede4;text-shadow:' + nameGlow + ';animation:' + nameIn + ' .5s cubic-bezier(.2,.9,.3,1.2) ' + (0.18 + ci * 0.075).toFixed(3) + 's both;">' + (sep ? '◆' : esc(chars[ci])) + '</span>';
+    inner += '<span style="display:block;font-family:var(--xz-font,"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif);font-size:' + (sep ? 24 : (isMobile ? 34 : 52)) + 'px;font-weight:' + (sep ? 700 : 900) + ';line-height:1.06;letter-spacing:2px;color:#f1ede4;text-shadow:' + nameGlow + ';animation:' + nameIn + ' .5s cubic-bezier(.2,.9,.3,1.2) ' + (0.18 + ci * 0.075).toFixed(3) + 's both;">' + (sep ? '◆' : esc(chars[ci])) + '</span>';
   }
   nameBox += inner + '</div>';
   nameBox += '<div style="position:absolute;left:50%;top:calc(44% + ' + (isMobile ? 150 : 210) + 'px);transform:translateX(-50%);font-size:calc(16px * var(--xz-fs, 1));letter-spacing:6px;color:' + color + ';white-space:nowrap;' + (lite ? '' : ('text-shadow:0 0 10px ' + color + ';')) + 'animation:' + nameIn + ' .5s ease-out .48s both;">S H E N &#183; T O N G</div>';
@@ -18738,7 +18738,7 @@ var styles = '<style id="' + P + '-styles">' +
 '  border-radius: 12px; border: 2px solid var(--xz-line-strong);' +
 '  box-shadow: 0 22px 60px rgba(0,4,8,0.78);' +
 '  display: flex; flex-direction: column; overflow: hidden;' +
-'  font-family: var(--xz-font, "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif); color: #f1ede4;' +
+'  font-family: var(--xz-font, "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif); color: #f1ede4;' +
 '}' +
 '.' + P + '-header {' +
 '  position: relative; height: 46px; display: flex; align-items: center; padding: 0 12px;' +
@@ -18805,7 +18805,7 @@ var styles = '<style id="' + P + '-styles">' +
 '.' + P + '-runner-node.active-actor.is-enemy { transform: scale(1.2); border-color: #ef4444 !important; box-shadow: 0 0 8px #ef4444; z-index: 20; }' +
 
 /* 第 5 条：战报区做成「楚河汉界」——上下两条硬边框把敌我两块隔开，不再生硬拼接 */
-'.' + P + '-log-box { flex: none; font-weight: 400; font-family: var(--xz-font, "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);' +
+'.' + P + '-log-box { flex: none; font-weight: 400; font-family: var(--xz-font, "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif);' +
   ' position: relative; background: linear-gradient(180deg, rgba(4,15,22,0.95) 0%, rgba(16,37,45,0.94) 100%);' +
   ' border: 1px solid var(--xz-border, rgba(201,168,106,0.22));' +
   ' border-top: 2px solid var(--xz-line-strong, rgba(201,168,106,0.45));' +
@@ -18890,7 +18890,7 @@ var styles = '<style id="' + P + '-styles">' +
    ⚠ 别再加回 blur 类装饰：文字入场也取消了 blur 动画，改成纯透明度 + 缩放。 */
 '.' + P + '-banner-veil { position: absolute; left: 50%; top: 50%; width: 540px; height: 340px; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(ellipse at center, rgba(2,6,14,0.92) 0%, rgba(2,6,14,0.50) 46%, transparent 72%); pointer-events: none; animation: ' + P + '-banner-fade var(--q-dur, 1100ms) ease-out forwards; }' +
 '.' + P + '-banner-ring { position: absolute; left: 50%; top: 50%; width: 158px; height: 88px; margin: -44px 0 0 -79px; border-radius: 50%; border: 1.5px solid var(--q-color, #d9b76d); box-shadow: 0 0 6px var(--q-color, #d9b76d); opacity: 0; animation: ' + P + '-banner-ring var(--q-dur, 1100ms) cubic-bezier(.16,.7,.3,1) forwards; }' +
-'.' + P + '-banner-text { position: relative; z-index: 2; white-space: nowrap; font-size: var(--q-fs, calc(30px * var(--xz-fs, 1))); font-weight: 700; letter-spacing: 0.16em; font-family: var(--xz-font, "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif); background: linear-gradient(180deg, var(--q-text2, #ffffff) 0%, var(--q-text, #d9b76d) 46%, var(--q-color, #d9b76d) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: var(--q-text, #d9b76d); filter: drop-shadow(0 0 var(--q-glow, 18px) var(--q-color, #d9b76d)) drop-shadow(0 2px 6px rgba(0,0,0,0.92)); animation: ' + P + '-banner-text var(--q-dur, 1100ms) cubic-bezier(.18,.8,.24,1) forwards; }' +
+'.' + P + '-banner-text { position: relative; z-index: 2; white-space: nowrap; font-size: var(--q-fs, calc(30px * var(--xz-fs, 1))); font-weight: 700; letter-spacing: 0.16em; font-family: var(--xz-font, "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei", sans-serif); background: linear-gradient(180deg, var(--q-text2, #ffffff) 0%, var(--q-text, #d9b76d) 46%, var(--q-color, #d9b76d) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: var(--q-text, #d9b76d); filter: drop-shadow(0 0 var(--q-glow, 18px) var(--q-color, #d9b76d)) drop-shadow(0 2px 6px rgba(0,0,0,0.92)); animation: ' + P + '-banner-text var(--q-dur, 1100ms) cubic-bezier(.18,.8,.24,1) forwards; }' +
 '.' + P + '-skill-banner.q5 .' + P + '-banner-text, .' + P + '-skill-banner.q6 .' + P + '-banner-text { letter-spacing: 0.2em; filter: drop-shadow(0 0 calc(var(--q-glow, 40px) * 1.4) var(--q-color, #ffd76a)) drop-shadow(0 2px 6px rgba(0,0,0,0.92)); }' +
 '.' + P + '-banner-sub { position: relative; z-index: 2; white-space: nowrap; margin-top: 6px; font-size: var(--q-fs-sub, calc(12px * var(--xz-fs, 1))); letter-spacing: 0.28em; color: var(--q-text, #d9b76d); opacity: 0; text-shadow: 0 1px 6px rgba(0,0,0,0.9); animation: ' + P + '-banner-sub var(--q-dur, 1100ms) ease-out forwards; }' +
 '.' + P + '-banner-spark { position: absolute; left: 50%; top: 50%; border-radius: 50%; background: var(--q-color, #d9b76d); box-shadow: 0 0 5px var(--q-color, #d9b76d); opacity: 0; animation: ' + P + '-banner-spark var(--sd, 0.8s) ease-out forwards; }' +
@@ -23675,7 +23675,7 @@ var XZJJ = (function () {
       + 'padding:11px 13px;border-radius:10px;box-sizing:border-box;'
       + 'background:linear-gradient(180deg,rgba(14,27,32,.985),rgba(3,13,20,.99));'
       + 'border:1px solid rgba(242,194,111,.62);box-shadow:0 14px 34px rgba(0,4,8,.8);'
-      + 'color:#e8e3d3;font:13px/1.55 var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);';
+      + 'color:#e8e3d3;font:13px/1.55 var(--xz-font,"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif);';
     /* ★ v43：**不给了 —— 玄技详情不再放 ✕**。
        用户原话：「x 取消了，点又点不了，我还不如重新再点一遍查看关上就行了」。
        那个 ✕ 是纯字形（不是按钮），命中框小、藏在标题行右边，实测点不中；
@@ -23727,7 +23727,7 @@ var XZJJ = (function () {
       + 'box-sizing:border-box;display:flex;flex-direction:column;gap:1px;'
       + 'background:linear-gradient(180deg,rgba(14,27,32,.98),rgba(3,13,20,.985));'
       + 'border:1px solid rgba(242,194,111,.62);box-shadow:0 14px 34px rgba(0,4,8,.8);'
-      + 'color:#e8e3d3;font:12.5px/1.5 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;';
+      + 'color:#e8e3d3;font:12.5px/1.5 "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif;';
     box.innerHTML = unitPopHtml(f);
     /* ★ v60：点里面的机制名 / 势种 → 就地点开说明 */
     box.addEventListener('click', function (e) { e.stopPropagation(); onAtomChipClick(e); });
@@ -23849,7 +23849,7 @@ var XZ_JJB_SKIN = `
   --xz-hp-a:#ff5d6c; --xz-hp-b:#7d1420;
   --xz-mp-a:#59b4ff; --xz-mp-b:#16406e;
   --xz-r:10px;
-  --xz-font:"Noto Serif SC","Songti SC","Source Han Serif SC",Georgia,"Microsoft YaHei",serif;
+  --xz-font:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif;
   --xz-num:"SF Mono",ui-monospace,"JetBrains Mono",Consolas,monospace;
 
   /* ── 旧令牌别名：不能删 ──
@@ -24557,7 +24557,7 @@ var XZ_JJB_LEGACY = `
 #xz-jjb-bfov-bd{flex:1;overflow-y:auto;padding:8px 10px 12px;}
 .xz-jjb-bfov-sec{margin-bottom:10px;}
 .xz-jjb-bfov-nm{font-size:12px;font-weight:700;margin-bottom:4px;letter-spacing:.3px;}
-.xz-jjb-fly{position:absolute;right:7px;top:2px;font-size:16.5px;font-weight:700;color:#f0d98a;font-family:var(--xz-font,"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif);letter-spacing:.5px;text-shadow:0 1px 3px #000, 0 0 10px rgba(0,4,8,.85);pointer-events:none;animation:xz-jjb-fly .95s ease-out forwards;}
+.xz-jjb-fly{position:absolute;right:7px;top:2px;font-size:16.5px;font-weight:700;color:#f0d98a;font-family:var(--xz-font,"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif);letter-spacing:.5px;text-shadow:0 1px 3px #000, 0 0 10px rgba(0,4,8,.85);pointer-events:none;animation:xz-jjb-fly .95s ease-out forwards;}
 .xz-jjb-fly.ally{color:#4ade80;text-shadow:0 1px 3px #000, 0 0 12px rgba(74,222,128,.55);}
 .xz-jjb-fly.enemy{color:#ff6b6b;text-shadow:0 1px 3px #000, 0 0 12px rgba(255,107,107,.5);}
 @keyframes xz-jjb-fly{0%{opacity:0;transform:translateY(2px) scale(.85);}22%{opacity:1;transform:translateY(-4px) scale(1.08);}100%{opacity:0;transform:translateY(-20px) scale(1);}}
@@ -24567,7 +24567,7 @@ var XZ_JJB_LEGACY = `
 .xz-jjb-miscitem{font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 10px;border-radius:7px;cursor:pointer;text-align:left;min-height:34px;background:rgba(201,168,106,.14);border:1px solid rgba(201,168,106,.40);color:#e8c98f;}
 .xz-jjb-miscitem:hover{background:rgba(201,168,106,.26);border-color:#d4af37;}
 .xz-jjb-miscitem.off{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);color:#6f7783;cursor:not-allowed;}
-.xz-jjb-teamwrap{position:fixed;inset:0;z-index:2147483647;background:rgba(3,6,10,.82);margin:0;max-width:none;max-height:none;width:100%;height:100%;border:0;outline:none;display:flex;align-items:center;justify-content:center;padding:8px;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;/* v452：色板同步战斗界面（这些值必须与 #xz-jjb-overlay 里那批令牌逐字相同，因为本层挂在 body 上、不在 overlay 内，var(--xz-line) 在这里取不到） */--xz-void:#05070a;--xz-bg:#05070a;--xz-border:rgba(255,255,255,.065);--xz-border-strong:rgba(255,255,255,.12);--xz-gold:#c9a86a;--xz-gold-bright:#e8cb92;--xz-gold-glow:rgba(201,168,106,.16);--xz-text:#e9e5dc;--xz-text-2:#9c968c;--xz-muted:#615c55;--xz-font:"Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;--dhl-stage:radial-gradient(circle at 78% 10%, rgba(94,234,212,.05), transparent 26%), linear-gradient(180deg,#0c1016 0%,#05070a 100%);--dhl-reading:linear-gradient(180deg,#0c1016 0%,#05070a 100%);--dhl-header:linear-gradient(90deg,#241d13 0%,#11161e 56%,#0c1016 100%);--dhl-button-active:linear-gradient(180deg, rgba(201,168,106,0.20), rgba(10,16,22,0.34));font-family:var(--xz-font);}
+.xz-jjb-teamwrap{position:fixed;inset:0;z-index:2147483647;background:rgba(3,6,10,.82);margin:0;max-width:none;max-height:none;width:100%;height:100%;border:0;outline:none;display:flex;align-items:center;justify-content:center;padding:8px;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;/* v452：色板同步战斗界面（这些值必须与 #xz-jjb-overlay 里那批令牌逐字相同，因为本层挂在 body 上、不在 overlay 内，var(--xz-line) 在这里取不到） */--xz-void:#05070a;--xz-bg:#05070a;--xz-border:rgba(255,255,255,.065);--xz-border-strong:rgba(255,255,255,.12);--xz-gold:#c9a86a;--xz-gold-bright:#e8cb92;--xz-gold-glow:rgba(201,168,106,.16);--xz-text:#e9e5dc;--xz-text-2:#9c968c;--xz-muted:#615c55;--xz-font:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif;--dhl-stage:radial-gradient(circle at 78% 10%, rgba(94,234,212,.05), transparent 26%), linear-gradient(180deg,#0c1016 0%,#05070a 100%);--dhl-reading:linear-gradient(180deg,#0c1016 0%,#05070a 100%);--dhl-header:linear-gradient(90deg,#241d13 0%,#11161e 56%,#0c1016 100%);--dhl-button-active:linear-gradient(180deg, rgba(201,168,106,0.20), rgba(10,16,22,0.34));font-family:var(--xz-font);}
 #xz-jjb-teamcard{width:min(440px,92vw);max-height:calc(100vh - 16px);overflow:hidden;display:flex;flex-direction:column;background:var(--dhl-stage);border:1px solid var(--xz-border);border-top:2px solid var(--xz-gold-bright);border-radius:12px;box-shadow:0 16px 45px rgba(0,4,8,.75), inset 0 1px 0 rgba(255,255,255,.06);color:var(--xz-text-2);}
 @media (max-width:560px){.xz-jjb-teamwrap{align-items:flex-start;padding-top:8px;}}
 #xz-jjb-teamhead{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--dhl-header);border-bottom:1px solid var(--xz-border);box-shadow:0 4px 15px rgba(0,0,0,.45);}
@@ -27548,7 +27548,7 @@ function build() {
           + 'display:flex;align-items:center;justify-content:center;'
           + 'cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;'
           + 'user-select:none;-webkit-user-select:none;'
-          + 'font:700 19px/1 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
+          + 'font:700 19px/1 "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif;'
           + 'color:#e8c98f;background:linear-gradient(180deg,rgba(126,78,42,.92) 0%,rgba(14,27,32,.96) 100%);'
           + 'border:1px solid rgba(242,194,111,.72);'
           + 'box-shadow:0 0 16px rgba(201,168,106,.30),0 10px 30px rgba(0,4,8,.75);';
@@ -27593,7 +27593,7 @@ function build() {
         try {
           el.style.width = XZ_FLOAT_HIT + 'px';
           el.style.height = XZ_FLOAT_HIT + 'px';
-          el.style.font = '700 19px/1 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif';
+          el.style.font = '700 19px/1 "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif';
           el.style.userSelect = 'none';
           el._xzOnTap = function () { openTeamPick(); };
           if (!el._xzClickFixed) {
@@ -28819,7 +28819,7 @@ function build() {
           + 'width:40px;height:40px;padding:0;box-sizing:border-box;border-radius:50%;'
           + 'display:flex;align-items:center;justify-content:center;'
           + 'cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;'
-          + 'font:700 15px/1 "Noto Serif SC","Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;'
+          + 'font:700 15px/1 "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif;'
           + 'color:#ffe9b8;background:linear-gradient(180deg,rgba(96,78,32,.96) 0%,rgba(24,20,10,.98) 100%);'
           + 'border:1px solid rgba(240,215,155,.85);'
           + 'box-shadow:0 0 14px rgba(201,168,106,.34),0 8px 24px rgba(0,4,8,.7);';
@@ -31824,7 +31824,7 @@ xzJJSniff();
       /* 弹层本体：#xz-jjb-overlay 同一套实色令牌（禁 rgba 底、禁透明卡片 —— 视觉铁律） */
       '.' + P + '-root{width:min(96vw,860px);max-height:94vh;padding:0;border:1px solid rgba(243,217,153,.45);',
       'border-radius:10px;background:#0e1219;color:#f6f1e6;overflow:hidden;',
-      'font-family:"Noto Serif SC","Source Han Serif SC","STSong","KaiTi",serif;box-shadow:0 18px 60px rgba(0,0,0,.75);}',
+      'font-family:var(--xz-font,"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif);box-shadow:0 18px 60px rgba(0,0,0,.75);}',
       '.' + P + '-root::backdrop{background:rgba(4,6,10,.82);}',
       /* 顶部条 */
       '.' + P + '-head{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#141a24;',
@@ -31948,7 +31948,7 @@ xzJJSniff();
       '#' + P + '-reopen{position:fixed;right:14px;bottom:88px;z-index:2147483000;display:none;',
       'align-items:center;gap:6px;padding:7px 12px;border-radius:20px;border:1px solid rgba(243,217,153,.5);',
       'background:#141a24;color:#f3d999;font-size:12px;font-weight:700;cursor:pointer;',
-      'box-shadow:0 4px 18px rgba(0,0,0,.6);font-family:"Noto Serif SC",serif;}',
+      'box-shadow:0 4px 18px rgba(0,0,0,.6);font-family:var(--xz-font,"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif);}',
       '#' + P + '-reopen.on{display:flex;}'
     ].join('');
     doc.head.appendChild(s);

@@ -1093,13 +1093,25 @@ function xzTrackSet(f, val) {
 /* ★ v69 行动条**击退**出口：xzTrackSub —— 与 xzTrackAdd 同一类「唯一出口」：
    前拉（xzTrackAdd）/ 击退（xzTrackSub）都只许经这里写 track/trackDistance，
    两个战斗界面共用同一份条（根层「击退」根即调本函数，不再自己写 f.track）。 */
+/* ★★★ v452：`xzTrackSub` 不再自己算一遍 —— 它是 `xzTrackAdd` 的**反向调用** ★★★
+   病历（用户 2026-10-29 问「击退和乱序是不是冲突了，毕竟都是跑条的」）：
+   原来这两个函数是**同一段算式的两份代码**：
+     xzTrackAdd: f.track = clamp(f.track + d);  f.trackDistance = clamp(… + d)
+     xzTrackSub: f.track = clamp(f.track - d);  f.trackDistance = clamp(… - d)
+   两个 clamp 的上下限、两个字段的写法，各写了一遍。这与「护盾唯一出口」那条病历同源
+   （十几个来源各写一次 → 数值能滚到畸形值）：**同一件事写两遍，改一处必然漂移**。
+   ⇒ 现在只留一份算式，`xzTrackSub` 就是对 `xzTrackAdd` 传负值。
+   ⚠ 名字**必须保留**：根层的修饰分发器按 `op:'trackSub'` 找它（见 dispatch 表
+     `trackSub: function (f, v, entry)`），且老招式数据里有 `击退·50` 在用它。
+     删掉函数名 = 那两招的击退静默失效（roots 找不到 op，不报错）。
+   ⚠ 函数名是「内部修饰名」，**不是玩家机制名** —— `击退` 从不在 XZ_ATOM_TYPES 里，
+     玩家与 AI 都写不出来（07 的 EFFECT_MECH_NAMES 也没有它）。玩家侧这条路
+     只有一个名字：**乱序**（`sub:'shuffle'` = 敌方全体退条）。
+     两者都经这一个出口，所以「跑条」这件事全项目只有一处算术。 */
 function xzTrackSub(f, delta) {
-  if (!f) return;
   var d = Number(delta) || 0;
   if (!d) return;
-  var cap = (typeof TRACK_MAX_DISTANCE !== 'undefined' && TRACK_MAX_DISTANCE) ? TRACK_MAX_DISTANCE : 1000;
-  if (typeof f.track === 'number') f.track = Math.max(0, Math.min(cap * 2, f.track - d));
-  f.trackDistance = Math.max(0, Math.min(cap, (Number(f.trackDistance) || 0) - d));
+  xzTrackAdd(f, -d);
 }
 
 /* ═══ ★ v69 护盾**唯一出口**：xzShieldSet ═══════════════════════════════════

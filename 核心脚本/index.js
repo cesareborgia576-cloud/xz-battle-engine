@@ -1260,8 +1260,7 @@ function xzHeal(f, amount) {
   return gained;
 }
 
-/* ═══ ★ v69 根层内嵌开始（来源：脚本/根层.js —— 勿手改本段；改 根层.js 后重跑 工具/patch_6c.mjs）═══ */
-(function () {   /* ← 纯 IIFE：既能**整段贴进 04**（04 里 xzShieldSet/xzTrackAdd/xzTrackSub/xzHeal
+/* ═══ ★ v69 根层内嵌开始（来源：脚本/根层.js —— 勿手改本段；改 根层.js 后重跑 工具/patch_6c.mjs）═══ */(function () {   /* ← 纯 IIFE：既能**整段贴进 04**（04 里 xzShieldSet/xzTrackAdd/xzTrackSub/xzHeal
                     在同一作用域），又能被 工具/root_layer_harness.mjs 用 vm.runInContext 独立跑。
                     ★ 无任何 module 引用（进了 04 的 ES5/IIFE 就是悬空引用）。 */
 
@@ -1349,7 +1348,7 @@ var _v2StateSet = (typeof v2StateSet === 'function')
 var ROOT_OPS = {
   /* 修饰：百分比加成写进属性池
      ⚠ 2026-10-14 修正（探针 probe_embed_scope.mjs 实测抓出）：
-       旧实现 'next = Math.round(base * (1 + v)); if (next === base) next = base + 1;'
+       旧实现 `next = Math.round(base * (1 + v)); if (next === base) next = base + 1;`
        对 **atkVal 这类「基准为 1 的倍率」字段是致命的**：
          base=1, v=0.1 ⇒ round(1.1)=1 ⇒ 与 base 相等 ⇒ 触发保底 ⇒ atkVal = 2
        即「加攻 10%」实际变成 **+100%**（加攻是全表最高频根，253 次调用）。
@@ -1463,7 +1462,7 @@ var ROOT_OPS = {
     var amount = Math.max(1, Math.round(rootNum(f.maxHp) * v));
     ctx.dealDamage(f, amount, entry);
   },
-  /* 处决：低于「阈值」才触发的斩杀（批次 6-D 补，数据侧真实需求 10 条，如 '处决·22·1.85'）
+  /* 处决：低于「阈值」才触发的斩杀（批次 6-D 补，数据侧真实需求 10 条，如 `处决·22·1.85`）
      ⚠ 与 dealDamage 的差别：目标气血占比 > 阈值 时**什么都不做**。
        这是**合法的条件未满足**，不是空转 —— 由 applyRoot 的 condUnmet 显式区分，
        否则 fuzz 生效闸会把「没到斩杀线」误判成「根不生效」。 */
@@ -1531,7 +1530,7 @@ var ROOT_LAYER = {
   /* ⚠ 2026-10-14 修正（由用户提问「增益为什么还能打人」查出）：
      本根 hits:'self' ⇒ dealDamage(self) ⇒ **扣自己的血**（使用强力技能的反噬/自伤代价）。
      原先标成「增益」是错的 —— 自伤对自己有害，应为「减益」；
-     text 原先写「挨打反弹」也与实现相反（反弹应扣敌人，见 B1 段的 '反震' 根）。 */
+     text 原先写「挨打反弹」也与实现相反（反弹应扣敌人，见 B1 段的 `反震` 根）。 */
   'A1.气血·损.+=': {
     trigger: '反噬', hits: 'self', 归属: '减益', 形式: '结算', op: 'dealDamage', field: 'hp',
     params: { 数值: { def: 0.05, min: 0, max: 2 } },
@@ -1586,7 +1585,7 @@ var ROOT_LAYER = {
 
   /* ─────────────── B1 · 敌方单体（10 个）─────────────── */
   /* ⚠ 2026-10-14 修正（架构评审 D1）：field 原为 'dmgTakenRound' —— **那是错的**。
-     04:9517 'gateBudget = maxHp*gateRate - dmgTakenRound' ／ 04:10264 注释「不再绕过单回合 60% 闸门」
+     04:9517 `gateBudget = maxHp*gateRate - dmgTakenRound` ／ 04:10264 注释「不再绕过单回合 60% 闸门」
      ⇒ dmgTakenRound 是**本回合已承伤累计**的闸门记账字段。对它 flatAdd/mulAmp 不是「让敌人更受伤」，
        而是**把敌人的承伤闸门提前顶满，让它更早进入免伤保护 —— 方向完全反了**。
      正确的「受伤加深」字段是 dmgTakenAmp（单体 04:9575 ／ 群攻 04:9815 ／ 直接伤害 04:10309，封顶 +1.0）。 */
@@ -1683,31 +1682,31 @@ var ROOT_LAYER = {
      来源：工具/diag_roots_3layer.mjs 对 1227 条已落表 roots 的审计。
      三个根全部是「数据侧有需求、38 根里没有」的真空缺，不是拍脑袋加的。 */
 
-  /* 反震（51 条需求，如 '反震·4'）：挨打反弹给攻击者
-     ⚠ 与 A1 的 '反噬' 严格区分：反噬扣自己（hits:'self'，自伤代价），反震扣敌人（hits:'target'）。
+  /* 反震（51 条需求，如 `反震·4`）：挨打反弹给攻击者
+     ⚠ 与 A1 的 `反噬` 严格区分：反噬扣自己（hits:'self'，自伤代价），反震扣敌人（hits:'target'）。
        审计时曾误把「反震」映射给「反噬」根 —— 那会让 51 个技能变成自己扣血，已纠正。 */
   'B1.反震.+=': {
     trigger: '反震', hits: 'target', 归属: '减益', 形式: '结算', op: 'dealDamage', field: 'hp',
     params: { 数值: { def: 0.05, min: 0, max: 2 } },
     text: '反震（thornReflect/04:4439）—— 挨打反弹，扣**该敌**气血，走 ctx.dealDamage'
   },
-  /* 处决（10 条需求，如 '处决·22·1.85'）：目标气血低于阈值时的斩杀 */
+  /* 处决（10 条需求，如 `处决·22·1.85`）：目标气血低于阈值时的斩杀 */
   'B1.处决.+=': {
     trigger: '处决', hits: 'target', 归属: '减益', 形式: '结算', op: 'executeDamage', field: 'hp',
     params: { 阈值: { def: 0.25, min: 0, max: 1 }, 倍率: { def: 2.0, min: 0.1, max: 10 } },
     text: '目标气血占比 ≤ 阈值 时，造成 倍率×maxHp 的斩杀伤害（走 ctx.dealDamage）；未达线则 condUnmet'
   },
   /* 穿防（架构评审 D2）：引擎有成熟的穿防机制（04 出现 39 次），
-     但**根层此前一个根都没写 pierce 字段**（grep 计数 = 0）—— 68 条 '加攻·穿防·N' 无处安放。
-     证据：04:1625 'pierce:0.40 玄技自带穿甲' ／ 04:4094 ''一刀两断':{pierce:0.30}' ／
-          04:4097 ''万军取首':{pierce:0.35}' ／ 04:4503 注释「结算侧确实读过的字段 pierce/… 白名单」
+     但**根层此前一个根都没写 pierce 字段**（grep 计数 = 0）—— 68 条 `加攻·穿防·N` 无处安放。
+     证据：04:1625 `pierce:0.40 玄技自带穿甲` ／ 04:4094 `'一刀两断':{pierce:0.30}` ／
+          04:4097 `'万军取首':{pierce:0.35}` ／ 04:4503 注释「结算侧确实读过的字段 pierce/… 白名单」
      ⚠ 待验证：pierce 的**实际消费点**需与 04:9117 那条同类警告一起复核
        （该行指出 atkAmp「常驻攻击提升全是死的」）—— 若 pierce 也是死字段，本根须改用引擎真读的口径。 */
   'A1.穿防.+=': {
     trigger: '穿防', hits: 'self', 归属: '增益', 形式: '修饰', op: 'pctAdd', field: 'pierce',
     params: { 数值: { def: 0.1, min: 0, max: 1 } }, text: '本方穿防提升（无视目标防御的比例）'
   },
-  /* 群伤（5 条需求，如 '群伤·按敌·12'）：B2 原本只有群削防/群减速/群种厄，**没有群体伤害根** */
+  /* 群伤（5 条需求，如 `群伤·按敌·12`）：B2 原本只有群削防/群减速/群种厄，**没有群体伤害根** */
   'B2.气血·损.+=': {
     trigger: '群伤', hits: 'enemies', 归属: '减益', 形式: '结算', op: 'dealDamage', field: 'hp',
     params: { 数值: { def: 0.1, min: 0, max: 2 } },

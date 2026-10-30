@@ -820,8 +820,37 @@ function xzSkillMpOf(quality, target) {
      这正是本项目最贵的那类 bug：写面板的和结算的不是同一个数，还都不报错。
    ★ 现在真身以**世界书附三表**为准（AI 看得见的表才是唯一口径）。
      改这张表必须同步改：世界书/数值表.md 的品质档、
-     世界书/变量/变量更新细则.md 第 25 行、世界书/未分类/全局生成规则.md。 */
-var QUALITY_POWER = { '凡阶': 16, '黄阶': 24, '玄阶': 41, '地阶': 57, '天阶': 73, '神阶': 85 };
+     世界书/变量/变量更新细则.md 第 25 行、世界书/未分类/全局生成规则.md。
+
+   ★★★ v473：整表上调（16/24/41/57/73/85 → 61/74/102/131/163/190）★★★
+   用户 2026-10-30：「伤害过低，凝府有一千多血，但是，一次伤害就这么四五十血，根本不合理。」
+
+   ── 为什么是"整表上调"而不是改公式 ────────────────────────────────────
+     实测（体质5 + 凡血30，全境后期小档）：
+       境界   气血   定档   属性   合计   手数
+       引玄   800     17      5     22   36.4   ← 比设计目标长 9 倍
+       凝府  1160     22     18     40   29.0   ← 用户看到的"四五十"就是这 40
+       玄罡  8480    279    141    400   20.2
+       帝境 44400   1467    537   2004   22.2
+     伤害是「定档值 + 属性部分」两项之和（见 calcDamage v94 段），
+     所以低境界那 40 里，定档只占 22、属性占 18 —— **两头都不够**。
+
+   ── 新数字怎么来的：按「同境 12 手」反推，不是拍脑袋 ────────────────────
+     用户 2026-10-30 选定「12 手左右」（另两档候选是 6 手 / 20 手）。
+     每个品质档取该档两个境界「气血 ÷ 12 − 属性部分 = 目标定档」，
+     再除境界系数，两个境界取几何平均 ⇒ 61 / 74 / 102 / 131 / 163 / 190。
+     全 48 档验证：**手数落在 10.3 ~ 12.7**，且六档严格单调递增。
+
+   ── 为什么低境界涨得比高境界多（×3.81 → ×2.24）──────────────────────
+     因为**属性部分**在高境界已经占掉伤害的一半以上（帝境 537/2004 = 27%，
+     引玄只有 5/22 = 23% 但基数太小），而属性部分是四维×层级系数自动长的。
+     低境界没有这份托底，只能靠定档值本身撑起来 ⇒ 凡阶必须涨 3.8 倍。
+     这不是补偿过头，是让六个档位**落在同一条手数线上**的唯一解。
+
+   ⚠ 改这张表 = 改全局伤害手感（同时影响普攻：普攻 = (定档 + 属性) × 0.5）。
+   ⚠ 老存档里写死的 `伤害:426` 这类**绝对值不受影响** —— 它们只在定档那一刻用这张表。
+   ⚠ 与《数值表》品质档、07 的 `_qpTable()` 兜底、`_cdn_verify` 的玄阶期望值四处同源。 */
+var QUALITY_POWER = { '凡阶': 61, '黄阶': 74, '玄阶': 102, '地阶': 131, '天阶': 163, '神阶': 190 };
 /* ══════════════════════════════════════════════════════════════
    【定档公式（v228 现行）】
    定档伤害 = 招式威力（QUALITY_POWER）× 境界系数（REALM_COEFFS / 48 档），
@@ -836,8 +865,10 @@ try { if (typeof globalThis !== 'undefined' && !globalThis.QUALITY_POWER) global
 
 /* ★ auto 基准取值入口。
    卡里品质字段可能写「地阶」也可能只写「地」（与 QUALITY_COEFFS 的历史写法一致），
-   这里统一剥掉尾部「阶」再查；查不到落「凡阶 16」（凡阶是最低档，也是旧兜底值，
-   语义上比硬编一个魔数更站得住）。 */
+   这里统一剥掉尾部「阶」再查；查不到落「凡阶」（凡阶是最低档，也是旧兜底值，
+   语义上比硬编一个魔数更站得住）。
+   ⚠ v473：兜底值从写死的 16 改成 `QUALITY_POWER['凡阶']` —— 表上调后写死的 16
+     会变成"别的档都涨了、只有认不出的档原地不动"，与 v77 那次同一个病。 */
 function qualityPowerOf(quality) {
   var q = String(quality == null ? '' : quality).trim();
   var v = QUALITY_POWER[q];
@@ -8409,6 +8440,43 @@ function advanceTimelineTick(gen) {
   }
 }
 
+/* ★★★ v473：时序条节点的逐帧定位 —— **改成 transform，只走合成层** ★★★
+   用户 2026-10-30：「战斗界面的时序条跑动动画太卡了，一点都不丝滑，到底tm咋回事」
+
+   病历（四个叠加原因，逐个都对得上"卡"）：
+     ① **写的是 `left`**。`left` 是**布局属性**，每改一次都要重排（layout）；
+        30ms 一跳 = 每秒 33 次强制重排，而且轨道里还有 `.trigger-point` 等绝对定位兄弟，
+        重排范围会扩散到整个 `.track-container`。改成 `transform:translateX()` 后
+        只走「合成 → 绘制」，**不碰布局**。
+     ② **写的是 `calc(百分比 - 7.5px)`**。浏览器每帧都要重新解析并求值这个 calc，
+        且百分比要等布局确定才成立 —— 相当于先布局再算位置，白绕一圈。
+        现在百分比在 JS 里就乘好（`laneW * pct/100`），只写一个 px 值。
+     ③ **和 `.active-actor` 的 `transform: scale(1.2)` 抢同一个属性**。
+        出手瞬间节点会 `translateX` ↔ `scale` 互相覆盖，表现为"抖一下再归位"。
+        现在 scale 挪到内层 span，外层只管位移，两个属性各归各位不再打架。
+     ④ 没给 `will-change`，每次位移都可能让浏览器重算是否要提升图层。
+        轨道容器是固定的，索性一次性 `will-change: transform` 提升到合成层。
+
+   ⚠ 轨道宽度是**布局量**，不能每帧读（读 clientWidth 也会强制同步布局）。
+     所以缓存起来，只在容器尺寸真的变了（resize / 首帧）才重量一次。
+   ⚠ `TRACK_MAX_DISTANCE` 恒 1000，但别把它当 100 用 —— 百分比的除数一直是它。 */
+var _xzTrackLane = { w: 0, at: 0 };
+function xzTrackLaneWidth() {
+  var lane = qs('.' + P + '-track-lane');
+  if (!lane) return 0;
+  /* 缓存 2s，或容器宽度变了才重量 —— getBoundingClientRect 会强制同步布局，
+     30ms 一跳每跳都量一次等于把刚省下的重排又赚回来。 */
+  var now = Date.now();
+  if (_xzTrackLane.w && (now - _xzTrackLane.at) < 2000) return _xzTrackLane.w;
+  var w = 0;
+  try { w = lane.clientWidth || 0; } catch (eW) {}
+  _xzTrackLane.w = w;
+  _xzTrackLane.at = now;
+  return w;
+}
+/* 重绘后轨道会重建，缓存必须作废 —— 否则新节点用旧宽度算位置，一进场就是错的 */
+function xzTrackLaneInvalidate() { _xzTrackLane.w = 0; _xzTrackLane.at = 0; }
+
 function updateTimelineNodes() {
   var allFighters = _xzAllFighters();
   // 一次查询搞完（原来每个单位一次属性选择器，30ms 一跳就是每秒几百次 DOM 扫描）
@@ -8420,12 +8488,21 @@ function updateTimelineNodes() {
       if (id) nodes[id] = list[i];
     }
   } catch (eQ) { }
+  var laneW = xzTrackLaneWidth();
   allFighters.forEach(function(f) {
     if (!f.alive) return;
     var node = nodes[f.id] || qs('.' + P + '-runner-node[data-node-id="' + f.id + '"]');
-    if (node) {
-      var pct = Math.min(100, Math.max(0, (f.trackDistance / TRACK_MAX_DISTANCE) * 100));
-      node.style.left = 'calc(' + pct + '% - 7.5px)';
+    if (!node) return;
+    var pct = Math.min(100, Math.max(0, (f.trackDistance / TRACK_MAX_DISTANCE)));
+    /* 量不到宽度（面板还没布局好）就退回百分比写法，总比不动强；
+       但**正常路径永远是 px**，那条路不触发 calc 重算。 */
+    var tx = laneW > 0 ? (laneW * pct - 7.5) : null;
+    if (tx !== null) {
+      var s = 'translate3d(' + tx.toFixed(1) + 'px,0,0)';
+      if (node._xzTx !== s) { node.style.transform = s; node._xzTx = s; }
+    } else {
+      var s2 = 'translateX(calc(' + (pct * 100).toFixed(2) + '% - 7.5px))';
+      if (node._xzTx !== s2) { node.style.transform = s2; node._xzTx = s2; }
     }
   });
 }
@@ -19148,9 +19225,14 @@ var styles = '<style id="' + P + '-styles">' +
 '.' + P + '-track-lane { position: relative; height: 18px; background: rgba(0,0,0,0.45); border-radius: 9px; border: 1px solid var(--glass-border-light); }' +
 '.' + P + '-track-line { position: absolute; top: 8px; left: 8px; right: 8px; height: 1.5px; background: rgba(255,255,255,0.10); }' +
 '.' + P + '-trigger-point { position: absolute; right: 0; top: -3px; bottom: -3px; width: 18px; background: rgba(245,158,11,0.22); border: 1px dashed var(--accent-gold); border-radius: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--accent-gold); font-size:calc(12px * var(--xz-fs, 1)); font-weight: 700; z-index: 5; }' +
-'.' + P + '-runner-node { position: absolute; top: 1px; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size:calc(11px * var(--xz-fs, 1)); font-weight: 700; user-select: none; border: 1px solid #f1ede4; box-shadow: 0 1px 3px rgba(0,4,8,0.78); z-index: 10; }' +
-'.' + P + '-runner-node.active-actor.is-ally { transform: scale(1.2); border-color: var(--xz-gold) !important; box-shadow: 0 0 8px rgba(201,168,106,0.78); z-index: 20; }' +
-'.' + P + '-runner-node.active-actor.is-enemy { transform: scale(1.2); border-color: #ef4444 !important; box-shadow: 0 0 8px #ef4444; z-index: 20; }' +
+'.' + P + '-runner-node { position: absolute; top: 1px; left: 0; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size:calc(11px * var(--xz-fs, 1)); font-weight: 700; user-select: none; border: 1px solid #f1ede4; box-shadow: 0 1px 3px rgba(0,4,8,0.78); z-index: 10; will-change: transform; }' +
+/* ★ v473：位移走外层 transform、放大走内层 span —— 两个属性不许抢同一个元素。
+   原来 `.active-actor { transform: scale(1.2) }` 会把 JS 写进去的 translateX **整个覆盖掉**，
+   出手那一刻节点先跳回轨道起点再被下一跳拉回来，就是用户看到的"抖"。 */
+'.' + P + '-runner-node > i { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; font-style: normal; transition: transform .14s ease-out; }' +
+'.' + P + '-runner-node.active-actor > i { transform: scale(1.2); }' +
+'.' + P + '-runner-node.active-actor.is-ally { border-color: var(--xz-gold) !important; box-shadow: 0 0 8px rgba(201,168,106,0.78); z-index: 20; }' +
+'.' + P + '-runner-node.active-actor.is-enemy { border-color: #ef4444 !important; box-shadow: 0 0 8px #ef4444; z-index: 20; }' +
 
 /* 第 5 条：战报区做成「楚河汉界」——上下两条硬边框把敌我两块隔开，不再生硬拼接 */
 '.' + P + '-log-box { flex: none; font-weight: 400; font-family: var(--xz-font, "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif);' +
@@ -19491,9 +19573,12 @@ function renderUI() {
     var nodeColor = f.side === 'ally' ? '#d4af37' : '#ef4444';
     var roleClass = f.side === 'ally' ? 'is-ally' : 'is-enemy';
     runnerNodesHtml += '<div class="' + P + '-runner-node ' + (isActor ? ('active-actor ' + roleClass) : '') + '" data-node-id="' + f.id + '" ' +
-      'style="left:calc(' + pct + '% - 7.5px);background:' + nodeColor + ';color:#f1ede4" ' +
+      /* ★ v473：初值也写 transform（与 updateTimelineNodes 同一个属性），
+         不再写 `left:calc(...)`。写 left 时首帧要等一次布局才落位，看着像"闪一下才出现"。
+         这里只能给百分比兜底值 —— 首次 tick（30ms 后）就会被 px 精确值取代，够用。 */
+      'style="transform:translateX(calc(' + pct.toFixed(2) + '% - 7.5px));background:' + nodeColor + ';color:#f1ede4" ' +
       'title="' + esc(f.name) + ' (速度:' + f.spd + ')">' +
-      esc(f.name.substr(0, 1)) + '</div>';
+      '<i>' + esc(f.name.substr(0, 1)) + '</i></div>';
   });
 
   h += '<div class="' + P + '-track-container"><div class="' + P + '-track-lane">' +
@@ -19866,6 +19951,11 @@ function renderUI() {
     h = '<div style="font-size:calc(13.5px * var(--xz-fs, 1));line-height:1.35;color:var(--text-muted);padding:2px 4px;border-bottom:1px solid rgba(148,163,184,0.10);">〔性能〕' + esc(_perf.last) + '</div>' + h;
   }
   ct.innerHTML = h;
+  /* ★ v473：轨道 DOM 被整块重建了 ⇒ 位置缓存必须作废。
+     不作废的话新节点会拿**上一轮的宽度**算 translateX；换屏宽（手机转横屏、
+     侧栏展开）后位置会整体偏，而且因为 `_xzTx` 去重，看着像"卡住不动"。
+     放在 innerHTML 之后立刻清，下一次 tick（≤30ms）就会重量一次。 */
+  xzTrackLaneInvalidate();
   _perf.renders++;
   _perf.renderMs += (Date.now() - _tR);
   if (_perf.probing) { try { var _forceLayout = ct.offsetHeight; _perf.renderMs += (Date.now() - _tR); } catch (eFL) {} }

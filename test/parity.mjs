@@ -130,8 +130,59 @@ function stmtEnd(src, startIdx) {
   return -1;
 }
 
-const src04 = fs.readFileSync(SRC04, 'utf8');
+const src04Raw = fs.readFileSync(SRC04, 'utf8');
 const coreSrc = fs.readFileSync(CORE, 'utf8');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★★ v473：把「可调数值表」对齐到引擎现值，再拿去双跑 ★★★
+   ─────────────────────────────────────────────────────────────────────────
+   这道测试要验的是「**算法**有没有被抽坏」——
+   不是「数值表和三个月前的备份是不是一个字都不差」。
+
+   病历（v473 实测）：把 `QUALITY_POWER` 从 16/24/41/57/73/85 上调到
+   61/74/102/131/163/190 之后，双跑立刻报 **272 / 1968 格不一致**，
+   全部集中在 `qualityPowerOf` / `xzSkillCapOf` / `xzClampToCap` 三个函数上。
+   但那三个函数的**代码一个字节都没动** —— 变的只是它们读的那张表。
+   ⇒ 这个红是**假的**：它把「参数调整」报成了「算法漂移」。
+     而假红比不红更坏（它会训练人无视红色，本项目第 4 条铁律）。
+
+   ── 做法 ──────────────────────────────────────────────────────────────
+   装沙箱之前，把备份那份 src 里的这几个**纯参数常量**整段替换成引擎当前值。
+   换完再切函数：算法用备份的（这才是有意义的对照），参数用今天的（这才不是刻舟求剑）。
+
+   ⚠ 只能放**纯参数表**。任何参与分支/结构的常量（XZ_LEVEL_SUBSTEP 之类
+     虽然也是参数，但它一旦错就会把整条链改向，应当继续用备份的来验）不要加进来。
+     判断标准：这张表改了，**应不应该**影响双跑结果？
+       · 品质威力 —— 改了就应该影响，所以必须先对齐，再比算法；
+       · 境界系数 / 层级系数 / 气血基数 —— 同上，都是"调平衡"用的参数；
+     但要小心：这些表**同时在《数值表》里有副本**，那边由别的闸对账，
+     这里只负责让"算法"这一层不受参数调整干扰。
+   ⚠ 替换用正则精确匹配整行 `var NAME = {...};`，匹配不到就 **当场报错**，
+     不许静默跳过 —— 静默跳过等于这条对齐没做，272 格假红会原样回来。
+   ══════════════════════════════════════════════════════════════════════════ */
+/* ⚠ 这份名单**只能是 core.js 里真有的**常量（它只抽 25 张表，XZ_HP_BASE 就不在里面）。
+   写进去一个不存在的名字 ⇒ 下面第一道检查就 `process.exit(1)`，整条测试停摆。
+   历史上正是因为「以为它在里面」，白白停了一次 —— 名单要照着 `grep '^var' core.js` 现取。 */
+const TUNABLE_CONSTS = ['QUALITY_POWER', 'REALM_COEFFS', 'XZ_LEVEL_COEFF', 'XZ_PEAK_COEFF'];
+let src04 = src04Raw;
+const aligned = [];
+for (const name of TUNABLE_CONSTS) {
+  /* 引擎侧（core.js 就是 index.js 抽出来的） */
+  const reCore = new RegExp('var\\s+' + name + '\\s*=\\s*\\{[\\s\\S]*?\\n?\\};');
+  const mCore = coreSrc.match(reCore);
+  if (!mCore) { console.error('✗ 引擎里找不到可调常量 ' + name + ' —— 双跑无法对齐，停止'); process.exit(1); }
+  /* 备份侧 */
+  const reBak = new RegExp('var\\s+' + name + '\\s*=\\s*\\{[\\s\\S]*?\\n?\\};');
+  const mBak = src04.match(reBak);
+  if (!mBak) { console.error('✗ 备份 04 里找不到 ' + name + ' —— 双跑无法对齐，停止'); process.exit(1); }
+  if (mBak[0] === mCore[0]) continue;      /* 本来就一样，不用动，也不该记进 aligned */
+  src04 = src04.replace(mBak[0], mCore[0]);
+  aligned.push(name);
+}
+if (aligned.length) {
+  console.log('· 双跑前已把备份里的可调数值表对齐到引擎现值：' + aligned.join('、'));
+  console.log('  （验的是算法是否一致；这几张表本身由《数值表》对账闸管）');
+}
 
 /* 从 core.js 的 export 段拿到「要比对的名字清单」——这就是唯一事实源。
    新加函数不用改测试，改了 04 忘了重抽会被 --check 挡，这里也跟着对齐。 */

@@ -438,7 +438,10 @@ if (!fs.existsSync(TRUE_SRC)) {
     /* 数值真的算得出来 —— 「挂上了」和「算得对」是两件事。
        这两个数是项目里的固定基准（玄阶 41 / 帝境 17.26），改动了就该有人知道。 */
     const q = typeof reg.qualityPowerOf === 'function' ? reg.qualityPowerOf('玄阶') : undefined;
-    q === 41 ? ok('qualityPowerOf(玄阶) → 41') : bad('qualityPowerOf(玄阶) → ' + q);
+    /* ⚠ v473：期望值跟着 QUALITY_POWER 走（玄阶 41 → 102）。
+       这里**必须**是硬编码而不是从引擎读 —— 本文件验的就是「CDN 上那份
+       是不是我们以为的那份」，从被测对象身上现取期望值，等于自己证明自己。 */
+    q === 102 ? ok('qualityPowerOf(玄阶) → 102') : bad('qualityPowerOf(玄阶) → ' + q);
 
     const m = typeof reg.realmMultByName === 'function' ? reg.realmMultByName('帝境') : undefined;
     typeof m === 'number' && Math.abs(m - 17.26) < 1e-9

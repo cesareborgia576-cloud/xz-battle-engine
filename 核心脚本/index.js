@@ -309,16 +309,20 @@ function fxMarkBuildCost(ms) {
 var PORTRAIT_URLS = {
   /* 第 4 条：立绘改为在人物框内半透明显示后，本表与状态栏 XZ_PORTRAITS 保持一致，
      否则战斗中绝大多数角色都会是空白。空字符串 = 该角色不出立绘。 */
-  '云疏月': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/TW_QQv3%E5%8A%A0%E9%80%9F_00005_.png',
+  /* [v473] 云疏月换新图（原 TW_QQv3%E5%8A%A0%E9%80%9F_00005_.png 已弃用） */
+  '云疏月': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/XL_yunshuyue_20261030.jpg',
+  /* [v473] 司幽怜原来**没有这个键**（幽月宗主一直没立绘），本次补上 */
+  '司幽怜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/XL_siyoulian_20261030.jpg',
   '姜绾绾': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791499913161.png',
   '白长雪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791499528667.png',
   '陆昭华': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791507840285.png',
   '梵清仪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/1791502271286.jpg',
-  '药仙儿': '',
+  '药仙儿': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/XL_yaoxianer_20261030.jpg',
   '沈千金': '',
   '洛无尘': '',
   '秦烈': '',
-  '沈清颜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/TW_QQv2%E8%84%B8%E9%83%A8%E5%8F%82%E8%80%83_00020_.png',
+  /* [v473] 沈清颜换新图（原「脸部参考_00020」那张已弃用，别再用它） */
+  '沈清颜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/XL_shenqingyan_20261030.jpg',
   '凌星遥': '',
   '言清漪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/Ab3qJJDgRKZTAAAAAElFTkSuQmCC.png',
   '阿依莎': 'https://a.imgckr.com/2026/10/14/XDkl5.png',

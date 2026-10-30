@@ -14963,7 +14963,7 @@ function xzEffKeyOf(effKey, parsed) {
 var XZ_PERM_KEYS = ['dmg', 'dmgDown', 'dr', 'vuln', 'evade',
   'hastePct', 'hasteFlat', 'slowPct', 'slowFlat', 'crit', 'critDmg', 'regen',
   /* ★ v348：上限类常驻倍率。它们不进任何乘区（不参与 calcDamage），
-     只给 'applyV75Effects' 的 hpMax/mpMax 分支做**累加记账**用 ——
+     只给 applyV75Effects 的 hpMax/mpMax 分支做**累加记账**用 ——
      记在这里而不是另开一个字段，是为了让「常驻加成」只有一本账本
      （本项目栽过太多次：同一件事两处实现 ⇒ 只改一处 ⇒ 静默半失效）。 */
   'hpMaxK', 'mpMaxK'];

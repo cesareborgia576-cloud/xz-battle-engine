@@ -1806,8 +1806,29 @@ function xzDrOf(f, ctx) {
   if (!f) return 0;
   var v = 0;
   try {
+    /* ★★★ v484：**必须读常驻三源**（血脉 / 玄诀 / 武器）★★★
+       用户 2026-10-31：「没挂上，因为里面减伤值什么的没变化，都是 0」
+                「战报里说 0，然后面板里减伤值等也确实没变化」。
+
+       真身：血脉写「减伤:28」，parseBloodEffect 认出来了、buildBloodBuffs 装进
+       `f.bloodBuffs` 了、`mechBuffsOf` 也汇总了 —— **每一次都对**。
+       但本函数只读 'v75DrPct'（招式临时）与 '_xzPerm.dr'（主动增益），
+       两个都不收被动三源 ⇒ 面板恒 0%。
+
+       为什么以前看着"能用"：calcDamage 里有一条 `mechSumField(defender,'dr')`
+       自己算了一遍再塞进 ctx.selfReduce —— 于是**实战是对的、面板是 0**。
+       这正是本项目最贵的那类 bug（算法一份、读者各写一份）：玩家在面板上看到 0，
+       就断定效果没挂上，而战报另一句「0 条已挂上」刚好把那句话坐实。
+
+       ⇒ 口径统一到**这一个函数**：mech 三源在这里读，calcDamage 那边不再自己算
+         （它只负责传 'ignoreDr' 这类「要看对手是谁」的上下文）。
+       ⚠ 封顶 0.40 与原来 calcDamage 里那句 `Math.min(0.40, _drSum)` 同额，
+         不许在这里改调 —— 改了就是平衡变更，不是修 bug。 */
+    var _mechDr = Math.min(0.40, mechSumField(f, 'dr'));
+    if (ctx && ctx.ignoreDr) _mechDr = _mechDr * (1 - Math.min(0.90, Number(ctx.ignoreDr) || 0));
     v = ((Number(f.v75DrPct) > 0 && (Number(f.v75DrRounds) || 0) > 0) ? Number(f.v75DrPct) : 0)
       + xzPermOf(f).dr
+      + _mechDr
       + (ctx && ctx.selfReduce ? Number(ctx.selfReduce) || 0 : 0);
     v = Math.min(0.75, v);
   } catch (eDR) {}

@@ -4906,6 +4906,16 @@ function parseBloodEffect(text) {
 function buildBloodBuffs(effects, label) {
   var out = [];
   var _lb = label || '血脉·效果';
+  /* ★★★ v484：'_fromBlood' 只在**真的是血脉**时才打 ★★★
+     用户 2026-10-31：「玄诀，武器的效果，一个没挂上」——
+     查这个问题时发现：heartBuffs / artifactBuffs 里的每一条都带着
+     `_fromBlood: true`（因为三者共用这一个装配器），于是任何按该标记
+     "只挑血脉" 的读者都会把玄诀/武器当成血脉。
+     现在按 label 判：只有 label 缺省（= 血脉那句默认名）才打标记。
+     ⚠ 目前全仓没有读者用这个标记做过滤（v282 已删掉那批），所以它是**潜在**雷；
+       但"潜在"正是本项目最贵那类 bug 的温床 —— 谁哪天按它统计血脉条数，
+       就会拿到一个混了玄诀与武器的数。 */
+  var _isBlood = !label || String(label).indexOf('血脉') === 0;
   try {
     (effects || []).forEach(function (be) {
       if (!be || !be.key) return;
@@ -4914,7 +4924,9 @@ function buildBloodBuffs(effects, label) {
          ★ v323：'unit:'flat''（提速）在 parseBloodEffect 里就没除 100，这里**原样搬**，
          再除一次就变成 0.18 点了。 */
       buff[be.key] = (be.unit === 'track') ? Math.round(be.数值 * 300) : be.数值;
-      out.push({ name: _lb, buff: buff, _fromBlood: true });
+      var one = { name: _lb, buff: buff };
+      if (_isBlood) one._fromBlood = true;
+      out.push(one);
     });
   } catch (eBb) { return []; }
   return out;
@@ -14381,7 +14393,17 @@ function calcDamage(attacker, defender, skill, isAoe) {
           attacker.borrowReady = false;   /* 一次性：用掉就清 */
           BattleState.logs.push('<span style="color:#22d3ee">【借力】受力化劲，本击增伤 +30%</span>');
         }
-      var _drSum = mechSumField(defender, 'dr') + (defender._atomDrNext || 0);   // dr + 预守(drNext)
+      var _drSum = (defender._atomDrNext || 0);   // 预守(drNext)
+      /* ★★★ v484：'mechSumField(defender,'dr')' **已从这一行移走** ★★★
+         它原来在这里被算一遍、塞进 _drSelfReduce，再由 xzDrOf 加一次；
+         而 xzDrOf 现在自己读 mechSumField(f,'dr') ⇒ 留着就是**同一份减伤算两遍**
+         （血脉减伤 28% 会变成 56%，再被 0.75 封顶 ⇒ 玩家看到"面板 28%、实战 56%"）。
+         ⇒ 口径归 xzDrOf 一处：'写了就固定生效'的减伤（dr 机制名 / 护体）由它统一读，
+           这一行只保留**本次结算上下文**（预守 drNext / lowHpDr / stkDr / ignoreDr），
+           由调用方作为 ctx 传给 xzDrOf。
+         ⚠ 本段下面的 lowHpDr / stkDr / ignoreDr 三样也随之改写为「就地算完并入 _drSum」，
+           因为 ignoreDr 必须只作用于**守方自己的减伤总额**（含血脉/玄诀/武器那部分），
+           若留在 xzDrOf 之外就削不到那 28%。 */
       /* ★ v34：减伤侧三个键（改造前全部没有读者）
            · 剑·剑罡御心  stkDr{state,per} → 按守方层数额外减伤（每场不消耗）
            · 枪·百折不屈  lowHpDr          → 自身血越低减伤越高
@@ -14394,14 +14416,17 @@ function calcDamage(attacker, defender, skill, isAoe) {
           var _sn2 = (typeof v2StateVal === 'function') ? v2StateVal(defender, a.stkDr.state) : 0;
           if (_sn2 > 0) _drSum += Math.min(0.30, (Number(a.stkDr.per) || 0) * _sn2);
         });
-        var _ignDr = Math.min(0.90, mechVal(attacker, 'ignoreDr'));
-        if (_ignDr > 0) _drSum = _drSum * (1 - _ignDr);
       } catch (eDr34) {}
+      /* ★ v484：ignoreDr（霸王断江）改为**整额生效在 xzDrOf 里**（见那边的 ctx.ignoreDr），
+         这里不再事先削减 _drSum —— 事先削的话只削到 lowHpDr/stkDr 这半，
+         守方血脉/玄诀/武器那部分照旧满额，玩家会看到「无视防御写了没用」。 */
       if (_drSum > 0) _drSelfReduce += Math.min(0.40, _drSum);   /* ★ v124：→减伤乘区（旧路被 Math.max(0,ampPool) 清零，从未生效） */
       /* ★ v448：条件减伤（低血减伤 / 高血减伤）也是**挨打时**才结算，所以在这里。
          ⚠ 与上面 '_drSum' 分开累加、各自封顶：
-           '_drSum' 是「写了就固定生效」的减伤（dr 机制名 / lowHpDr / 护体），
-           条件减伤是「随血量浮动」的。混在一起封顶会让浮动那部分被固定值挤掉。 */
+           '_drSum' 是「写了就固定生效」的减伤（lowHpDr / 护体 / stkDr），
+           条件减伤是「随血量浮动」的。混在一起封顶会让浮动那部分被固定值挤掉。
+         ⚠ 注意：'写了就固定生效' 里的重点那一项（dr 机制名 / 血脉 / 玄诀 / 武器）
+           现在由 xzDrOf 自己读，不在这里 —— 否则同一份减伤算两遍（见上）。 */
       try {
         if (typeof xzCondAmpOf === 'function') {
           var _cDr448 = xzCondAmpOf(defender, attacker, 'dr', (defender.side === 'ally'));
@@ -14662,7 +14687,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
      封顶 75%，避免叠成无敌（且要与既有条件减伤各自封顶，不共享额度）。
      ★ v313：算术搬到 'xzDrOf(defender, { selfReduce: _drSelfReduce })'，
        与查看面板同一份；面板不传 selfReduce ⇒ 只显示身上挂着的那部分。 */
-  var v75DrPct = xzDrOf(defender, { selfReduce: _drSelfReduce || 0 });
+  var v75DrPct = xzDrOf(defender, { selfReduce: _drSelfReduce || 0, ignoreDr: Math.min(0.90, mechVal(attacker, 'ignoreDr')) });
   var v75DrMult = (1 - v75DrPct);
   /* ★ v86 破防乘区：debuff·破防类（目标防御-/易伤）挂 defender 的 v75VulnPct，
      挨打时乘 (1+pct) —— 与上面的承伤减免互为镜像（一个减、一个加），封顶 +60%。 */
@@ -15090,7 +15115,15 @@ function xzDmgUpOf(f) {
   if (!f) return 0;
   var up = 0, down = 0;
   try {
-    up = Math.min(0.6, ((Number(f.v75BuffPct) > 0 && (Number(f.v75BuffRounds) || 0) > 0) ? Number(f.v75BuffPct) : 0) + xzPermOf(f).dmg);
+    /* ★★★ v484：补上常驻三源（血脉 / 玄诀 / 武器）的常驻增伤 ★★★
+       用户 2026-10-31：「玄诀，武器的效果，一个没挂上，buff里没显示」。
+       真身同 xzDrOf：'amp' 这条在 mechBuffsOf 里明明有（血脉写「增伤:22」就装成
+       {amp:0.22}），calcDamage 里也有一条 'mechSumField(attacker,'amp')' 折进 _drFoldAmp，
+       **唯独这个函数不读它** ⇒ 面板「增伤值」恒 0。
+       ⇒ 在这里一并计入，calcDamage 那边改读本函数，不各自算一份。 */
+    var _mechAmp = Math.min(0.60, mechSumField(f, 'amp'));
+    up = Math.min(0.6, ((Number(f.v75BuffPct) > 0 && (Number(f.v75BuffRounds) || 0) > 0) ? Number(f.v75BuffPct) : 0)
+      + xzPermOf(f).dmg + _mechAmp);
     down = Math.min(0.6, ((Number(f.v75DebuffPct) > 0 && (Number(f.v75DebuffRounds) || 0) > 0) ? Number(f.v75DebuffPct) : 0) + xzPermOf(f).dmgDown);
   } catch (eDU) {}
   return Math.round((up - down) * 1000) / 1000;
@@ -15108,8 +15141,29 @@ function xzDrOf(f, ctx) {
   if (!f) return 0;
   var v = 0;
   try {
+    /* ★★★ v484：**必须读常驻三源**（血脉 / 玄诀 / 武器）★★★
+       用户 2026-10-31：「没挂上，因为里面减伤值什么的没变化，都是 0」
+                「战报里说 0，然后面板里减伤值等也确实没变化」。
+
+       真身：血脉写「减伤:28」，parseBloodEffect 认出来了、buildBloodBuffs 装进
+       `f.bloodBuffs` 了、`mechBuffsOf` 也汇总了 —— **每一次都对**。
+       但本函数只读 'v75DrPct'（招式临时）与 '_xzPerm.dr'（主动增益），
+       两个都不收被动三源 ⇒ 面板恒 0%。
+
+       为什么以前看着"能用"：calcDamage 里有一条 `mechSumField(defender,'dr')`
+       自己算了一遍再塞进 ctx.selfReduce —— 于是**实战是对的、面板是 0**。
+       这正是本项目最贵的那类 bug（算法一份、读者各写一份）：玩家在面板上看到 0，
+       就断定效果没挂上，而战报另一句「0 条已挂上」刚好把那句话坐实。
+
+       ⇒ 口径统一到**这一个函数**：mech 三源在这里读，calcDamage 那边不再自己算
+         （它只负责传 'ignoreDr' 这类「要看对手是谁」的上下文）。
+       ⚠ 封顶 0.40 与原来 calcDamage 里那句 `Math.min(0.40, _drSum)` 同额，
+         不许在这里改调 —— 改了就是平衡变更，不是修 bug。 */
+    var _mechDr = Math.min(0.40, mechSumField(f, 'dr'));
+    if (ctx && ctx.ignoreDr) _mechDr = _mechDr * (1 - Math.min(0.90, Number(ctx.ignoreDr) || 0));
     v = ((Number(f.v75DrPct) > 0 && (Number(f.v75DrRounds) || 0) > 0) ? Number(f.v75DrPct) : 0)
       + xzPermOf(f).dr
+      + _mechDr
       + (ctx && ctx.selfReduce ? Number(ctx.selfReduce) || 0 : 0);
     v = Math.min(0.75, v);
   } catch (eDR) {}
@@ -30563,8 +30617,26 @@ function build() {
            要主动翻效果，由玩家自己在选人/翻译面板上点「✦ 重翻效果」/「✦ 翻译/重翻」，
            那两处是玩家主动行为，保留。 */
         try {
+          /* ★★★ v484：这条战报原来数的是**完全错的量** ★★★
+             用户 2026-10-31：「是他妈战报里说 0，然后面板里减伤值等也确实没变化」。
+             老代码：`_n += (xzPassiveAtomsOf(f.name) || []).length` —— 读的是
+             **翻译 store**（玩家在翻译面板里翻出来的「原子」），不是实际挂上的常驻效果。
+             后果两种，都很坏：
+               ① 玩家写的是 v296 规范格式（`减伤:28｜…`）⇒ xzTransPlan 判它 ready、
+                  **压根不需要翻译** ⇒ store 里那条 passive 是空的 ⇒ 战报印「0 条」，
+                  而引擎其实吃得很好。玩家看到「0 条」当然断定没挂上。
+               ② 反过来，store 里有翻译、但装配失败（throw 被 buildFighterFromData
+                  的 catch 吞掉）时，这条战报照样报「N 条已挂上」⇒ 假绿。
+             ⇒ 改成数**装配结果**：直接遍历存活单位的 bloodBuffs/heartBuffs/artifactBuffs
+               （那三个数组就是 mechBuffsOf 的唯一来源，数它 = 数真正进公式的条数）。
+             ⚠ 不许改回读 store：store 是「翻译过什么」，不是「挂上了什么」。
+               这两个问题的答案在任何情况下都不相等。 */
           var _n = 0;
-          try { aliveList().forEach(function (f) { _n += (xzPassiveAtomsOf(f.name) || []).length; }); } catch (eAp) {}
+          try {
+            aliveList().forEach(function (f) {
+              _n += ((f.bloodBuffs || []).length + (f.heartBuffs || []).length + (f.artifactBuffs || []).length);
+            });
+          } catch (eAp) {}
           /* 如实分三种情况报，别再笼统一句「0 条」让玩家猜 */
           if (_restored > 0) {
             push('【战前转译】沿用你在翻译面板翻好的结果 ' + _restored + ' 人（原文没变，直接生效）；'

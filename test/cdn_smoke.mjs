@@ -446,11 +446,17 @@ if (!fs.existsSync(TRUE_SRC)) {
       : bad('realmMultByName(帝境) → ' + m);
   }
 
-  /* 秘境模块（XZ_MIJING）是独立 IIFE，有自己的 window 挂载点。
-     它挂了不代表共享表挂了，两者要分开验。 */
-  win.__XZ_MIJING__ || win.xzMijing
-    ? ok('秘境模块已挂载（__XZ_MIJING__ / xzMijing）')
-    : bad('秘境模块没挂上');
+  /* ~~秘境模块（XZ_MIJING）是独立 IIFE，有自己的 window 挂载点。~~
+     **v472 已整层下架**，判据翻面：现在要求它**没挂上**。
+     ⚠ 为什么不能只是把这条删掉：删掉之后，谁把模块加回引擎（或留下半截 IIFE），
+       这份"真身扔进假宿主跑一遍"的闸白白跑了一趟，**不会有一声**。
+       而这条闸跑的是 **CDN 真身**，不是工程目录里那份 —— 两条线都可能漂。
+     ⚠ 两侧都判：`win.__XZ_MIJING__` 与 `win.xzMijing` 任一还在都算没下干净。 */
+  if (win.__XZ_MIJING__ || win.xzMijing) {
+    bad('秘境模块又被挂上了（__XZ_MIJING__ / xzMijing）—— v472 已下架');
+  } else {
+    ok('秘境模块已下架（真身里没有 __XZ_MIJING__ / xzMijing 挂载点）');
+  }
 
   /* 桥接对象：状态栏跨窗口调它。缺了 = 状态栏按钮全哑。 */
   win.__XIUXIAN_ATB_BRIDGE__

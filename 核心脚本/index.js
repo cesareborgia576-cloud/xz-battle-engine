@@ -4643,7 +4643,14 @@ function v2Add(f, key, n, src2) {
      终结式   → 兑付全部层数，每层 +12%（04 兑付段）
      绝式     → 层数 ≥3 才兑付：每层 +12% + 必暴 + 穿防 40%（04 兑付段）
      本命杀招 → 兑付全部层数，每层 +9%；破盾看技能表的「破盾」位（04 兑付段）
-     领域     → 铺开 3 回合，每回合自生本路势种（落 v2domain + 逐回合自生）
+     领域     → **位次本身没有数值机制**（v514 起）：它只决定「算增益技、可打 2 个目标」，
+                真正的效果要写在效果栏里（`叠层增伤` / `减伤` / `护盾` 之类）。
+                原来这里写的是「铺开 3 回合，每回合自生本路势种（落 v2domain）」——
+                那段唯一的写入源是机制名「势种」，而用户 2026-10-31 明确下架了它
+                （「没有势种这个东西，现在只有叠层」）。删完 v2domain 就没有写入源，
+                消费段也已一并删除，这里再写它就是空头承诺。
+                ⚠ 33 门 `pos:'领域'` 预设的 `eff` 文案里还有「三回合内气机自生不绝」，
+                  那是**纯文本**，引擎从来没按它算过 —— 见 v514 报告里的待办，别当已修。
    其余位次**没有任何引擎机制**，这里就必须是空的。旧版那批标签全是纯文本：
      · 「单体一击 / 群体一击」—— 攻击类型早就标了（单体/范围），写进骨架只是重复；
      · 「追加一击」「叠层加速」—— **引擎里压根没有这两个机制**（连击式不会追打），点了也没反应；
@@ -4658,7 +4665,16 @@ var SKILL_SKELETON = {
   '终结式':   ['兑付全部层数', '每层+12%'],
   '绝式':     ['兑付每层+12%', '必暴', '穿防40%'],
   '本命式':   [],
-  '领域':     ['领域展开', '每回合自生层'],
+  /* ★ v514：'领域' 位次**不再有任何骨架标签**。
+     原来挂的是 `['领域展开','每回合自生层']`，两个都落空：
+       · 「每回合自生层」的实现是 `v2domain`，而它唯一的写入源是机制名「势种」，
+         v514 已下架并连消费段一起删掉 ⇒ 这个标签承诺的事**做不到了**；
+       · 「领域展开」在引擎里从来没有实现（`v2pos === '领域'` 一个分支都没有，
+         它只影响「算增益技、可打 2 个目标」）。
+     骨架的铁律就是「只写引擎真的按位次做的那件事」，所以这里必须是空的。
+     ⚠ 别为了让面板好看把 `'领域展开'` 留回来 —— 那是纯文本承诺，
+       玩家点开看到"改变战场，持续 3 回合"，实际什么都没发生。 */
+  '领域':     [],
   '本命杀招': ['兑付全部层数', '每层+9%', '无视护盾'],
   '保命翻盘': [],
   '通用式':   []
@@ -4670,9 +4686,13 @@ var SKELETON_DESC = {
   '每层+9%': '按兑付掉的层数算，每层 +9% 增伤。',
   '必暴': '本击必定暴击。',
   '穿防40%': '本击无视目标 40% 防御。',
-  '无视护盾': '本击无视护体灵盾。',
-  '领域展开': '铺开领域，改变战场，持续 3 回合。',
-  '每回合自生层': '领域铺开期间，每回合自行蓄养一重本路势种。'
+  '无视护盾': '本击无视护体灵盾。'
+  /* ★ v514：'领域展开' / '每回合自生层' 两条说明**已删** ——
+     它们对应的标签已从 SKILL_SKELETON['领域'] 撤掉（理由见那张表里的注释）。
+     留着键就是死字段：没有任何骨架标签会再引用它们，
+     而 `SKELETON_DESC[nm]` 只在标签存在时才被查（23494）。
+     ⚠ 这是 v514 旧字段普查里"说明表比标签表多两条"的那一类，
+       以后加删标签记得两张表一起动。 */
 };
 /* ══════════ v60 势种机制名：**怎么叠层**也拆成可点的机制名 ══════════
    用户原话（第 5 项，逐字）：「每个流派怎么触发的叠层都没写明，我看半天灼烧怎么叠，
@@ -7189,7 +7209,12 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
     id: (side === 'ally' ? 'a_' : 'e_') + Math.random().toString(36).substr(2, 6),
     name: realName,
     isPlayer: isPlayer,
-    isTeammate: isTeammate,
+    /* ★ v514：'isTeammate' 字段**已删** —— 全库零读取（写 3 处、读 0 处）。
+       用户 2026-10-31：「继续全面检测有没有旧字段，进行清洗，清理」。
+       ⚠ 函数**参数** `isTeammate` 保留：五个调用方都按位置传参
+         （`buildFighterFromData(name, isPlayer, isTeammate, side, statData)`），
+         删掉它会让后面的 `side` / `statData` 整体错位一格 —— 那是"改名引起静默错位"
+         的典型形状，比留一个没人读的字段危险得多。 */
     isPet: false,
     petKey: null,
     /* ★ 先天气运已下线（现为血脉，增益由 v43 血脉块按 品阶×纯度 结算，无面板百分比模型），
@@ -7472,7 +7497,7 @@ function buildPetFighter(pet, side, statData, ownerName) {
     id: 'p_' + Math.random().toString(36).substr(2, 6),
     name: petName,
     isPlayer: false,
-    isTeammate: true,
+    /* ★ v514：同上，'isTeammate' 零读取，已删。 */
     isPet: true,
     petKey: pet.__key || petName,
     omenBonus: { A: 0, D: 0, H: 0, C: 0, S: 0, names: [] },
@@ -7726,7 +7751,7 @@ function prepareBattle(allyNames, enemyNames) {  var statData = getRawStatData()
         var petCopy = JSON.parse(JSON.stringify(pr));
         petCopy.__key = f.name + '·' + (pr.名称 || keys[i]);
         var pf = buildPetFighter(petCopy, side, statData, f.name);
-        pf.isTeammate = (side === 'ally');
+        /* ★ v514：'pf.isTeammate' 写入已删（全库零读取，见 buildFighterFromData 处的注释）。 */
         target.push(pf);
       }
     });
@@ -8629,18 +8654,18 @@ function processTurnStartDots(fighter) {
     }
   } catch (eV2Dot) {}
 
-  // ===== v2 通用领域：三回合内每回合自行蓄养本路状态 =====
-  if (fighter.v2domain && fighter.v2domain.rounds > 0) {
-    fighter.v2domain.rounds--;
-    var _dn = fighter.v2domain.gain || 1, _dk = fighter.v2domain.key;
-    if (_dk && typeof v2Add === 'function') {
-      var _dg = v2Add(fighter, _dk, _dn, fighter);
-      if (_dg > 0) dotLogs.push(fName + ' 【领域】' + _dk + ' 自生 +' + _dg);
-    } else {
-      fighter.swordIntent = Math.min(swordIntentCap(fighter), (fighter.swordIntent || 0) + _dn);
-      dotLogs.push(fName + ' 【领域】剑意自生（' + fighter.swordIntent + '/5）');
-    }
-  }
+  /* ★★★ v514：'v2domain'（领域/势种自生）**整段已删** ★★★
+     用户 2026-10-31：「势种删掉啊，没有势种这个东西，势种是早期的东西，现在只有叠层」。
+     这一段读的 'fighter.v2domain' 全库只有一个写入源 —— 'applyV75Effects' 的
+     'case 'v2seed''（机制名「势种」）。那个机制名和那个分支都已删掉 ⇒
+     这个字段再也不会被写 ⇒ 下面整段是**永远不会执行的死代码**。
+     ⚠ 死代码比删掉更坏：它会让接手的人以为「领域系统还在、只是没触发」，
+       于是去找一个根本不存在的数据源。v514 的旧字段普查里它就是这么被揪出来的
+       （'v2domain' 写入点 0 / 读取点 1）。
+     ⚠ 下面这两支**保留**，它们与势种无关，各有独立写入源：
+       · 'yichaoRounds'（本命《剑意潮生》，v2 存档）
+       · 'domainRounds'（剑路【剑冢领域】，建卡期玄诀给的旗标）
+       —— 两者都涨 'swordIntent'，与「剑意」机制同一个消费口径。 */
   // ===== v2 本命《剑意潮生》：剑意 ≥3 层时每回合自行再蓄 1 层 =====
   if (fighter.yichaoRounds > 0 && (fighter.swordIntent || 0) >= 3) {
     fighter.swordIntent = Math.min(swordIntentCap(fighter), (fighter.swordIntent || 0) + 1);
@@ -10835,8 +10860,26 @@ var XZ_ATOM_TYPES = {
   '乱序': { kind: '常驻增益', beh: 'buff', sub: 'shuffle' },
   '换命': { kind: '常驻增益', beh: 'buff', sub: 'swapHp' },
   '牺牲': { kind: '常驻增益', beh: 'buff', sub: 'burnSelf' },
-  '剑意': { kind: '常驻增益', beh: 'buff', sub: 'swordStack' },
-  '势种': { kind: '常驻增益', beh: 'buff', sub: 'v2seed' }
+  '剑意': { kind: '常驻增益', beh: 'buff', sub: 'swordStack' }
+  /* ★★★ v514：'势种' **已下架** ★★★
+     用户 2026-10-31 原话：「势种删掉啊，没有势种这个东西，势种是早期的东西，
+                            现在只有叠层」。
+     ── 为什么必须走硬删、不进 XZ_ATOM_RETIRED ───────────────────────
+     退役表是「旧名 → 新名」的**重定向**。势种没有对应的新名字：
+     它干的事是「每回合自生一层本路势种」，而玩家现在用的是**叠层**四支
+     （叠层增伤 / 叠层减伤 / 叠层破甲 / 叠层减速），那是「每次命中叠一层」——
+     触发时机不同（回合 vs 命中）、强度语义不同（自生层 vs 每层强度）。
+     硬塞进退役表 = 把「每回合 1 层」偷偷改成「每次命中 ×N」，是凭空造一条玩家没要的机制
+     （v449 '抢先手' 下架时同一个道理）。
+     ── 删掉之后玩家写它会怎样 ────────────────────────────────────
+     'xzEffMechOf('势种')' 不认识 ⇒ 落 narrative ⇒ 不施加、不报错、不进公式。
+     这是「不生效、也不假装生效」，与下架口径一致。
+     ⚠ 三处必须一起删干净（v514 已核对）：
+       ① 本表这一条；② 'applyV75Effects' 的 'case 'v2seed'' 分支；
+       ③ 'processTurnStartDots' 里读 'v2domain' 的那一段（删了②之后它就没有写入源了，
+          留着就是永远不执行的死代码，而且会让人以为"领域系统还在"）。
+     ⚠ 'V2_STATES' / 'v2Add' / 'v2StateVal' **一个字都没动** —— 那是叠层四支的底层，
+       和"势种"这个机制名不是一回事，别把它们一起删了（删了叠层全废）。 */
 };
 /* 已废除的机制名（v94 二合一）：读到这些不报错，但**不进公式**，并在战报里点名 ——
    静默吞掉才是真害人（玩家会以为「攻击 +10%」生效了）。
@@ -16176,17 +16219,6 @@ function applyV75Effects(attacker, target, skill) {
                （8448~8460）—— 它们是**同一个机制的不同触发条件**，统一由这一支设旗标。 */
             bHolder.ningshenRounds = Math.max(bHolder.ningshenRounds || 0, _isPerm ? XZ_TRANS_DUR : dur);
             BattleState.logs.push(bHolder.name + ' 剑意蓄养（' + (_isPerm ? '整场' : xzDurText(dur)) + '内每次命中额外蓄养一层）');
-          } else if (_bsub === 'v2seed') {
-            /* 势种自生：每回合自行蓄养一层本路势种。
-               落点 'v2domain'，消费点 processHandBuffs 8437（唯一）。 */
-            var _v2k = String((skill && skill.v2st) || (e.key ? '' : '') || '');
-            bHolder.v2domain = {
-              key: _v2k,
-              gain: Math.max(1, Math.round(e.flat || 1)),
-              rounds: Math.max(1, _isPerm ? 99 : dur)
-            };
-            BattleState.logs.push(bHolder.name + ' 气场铺开：'
-              + (_isPerm ? '整场' : xzDurText(dur)) + '内每回合自行蓄养势种');
           } else {
             /* ★ v270：增伤是「常驻顶替临时」最典型的一对（武器 +10% 常驻、
                招式 +30%/3手）—— 常驻改走 _xzPerm.dmg，临时照旧写 v75Buff*。 */

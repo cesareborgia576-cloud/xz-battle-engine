@@ -9580,6 +9580,37 @@ function dispelTempBuffs(f) {
   if (f.tempDefBoostRounds > 0) { f.tempDefBoostRounds = 0; if (f.baseDef) f.defVal = f.baseDef; got.push('铁壁'); }
   if (f.tempSpdBoostRounds > 0) { f.tempSpdBoostRounds = 0; if (f.baseSpd) f.spd = f.baseSpd; got.push('疾行'); }
   if (f.shieldHp > 0) { f.shieldHp = 0; got.push('护盾'); }
+  /* ══════════════════════════════════════════════════════════════════════
+     ★★★ v514：补上**机制名通道**的临时增益 ★★★
+     病历（用户 2026-10-31 的「全部生效吗」查出来的）：
+     上面这五条清的全是**旧效果项**（淬锋/铁壁/疾行/真元狂暴/护盾）的字段。
+     v452 之后玩家写的增益走的是 'v75*' 那一套，而这段**一个字段都没碰** ⇒
+     实测（修复前）：给对方挂 '增伤:40:3' / '提速:40:3' / '暴击:40:3' /
+     '闪避:30:3' / '减伤:40:3'，再放「驱散」，五个字段**一个都没归零**，
+     而战报照样打「散人功体，敌方身无增益」—— 说了做了、其实没做。
+
+     ── 为什么现在必须补，而不是"等过期就好" ──────────────────────────
+     驱散是**解场牌**：对手刚叠了三层增伤、正要开大，你驱散掉是本回合的胜负手。
+     等它自然过期 = 这张牌在这个时机毫无意义，而玩家根本看不出是引擎没做。
+
+     ── 只清「临时」、不清常驻 ────────────────────────────────────────
+     '_xzPerm' 那条通道（玄诀/武器/血脉给的整场加成）是**被动**，不是"对面刚挂上去的"，
+     驱散它等于拆人家的建卡；本表历来只清带 rounds 的临时状态，这条口径不改。
+
+     ── 提速清掉必须重算速度 ──────────────────────────────────────────
+     速度和别的字段不同：它是 'xzRecalcSpd' 算出来的派生值，光把 'v75HasteFlat' 归零
+     不会让 'f.spd' 退回去（会留一脸"散了但还很快"）。所以下面补一次重算。
+     ══════════════════════════════════════════════════════════════════════ */
+  if (f.v75BuffRounds > 0 || f.v75BuffPct > 0) { f.v75BuffPct = 0; f.v75BuffRounds = 0; got.push('增伤'); }
+  if (f.v75DrRounds > 0 || f.v75DrPct > 0) { f.v75DrPct = 0; f.v75DrRounds = 0; got.push('减伤'); }
+  if (f.tempCritRounds > 0 || f.tempCritBoost > 0) { f.tempCritBoost = 0; f.tempCritRounds = 0; got.push('暴击'); }
+  if (f.tempEvadeRounds > 0 || f.tempEvadeBoost > 0) { f.tempEvadeBoost = 0; f.tempEvadeRounds = 0; got.push('闪避'); }
+  if (f.v94CritDmgRounds > 0 || f.v94CritDmgPct > 0) { f.v94CritDmgPct = 0; f.v94CritDmgRounds = 0; got.push('暴伤'); }
+  if (f.v75HasteRounds > 0 || (f.v75HasteFlat || 0) > 0 || (f.v75HastePct || 0) > 0) {
+    f.v75HasteFlat = 0; f.v75HastePct = 0; f.v75HasteRounds = 0;
+    try { if (typeof xzRecalcSpd === 'function') xzRecalcSpd(f); } catch (eDspS) {}
+    got.push('提速');
+  }
   return got;
 }
 
@@ -11220,6 +11251,17 @@ function _v75ParseEffect(text) {
              这里只负责把数值和量纲留下来。 */
         r.isBuff = true;
         r.dmgPct = _val / 100;
+        /* ★★★ v514：**必须把 'sub' 带出来** —— 它就是势种名 ★★★
+           病历（用户 2026-10-31「看看现在总共有几个效果，全部生效吗」查出来的）：
+           这一支只写了 isBuff / dmgPct，没写 'r.sub'，而 'applyV75Effects' 的
+           'case 'v2stack'' 第一句就是 `var _vsKey = String(e.sub || '')` ——
+           拿到空串 ⇒ 不在 'V2_STATES' 里 ⇒ 'break' 跳过。
+           表现：'叠层增伤 / 叠层减伤 / 叠层破甲 / 叠层减速' 四条**全部静默失效**，
+           玩家写了毫无反应、战报一个字都不打、零报错（本项目最贵那类 bug）。
+           实测（修复前）：'叠层增伤:20:3' → {beh:'v2stack', sub:''} → 开关 false。
+           ⚠ 'buff' / 'debuff' 两支都有这一行，唯独 v2stack 漏了 ——
+             以后新增 beh 分支必须对照这三支检查「表里有的字段有没有全带出来」。 */
+        r.sub = _tp.sub || '';
         break;
       case 'stack':
         /* ★ v448：叠层兑换（用户第 ⑦ 条）。

@@ -1328,6 +1328,17 @@ function _v75ParseEffect(text) {
              这里只负责把数值和量纲留下来。 */
         r.isBuff = true;
         r.dmgPct = _val / 100;
+        /* ★★★ v514：**必须把 'sub' 带出来** —— 它就是势种名 ★★★
+           病历（用户 2026-10-31「看看现在总共有几个效果，全部生效吗」查出来的）：
+           这一支只写了 isBuff / dmgPct，没写 'r.sub'，而 'applyV75Effects' 的
+           'case 'v2stack'' 第一句就是 `var _vsKey = String(e.sub || '')` ——
+           拿到空串 ⇒ 不在 'V2_STATES' 里 ⇒ 'break' 跳过。
+           表现：'叠层增伤 / 叠层减伤 / 叠层破甲 / 叠层减速' 四条**全部静默失效**，
+           玩家写了毫无反应、战报一个字都不打、零报错（本项目最贵那类 bug）。
+           实测（修复前）：'叠层增伤:20:3' → {beh:'v2stack', sub:''} → 开关 false。
+           ⚠ 'buff' / 'debuff' 两支都有这一行，唯独 v2stack 漏了 ——
+             以后新增 beh 分支必须对照这三支检查「表里有的字段有没有全带出来」。 */
+        r.sub = _tp.sub || '';
         break;
       case 'stack':
         /* ★ v448：叠层兑换（用户第 ⑦ 条）。

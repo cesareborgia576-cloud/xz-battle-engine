@@ -25023,6 +25023,35 @@ var XZ_JJB_SKIN = `
 .xz-jjb-sknav:hover:not(:disabled){color:var(--xz-gold-2);border-color:rgba(201,168,106,.4);}
 .xz-jjb-sknav:disabled{opacity:.28;cursor:default;}
 
+/* ★★★ v492：.xz-jjb-mb 必须有一条**不带父级限定**的基础规则 ★★★
+   病历（用户 2026-10-31：「这些美化都掉了，变成白框」，附 4 张截图）：
+     v479 把四个功能键包进 '.xz-jjb-fn' 之后，底栏那条规则写成了
+     '#xz-jjb-bar > .xz-jjb-mb'（**直接子元素**）。
+     但 '#xz-jjb-restart2'（战后结算面板底部那个「重开」）用的**也是同一个类**，
+     它挂在 '-dec' 面板里、**不在 #xz-jjb-bar 内**
+     ⇒ 两条 mb 规则一条都命不中 ⇒ 剩下浏览器默认的 <button>：
+       白底 / 黑字 / 3D 凸边框。图1 那条纯白长条、图4 底部那两块白方块就是它。
+   ⚠⚠ 同一个病本轮一共 2 处，都是「皮肤挂在某个祖先作用域下，按钮被搬出了那个作用域」：
+       ① 引擎 .xz-jjb-mb —— 皮肤绑 '#xz-jjb-bar >'，restart2 却在结算面板
+       ② 05 .xz-tianji-goto-btn / .xz-chip-sm —— 皮肤绑 '.xz-root '，管理器面板挂在 body 上
+   ⚠ 所以这条基础规则**不许再写任何父级前缀**：同一个按钮以后还会被搬进别的面板，
+     每搬一次就要改一次选择器 —— 这个坑本项目已经踩满两次了。
+     基础规则只负责「按钮该长什么样」，宽高/字号仍由各处自己的规则去覆写。
+   ⚠⚠ 本段在 XZ_JJB_SKIN 的**模板字符串里**：注释里绝不许出现反引号，
+      出现一次就把整条模板提前收尾 ⇒ 引擎整体 SyntaxError ⇒ 战斗界面完全不注入。
+      （本轮第一次提交就踩了这个坑，探针报 'jjb is not defined'。） */
+.xz-jjb-mb{
+  appearance:none;-webkit-appearance:none;cursor:pointer;font-family:var(--xz-font);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  padding:4px 0;background:transparent;color:var(--xz-ink-3);
+  border:1px solid var(--xz-line);border-radius:9px;
+  line-height:1.15;text-align:center;
+  transition:color .16s,border-color .16s,background .16s;
+}
+.xz-jjb-mb:hover{
+  color:var(--xz-ink);border-color:var(--xz-line-2);background:rgba(255,255,255,.03);
+}
+
 /* 右侧功能键：图标 + 一行小字 */
 #xz-jjb-bar > .xz-jjb-mb,#xz-jjb-endturn,#xz-jjb-flee{
   flex:none;appearance:none;cursor:pointer;font-family:var(--xz-font);
@@ -25070,6 +25099,12 @@ var XZ_JJB_SKIN = `
   letter-spacing:.12em;padding:8px 18px;border-radius:7px;cursor:pointer;border:0;
   color:#241a08;background:linear-gradient(180deg,var(--xz-gold-2),var(--xz-gold));
 }
+/* ★ v492：结算底部的「重开」是小按钮，不该跟上面那颗金色主按钮抢通栏。
+   它原来是浏览器默认 <button>（通栏白条，见 .xz-jjb-mb 那条病历）；
+   补了基础皮肤后颜色对了，但 width 仍会被 '-decbox' 的 align-items:stretch 拉满
+   ⇒ 这里钉回左对齐小尺寸，与「确认决策」左边线对齐成一列。
+   ⚠ 本段也在 XZ_JJB_SKIN 模板字符串里：注释不许有反引号（会提前收尾整条模板）。 */
+#xz-jjb-restart2{align-self:flex-start;padding:6px 18px;border-radius:7px;font-size:11.5px;}
 .xz-jjb-finishing{align-items:center;}
 .xz-jjb-finishing-tip{font-size:11.5px;color:var(--xz-ink-3);letter-spacing:.08em;}
 

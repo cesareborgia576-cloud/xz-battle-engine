@@ -1807,7 +1807,7 @@ function xzEffKeyOf(effKey, parsed) {
   if (p.isHaste) return '提速';
   if (p.isReduce) return '减伤';
   if (p.isSlow) return '减速';
-  if (p.isVuln) return '破防';
+  if (p.isVuln) return '易伤';
   /* ★ v452：先按 6 类给友好名，查不到再按行为名回落。
      两套都查不到才返回原键名（保持旧行为，绝不伪造标签）。 */
   if (p.kind && XZ_KIND_LABEL[p.kind]) return XZ_KIND_LABEL[p.kind];

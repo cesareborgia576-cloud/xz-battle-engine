@@ -12993,7 +12993,7 @@ function xzTemperTierOf(quality) {
      洗练是「随机重抽一格」。两边键名一旦漂开，就会出现
      「洗出来的效果项 AI 写 auto 会报错」这种谁也说不清的错位。 */
 var XZ_TEMPER_POOL = [
-  '增伤', '减伤', '减速', '削防', '易伤', '虚弱', '破防', '穿防',
+  '增伤', '减伤', '减速', '易伤', '虚弱', '穿防',
   '闪避', '暴击', '暴伤', '回血', '回蓝', '灼烧', '中毒', '流血',
   '腐蚀', '提速', '气血上限', '灵力上限'
 ];
@@ -15096,7 +15096,7 @@ function xzEffKeyOf(effKey, parsed) {
   if (p.isHaste) return '提速';
   if (p.isReduce) return '减伤';
   if (p.isSlow) return '减速';
-  if (p.isVuln) return '破防';
+  if (p.isVuln) return '易伤';
   /* ★ v452：先按 6 类给友好名，查不到再按行为名回落。
      两套都查不到才返回原键名（保持旧行为，绝不伪造标签）。 */
   if (p.kind && XZ_KIND_LABEL[p.kind]) return XZ_KIND_LABEL[p.kind];
@@ -15423,8 +15423,10 @@ function xzEffectsFromRawText(skill) {
       { re: /减伤\s*(\d+(?:\.\d+)?)%/, key: '减伤', sub: 'dr', kind: 'buff', pct: 1 },
       { re: /增伤\s*(\d+(?:\.\d+)?)%/, key: '增伤', sub: 'dmg', kind: 'buff', pct: 1 },
       { re: /(?:穿防|破甲)\s*(\d+(?:\.\d+)?)%/, key: '穿防', sub: 'pierce', kind: 'buff', pct: 1 },
-      { re: /破防\s*(\d+(?:\.\d+)?)%/, key: '破防', sub: 'vuln', kind: 'debuff', pct: 1 },
-      { re: /易伤\s*(\d+(?:\.\d+)?)%/, key: '易伤', sub: 'vuln', kind: 'debuff', pct: 1 },
+      /* ★ v519：`破防` 与 `易伤` 原来是**两条规则**，落同一个 sub:'vuln'
+         ⇒ 同一件事在自然语言里被认成两个名字（这正是用户说的"一边一个叫法"）。
+         现在合成一条：**认两种写法、只产出正式名「易伤」**。 */
+      { re: /(?:破防|易伤)\s*(\d+(?:\.\d+)?)%/, key: '易伤', sub: 'vuln', kind: 'debuff', pct: 1 },
       { re: /减速\s*(\d+(?:\.\d+)?)%/, key: '减速', sub: 'slow', kind: 'debuff', pct: 1 },
       { re: /虚弱\s*(\d+(?:\.\d+)?)%/, key: '虚弱', sub: 'dmgDown', kind: 'debuff', pct: 1 },
       { re: /闪避\s*(\d+(?:\.\d+)?)%/, key: '闪避', sub: 'evade', kind: 'buff', pct: 1 },
@@ -16411,7 +16413,7 @@ function processHandBuffs(fighter) {
     if (fighter.v94CritDmgRounds > 0) _dbg.push('暴伤 ' + fighter.v94CritDmgRounds);
     if (fighter.tempAtkBoostRounds > 0) _dbg.push('攻↑ ' + fighter.tempAtkBoostRounds);
     var _pp0 = xzPermOf(fighter);
-    var _PERM_LABEL = { dmg: '增伤', dmgDown: '受制', dr: '减伤', vuln: '破防', evade: '闪避',
+    var _PERM_LABEL = { dmg: '增伤', dmgDown: '受制', dr: '减伤', vuln: '易伤', evade: '闪避',
       hastePct: '提速', hasteFlat: '提速', slowPct: '减速', slowFlat: '减速',
       crit: '暴击', critDmg: '暴伤', regen: '回血' };
     for (var _pk = 0; _pk < XZ_PERM_KEYS.length; _pk++) {
@@ -26284,7 +26286,7 @@ function build() {
     ['v94RegenRounds', '回血', 'good', 'v94RegenPct'],
     ['_v94BreakShieldRounds', '破盾', 'good', null],
     ['v75DebuffRounds', '受制', 'bad', 'v75DebuffPct'],
-    ['v75VulnRounds', '破防', 'bad', 'v75VulnPct'],
+    ['v75VulnRounds', '易伤', 'bad', 'v75VulnPct'],
     ['tearRounds', '撕裂', 'bad'],
     ['internalWoundRounds', '内伤', 'bad'],
     ['markRounds', '标记', 'bad'],
@@ -26298,7 +26300,7 @@ function build() {
        也没有别的通道能显示 —— 玩家身上明明挂着「破防」，战报里也写了，就是面板上找不到。
        这正是 v77 那条注释说的同一类病，只是漏了这三个。
        ⚠ 只加显示，不碰任何数值；标签口径对着上面三处施加点的日志文案。 */
-    ['v75VulnRounds', '破防', 'bad'],
+    ['v75VulnRounds', '易伤', 'bad'],
     ['v75HasteRounds', '提速', 'good'],
     ['tempEvadeRounds', '闪避', 'good']
   ];
@@ -26359,7 +26361,7 @@ function build() {
       try {
         var _pp = xzPermOf(f);
         var _PERM_NM = {
-          dmg: '增伤', dmgDown: '受制', dr: '减伤', vuln: '破防', evade: '闪避',
+          dmg: '增伤', dmgDown: '受制', dr: '减伤', vuln: '易伤', evade: '闪避',
           hastePct: '提速', hasteFlat: '提速', slowPct: '减速', slowFlat: '减速',
           crit: '暴击', critDmg: '暴伤', regen: '回血'
         };

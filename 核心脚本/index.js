@@ -5089,16 +5089,6 @@ function mechSub(f, key, sub) {               // 二级映射·数值求和（el
   });
   return s;
 }
-function mechSubObj(f, key, sub) {            // 二级映射·取对象（elemExtraState['木'] = {state,n}）
-  var out = null;
-  mechBuffsOf(f).forEach(function (a) {
-    var m = a[key];
-    if (!m || typeof m !== 'object') return;
-    var v = (sub != null) ? m[sub] : null;
-    if (v != null) out = v;
-  });
-  return out;
-}
 function mechStr(f, key) {                    // 字符串（elemFreeMp:'水' / elemAlwaysCrit:'雷'）
   var out = null;
   mechBuffsOf(f).forEach(function (a) { if (a[key]) out = a[key]; });
@@ -5894,9 +5884,6 @@ function xzTargetOf(t) {
   var s = String(t == null ? '' : t).trim();
   return XZ_TARGET_CANON[s] || '敌方单体';
 }
-/* 这个目标是不是打敌人的（含范围） */
-function xzTargetIsFoe(t) { var c = xzTargetOf(t); return c === '敌方单体' || c === '敌方范围'; }
-/* 这个目标是不是打多个（只对敌方范围成立；我方群体是"给我方多人"，不走 aoe 伤害链） */
 function xzTargetIsAoe(t) { return xzTargetOf(t) === '敌方范围'; }
 /* 落点是自己（含我方群体里施术者自己那一条） */
 function xzTargetIsSelfSide(t) { var c = xzTargetOf(t); return c === '自身' || c === '我方群体'; }
@@ -13323,17 +13310,6 @@ function xzHitBonusOf(skill) {
     return (typeof v === 'number') ? v : 0;
   } catch (eH) { return 0; }
 }
-/* 攻方的敏捷 → 命中加值。没有敏捷字段（野怪/未建卡）就按 0，不猜。 */
-function xzAgiHitBonusOf(unit) {
-  try {
-    var a = Number(unit && (unit.agi !== undefined ? unit.agi
-      : (unit.four && unit.four.敏捷) || (unit.四维 && unit.四维.敏捷))) || 0;
-    /* ★ v268：临时敏捷（v75AgiFlat）已随「敏捷不做效果」一并删除 ——
-       敏捷只来自建卡四维，没有任何效果能临时加它。 */
-    if (!isFinite(a) || a <= 0) return 0;
-    return Math.round(a * XZ_AGI_HIT_RATE * 2) / 2;   /* 0.5 粒度 */
-  } catch (eA) { return 0; }
-}
 
 /* ⚠ v229：**不再有独立的「闪避」机制**。
    用户原话：「闪避就是命中总值够不着的下档，也就是此时对方算闪避，
@@ -13389,9 +13365,6 @@ function xzHitCutOf(attacker, skill) {
   /* ★ v272：删掉 'attacker.v75HitFlat' 那行 —— 全仓零写入点，恒为 undefined，
      'cut += 0' 白算一次（v260 起攻方已无「命中加值」这个概念）。 */
   return cut;
-}
-function xzDodgePtsOf(defender) {
-  return 0;
 }
 
 /* 专称 → 大境名。玄帝属帝境、穹主属穹境，这两个专称里**不含大境名**
@@ -23492,13 +23465,6 @@ var XZJJ = (function () {
 
   /* 玄诀机制名属于「专属机制名（XINFA_ATOM）」还是「通用效果项（COMMON_ATOM）」——
      与玄技那套 xjjAtomKind 同一思路，但查的是玄诀表（两表不通用，别混）。 */
-  function xjjHeartAtomKind(name) {
-    try {
-      if (typeof XINFA_ATOM !== 'undefined' && XINFA_ATOM && XINFA_ATOM[name]) return '专属机制名';
-      if (typeof COMMON_ATOM !== 'undefined' && COMMON_ATOM && COMMON_ATOM[name]) return '通用效果项';
-    } catch (e) {}
-    return '效果项';
-  }
   /* ★ v43：机制名／效果项改成「**名：解释**」的分行块，字号 11 → 12.5px。
      用户原话：「机制名和效果项不可点了，但是字体放大一点点，不然看不清，
      每个效果项和机制名要冒号解释」。
@@ -23521,17 +23487,6 @@ var XZJJ = (function () {
        金（tone='atom'）—— 势种机制名（堆层·X / 满层·X / 兑付·X）、专属机制名、招式骨架（骨架也是位次机制）；
        灰（tone='term'）—— 通用效果项 / 效果项 / 固定效果项（不是这一路独有的机制，是配上去的效果项）。
      ⚠ 这些签挂在**小框**里（小框挂 body 上，取不到浮层的 CSS 令牌）⇒ 一律写实色。 */
-  function atomChipBtn(key, label, tone) {
-    var isTerm = (tone === 'term');
-    var col = isTerm ? '#9aa4b0' : '#e8c98f';
-    var bd = isTerm ? 'rgba(255,255,255,.16)' : 'rgba(242,194,111,.52)';
-    var bg = isTerm ? 'rgba(255,255,255,.05)' : 'rgba(201,168,106,.13)';
-    return '<span class="' + PFX + '-atomb" data-jjb-atom="' + esc(key) + '" role="button" title="点开看这一条的说明"'
-      + ' style="cursor:pointer;display:inline-block;margin:0 5px 3px 0;padding:1px 7px;border-radius:5px;'
-      + 'font-size:12px;line-height:1.6;border:1px solid ' + bd + ';background:' + bg + ';'
-      + 'color:' + col + ';-webkit-tap-highlight-color:transparent;">'
-      + esc(label) + ' <span style="opacity:.62;">▸</span></span>';
-  }
   /* 一枚机制名/势种/骨架标签 → 说明页的内容（点开才看） */
   function atomInfoOf(name) {
     var nm = String(name || '');
@@ -23628,17 +23583,6 @@ var XZJJ = (function () {
     } catch (eA) { return false; }
   }
 
-  function atomChip(name, kind) {
-    var d = (typeof atomOf === 'function') ? atomOf(name) : null;
-    var tier = (d && d.tier) ? (' ' + (ATOM_TIER_CN[d.tier] || '')) : '';
-    /* ★ v62：名字里**已经带等级**的（通用效果项就叫「奋击II」「避虚III」）不再补一次，
-       否则卡面上会印出「奋击II II」这种一眼假的重复。 */
-    if (tier && ATOM_TIER_CN[d.tier] && String(name).slice(-ATOM_TIER_CN[d.tier].length) === ATOM_TIER_CN[d.tier]) tier = '';
-    /* ★ v62：**只有本路专属机制名是金**（那是机制）；通用效果项 / 效果项 / 固定效果项一律灰。
-       v43 的「名：说明」行内铺开也按用户新口径作废 —— 说明点开才看。 */
-    var tone = (kind === '专属机制名') ? 'atom' : 'term';
-    return atomChipBtn(name, name + tier, tone);
-  }
 
   /* 小框里的「玄技 × 机制名 / 效果项」区块：读的是**真技能对象**（normalizeSkillItem 产出）。
      ★ v37 修正：字段名改按真对象取（quality / v2pos / style / coeff）。
@@ -28663,22 +28607,6 @@ function build() {
   }
   /* 把「某窗口视口内的坐标」换算成「真实屏幕坐标」——只用来判断能不能看见，
      不参与定位（定位仍写在那块文档里，因为事件得由那块文档收）。 */
-  function xzFloatScreenRect(w) {
-    /* 顶层：视口坐标就是屏幕坐标，再减去滚动 */
-    try { if (w === w.top) return { dx: -(w.scrollX || w.pageXOffset || 0), dy: -(w.scrollY || w.pageYOffset || 0) }; } catch (e0) {}
-    var dx = 0, dy = 0, cur = w, guard = 0;
-    while (cur && guard++ < 8) {
-      try { if (cur === cur.top) break; } catch (eT) { break; }
-      var fe = null;
-      try { fe = cur.frameElement; } catch (e1) { break; }
-      if (!fe) break;
-      var r = fe.getBoundingClientRect();
-      dx += r.left; dy += r.top;
-      try { dx -= (cur.parent.scrollX || 0); dy -= (cur.parent.scrollY || 0); } catch (e2) {}
-      cur = cur.parent;
-    }
-    return { dx: dx, dy: dy };
-  }
   function xzFloatGeom(w) {
     var vv = null, vw = 0, vh = 0, ox = 0, oy = 0;
     try { vv = w.visualViewport || null; } catch (e0) {}
@@ -29206,12 +29134,6 @@ function build() {
   }
   function xzEntryOff(e) {
     return xzIsOff(e.enabled) || xzIsOn(e.disable);
-  }
-  function xzWBIsTarget(e, item) {
-    if (!e) return false;
-    try { if (item.uid !== undefined && item.uid !== null && e.uid === item.uid) return true; } catch (eU) {}
-    var t = String(e.comment || e.name || '');
-    return !!(item.title && t.indexOf(item.title) >= 0);
   }
   /* 直接读页面里的世界书对象（不依赖任何 API）。
      两条来源：全局 'world_info.entries'，以及角色卡内嵌 'character_book.entries'。 */
@@ -29799,94 +29721,6 @@ function build() {
        ② 原地改 'world_info.entries' / 'character_book.entries' + 'saveCharacterDebounced()'；
        ③ 'setLorebookEntries(书, [{uid, enabled}])' 及其 'disable' 变体。
      旧版只做③、且把 Promise resolve 当成功 —— 这就是「球变色、世界书没动」的根源。 */
-  function xzWBPatch(bookName, item, want) {
-    return new Promise(function (resolve) {
-      var done = false;
-      function finish(r) { if (!done) { done = true; resolve(r); } }
-
-      function step1() {
-        var uf = xzPickFn('updateWorldbookWith');
-        if (!uf || !bookName) { step2('无 updateWorldbookWith 接口'); return; }
-        try {
-          var r = uf(bookName, function (entries) {
-            var arr;
-            if (Array.isArray(entries)) arr = entries;
-            else if (entries && entries.entries) {
-              arr = Object.keys(entries.entries).map(function (k) { return entries.entries[k]; });
-            } else arr = Object.keys(entries || {}).map(function (k) { return entries[k]; });
-            return arr.map(function (e) { return xzWBIsTarget(e, item) ? xzWBSetOn(e, want) : e; });
-          }, { render: 'immediate' });
-          if (r && typeof r.then === 'function') {
-            r.then(function () { finish({ ok: true, how: 'updateWorldbookWith' }); })
-              .catch(function (err) { step2('updateWorldbookWith → ' + ((err && err.message) || err)); });
-            return;
-          }
-          finish({ ok: true, how: 'updateWorldbookWith' });
-        } catch (e1) {
-          step2('updateWorldbookWith → ' + ((e1 && e1.message) || e1));
-        }
-      }
-
-      function step2(why1) {
-        var hit = false;
-        function scan(bag) {
-          if (!bag || hit) return;
-          try {
-            if (Array.isArray(bag)) {
-              for (var i = 0; i < bag.length; i++) {
-                if (xzWBIsTarget(bag[i], item)) { bag[i] = xzWBSetOn(bag[i], want); hit = true; }
-              }
-            } else if (typeof bag === 'object') {
-              Object.keys(bag).forEach(function (k) {
-                var e = bag[k];
-                if (!e || typeof e !== 'object') return;
-                if (xzWBIsTarget(e, item)) { bag[k] = xzWBSetOn(e, want); hit = true; }
-              });
-            }
-          } catch (eS) {}
-        }
-        try { scan(window.world_info && window.world_info.entries); } catch (e3) {}
-        try {
-          var w = window;
-          if (w.characters && w.characterId !== undefined && w.characters[w.characterId]
-            && w.characters[w.characterId].data && w.characters[w.characterId].data.character_book) {
-            scan(w.characters[w.characterId].data.character_book.entries);
-          }
-        } catch (e4) {}
-        if (hit) {
-          try { if (typeof window.saveCharacterDebounced === 'function') window.saveCharacterDebounced(); } catch (e5) {}
-          try { if (typeof window.saveWorldInfo === 'function') window.saveWorldInfo(bookName); } catch (e6) {}
-          try { if (typeof window.saveSettingsDebounced === 'function') window.saveSettingsDebounced(); } catch (e7) {}
-          finish({ ok: true, how: 'inplace' });
-          return;
-        }
-        step3(why1 + ' ｜ 原地改也没碰到目标条目');
-      }
-
-      function step3(whyBase) {
-        var setE = xzPickFn('setLorebookEntries');
-        if (!setE) { finish({ ok: false, why: whyBase + '；且无 setLorebookEntries' }); return; }
-        function tryPatch(field, next) {
-          var patch = { uid: item.uid };
-          patch[field] = (field === 'enabled') ? !!want : !want;
-          var r = null;
-          try { r = setE(bookName, [patch]); } catch (e) { r = null; }
-          if (r && typeof r.then === 'function') {
-            r.then(function () { finish({ ok: true, how: 'setLorebookEntries:' + field }); })
-              .catch(function (err) { next('setLorebookEntries:' + field + ' → ' + ((err && err.message) || err)); });
-            return;
-          }
-          if (r === false) { next('setLorebookEntries:' + field + ' → false'); return; }
-          finish({ ok: true, how: 'setLorebookEntries:' + field });
-        }
-        tryPatch('enabled', function (w1) {
-          tryPatch('disable', function (w2) { finish({ ok: false, why: whyBase + ' ｜ ' + w1 + ' ｜ ' + w2 }); });
-        });
-      }
-
-      step1();
-    });
-  }
   function xzModeOfPair(code, dice) {
     if (!code && !dice) return 'none';
     if (code && dice) {
@@ -30279,88 +30113,6 @@ function build() {
      现在：点入口 → 战前编队界面（列出变量里读到的同伴，勾选）→ 确认 → 开战。
      ⚠ 候选读不到就只上玩家自己，绝不因为「编队失败」而开不了战。 */
   var XZ_PRE_TEAM = null;
-  function xzTeamPool() {
-    var out = [];
-    try {
-      var cl = xzCharListFromVars();
-      if (cl) {
-        for (var k in cl) {
-          var c = cl[k] || {};
-          var nm = String(c.姓名 || c.name || k || '');
-          if (!nm) continue;
-          out.push({
-            name: nm,
-            /* ★ v45：候选列表的境界名也归一（列表上显示的境界与真的会建出的单位一致） */
-            realm: xzNormRealmName(String(c.境界 || c.realm || '引玄初期')),
-            /* ★ v270：同上 —— 玄元属性裸串（旧档）与 {属性}（现行）都要认，
-               否则选人界面里所有人的属性都印成「火」。 */
-            elem: (function (c) {
-              var ax = c.玄元属性, e = '';
-              if (typeof ax === 'string') e = ax;
-              else if (ax && ax.属性) e = String(ax.属性);
-              else if (ax && ax.元素) e = String(ax.元素);
-              return xzNormElem(e) || xzNormElem(c.element) || '火';
-            })(c)
-          });
-        }
-      }
-    } catch (e) {}
-    return out.slice(0, 10);
-  }
-  function openPreBattle() {
-    xzScrollSave();          /* ★ v197：里面有 checkbox，获焦会把整页滚下去；关掉必须还原 */
-    ensureStyle(); build();
-    var d = d0();
-    var old = d.getElementById(PFX + '-pre');
-    if (old && old.parentNode) old.parentNode.removeChild(old);
-    var pool = xzTeamPool();
-    var box = d.createElement('div');
-    box.id = PFX + '-pre';
-    box.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;'
-      + 'width:min(420px,92vw);max-height:76vh;overflow-y:auto;padding:14px 16px;border-radius:12px;'
-      + 'box-sizing:border-box;background:linear-gradient(180deg,rgba(16,37,45,.98),rgba(3,13,20,.99));'
-      + 'border:1px solid rgba(242,194,111,.62);box-shadow:0 18px 44px rgba(0,4,8,.82);'
-      + 'color:#e8e3d3;font:13px/1.6 var(--xz-font,"Microsoft YaHei","PingFang SC",sans-serif);';
-    var rows = pool.length
-      ? pool.map(function (c, i) {
-          return '<label style="display:flex;align-items:center;gap:9px;padding:7px 0;'
-            + 'border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer;">'
-            + '<input type="checkbox" data-pre="' + i + '" style="width:16px;height:16px;flex:none;">'
-            + '<span style="flex:1;">' + esc(c.name) + '</span>'
-            + '<span style="color:#8a8578;font-size:11.5px;">' + esc(c.realm) + ' · ' + esc(c.elem) + '</span></label>';
-        }).join('')
-      : '<div style="color:#8a8578;font-size:12.5px;line-height:1.6;">变量里暂时读不到同伴名单 —— 直接「开战」就是你自己上场。</div>';
-    box.innerHTML = '<div style="font-size:14.5px;font-weight:700;color:#e8c98f;letter-spacing:.08em;">战前编队</div>'
-      + '<div style="font-size:11.5px;color:#8a8578;margin:3px 0 9px;line-height:1.5;">'
-      + '勾选要一起上场的人（不勾 = 你单人应战）</div>' + rows
-      + '<div style="display:flex;gap:8px;margin-top:13px;">'
-      + '<button type="button" id="' + PFX + '-pre-ok" style="flex:1;min-height:34px;padding:8px;border-radius:7px;'
-      + 'cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;background:rgba(201,168,106,.22);'
-      + 'border:1px solid #d4af37;color:#e8c98f;">开战</button>'
-      + '<button type="button" id="' + PFX + '-pre-x" style="min-height:34px;padding:8px 15px;border-radius:7px;'
-      + 'cursor:pointer;font-family:inherit;font-size:12.5px;background:rgba(255,255,255,.06);'
-      + 'border:1px solid rgba(255,255,255,.18);color:#b7b8b3;">取消</button></div>';
-    d.body.appendChild(box)   /* 战前面板出现在战斗弹层开启之前，留在 body */
-    var bx = d.getElementById(PFX + '-pre-x');
-    if (bx) bx.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (box.parentNode) box.parentNode.removeChild(box);
-      xzScrollRestore();
-    });
-    var bo = d.getElementById(PFX + '-pre-ok');
-    if (bo) bo.addEventListener('click', function (e) {
-      e.stopPropagation();
-      var picked = [];
-      try {
-        var ins = box.querySelectorAll('input[data-pre]');
-        for (var i = 0; i < ins.length; i++) if (ins[i].checked) picked.push(pool[Number(ins[i].getAttribute('data-pre'))].name);
-      } catch (e2) {}
-      XZ_PRE_TEAM = picked;
-      if (box.parentNode) box.parentNode.removeChild(box);
-      xzScrollRestore();
-      startJJ();
-    });
-  }
 
   /* ★★ v171（用户：「战斗界面的重开按钮没反应」）★★
      根因是 v166 我自己加的那道闸：

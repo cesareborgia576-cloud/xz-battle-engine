@@ -24967,16 +24967,25 @@ var XZ_JJB_SKIN = `
   overflow-x:auto;scrollbar-width:none;padding-bottom:2px;
 }
 .xz-jjb-skrow::-webkit-scrollbar{display:none;}
-.xz-jjb-skgrp{display:flex;flex:0 0 auto;min-width:0;}
+/* ★ v494：「align-self:center」 —— 底栏是 「align-items:stretch」，
+   技能键会被拉成和四宫格一样高（66px），两行字的本事却只占 36px
+   ⇒ 用户看到的是一块「又高又空的大方块」。改成按内容高、垂直居中。 */
+.xz-jjb-skgrp{display:flex;flex:0 0 auto;min-width:0;align-self:center;}
 
 /* 技能键：菱形图标 + 名字 + 品阶·目标 + 耗灵 */
 .xz-jjb-sk{
   position:relative;display:flex;align-items:center;gap:5px;
   /* ★ v479：改扁、改短（用户：「技能改扁，改短一点，一栏(页)容纳三个技能」）。
-     宽度下限从 104 放到 0（由外层 flex 等分），纵向内距 6→3，
-     菱形图标藏掉 —— 品阶色由左边那条 2.5px 色条表达，那颗菱形占 18px 宽，
-     在 63px 一格的时代就是"挤掉半个名字"的元凶。 */
-  min-width:0;flex:1 1 0;padding:3px 5px 3px 7px;text-align:left;
+     宽度下限从 104 放到 0（由外层 flex 等分），纵向内距 6→3。
+     ★ v494 撤回 "菱形图标藏掉" 那半句 —— 用户：「而且我的技能图标呢，那个菱形啊」。
+       品阶色仍由左边那条 2.5px 色条表达，菱形只作为"这是一门玄技"的识别标记。 */
+  /* ★★★ v494（用户 2026-10-31）：「而且你搞这么宽干什么，他妈这么空」★★★
+     病历：「flex:1 1 0」 在一个 「flex:0 0 auto」 的组里 = 组宽由内容定，
+     可**内容只有一枚技能时**，那枚会把整条滑轨（实测 215px）全撑满，
+     名字两字 + 三枚小标签撑不起这个宽度 ⇒ 一大片空白。
+     ⇒ 加 「max-width:154px」：一枚时就是一枚的宽，三枚时照旧等分。
+       宽度上限按"最长的目标标签（敌方单体 4 字）+ 耗灵 + 菱形"实测算出来。 */
+  min-width:0;flex:1 1 0;max-width:154px;padding:5px 7px;text-align:left;
   appearance:none;cursor:pointer;font-family:var(--xz-font);color:var(--xz-ink);
   background:var(--xz-panel);border:1px solid var(--xz-line);border-radius:9px;
   transition:border-color .16s,background .16s,transform .16s;
@@ -24994,8 +25003,12 @@ var XZ_JJB_SKIN = `
 }
 .xz-jjb-sklack{opacity:.45;cursor:not-allowed;}
 .xz-jjb-skico{
-  display:none;   /* v479：去掉菱形，理由见 .xz-jjb-sk 那条规则的注释 */
-  flex:none;width:14px;height:14px;margin-left:2px;
+  /* ★ v494：恢复显示（用户：「而且我的技能图标呢，那个菱形啊」）。
+     v479 把它 「display:none」 掉了，理由是"占 18px 宽、挤掉半个名字"——
+     但用户明确要它回来，而且技能键现在已经有了宽度上限（154px），装得下。
+     尺寸压到 12px（原来 14px），旋转 45° 后视觉对角 ≈17px，比原来省 4px 宽。 */
+  display:block;
+  flex:none;width:12px;height:12px;margin-left:1px;
   transform:rotate(45deg);border-radius:2px;
   border:1px solid currentColor;color:var(--ico,#c9a86a);
   background:linear-gradient(135deg,rgba(255,255,255,.16),transparent 60%);
@@ -25015,16 +25028,32 @@ var XZ_JJB_SKIN = `
 /* ★ v479：3 个技能挤一页后这一行只有 ~51px 宽。
    目标（「敌方单体」4 字）必须**完整显示**（用户点名要留），品阶与耗灵让位：
    ⇒ 允许换行，目标那枚不省略号。两行 pills 共 22px，底栏 78px 装得下。 */
-.xz-jjb-skpills{display:flex;flex-wrap:wrap;align-items:center;gap:1px 4px;
-  font-size:8.5px;line-height:1.25;color:var(--xz-ink-3);min-width:0;}
+/* ★★★ v494（用户 2026-10-31）★★★
+   原话：「玄技名字和品质和目标和耗蓝的美化小框呢」。
+   v479 为了把 3 个技能塞进一页，把这三枚压成了**光秃秃一行小字**：
+   「padding:0;border:0;background:none」 —— 框、底色、圆角全给删没了。
+   玩家看到的就只剩「地阶 敌方单体 无耗」三串灰字，看不出哪一段是品阶、哪一段是耗灵。
+   ⇒ 现在恢复成**带底带边的小框**（三枚各自一个色系：
+     品阶金 / 目标中性 / 耗灵蓝，和气血条·灵力条同一套色感）。
+   ⚠ 别再为了省宽度把它们退回成纯文字：技能键这一版已经加了宽度上限、
+     也改扁了，装得下这三枚；真装不下时靠 「.xz-jjb-skpills」 的 wrap 换行，
+     而不是删样式。 */
+.xz-jjb-skpills{display:flex;flex-wrap:wrap;align-items:center;gap:2px 3px;
+  font-size:8.5px;line-height:1.2;color:var(--xz-ink-3);min-width:0;}
 .xz-jjb-pill{
-  font-size:9.5px;letter-spacing:0;color:var(--xz-ink-3);
-  padding:0;border:0;background:none;white-space:nowrap;
+  display:inline-flex;align-items:center;flex:none;
+  font-size:8.5px;line-height:1;letter-spacing:0;
+  padding:2px 4px;border-radius:3px;
+  color:var(--xz-ink-3);
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.035);
+  white-space:nowrap;
 }
-.xz-jjb-pill-q{color:var(--xz-ink-3);flex:none;}
+.xz-jjb-pill-q{color:#e0c07a;border-color:rgba(201,168,106,.34);background:rgba(201,168,106,.10);}
 /* 目标**不截断**：它是玩家判断"这一招打谁"的唯一依据，截成「敌方…」等于没说 */
-.xz-jjb-pill-tgt{color:var(--xz-ink-3);white-space:nowrap;}
-.xz-jjb-pill-cost{margin-left:auto;color:var(--xz-mp-a);font-family:var(--xz-num);font-variant-numeric:tabular-nums;}
+.xz-jjb-pill-tgt{color:var(--xz-ink-2);white-space:nowrap;}
+.xz-jjb-pill-cost{color:var(--xz-mp-a);border-color:rgba(90,170,240,.30);background:rgba(90,170,240,.09);
+  font-family:var(--xz-num);font-variant-numeric:tabular-nums;}
 .xz-jjb-sk .xz-jjb-pill-cost{color:var(--xz-mp-a);}
 .xz-jjb-see{
   /* v479：3 个技能挤一页之后，这枚 22px 的「详」键吃掉三分之一个技能格。
@@ -25205,9 +25234,10 @@ var XZ_JJB_SKIN = `
   .xz-jjb-fn{flex:0 0 112px;width:112px;}
   /* 提示行（「时序推进中…」）占满剩下的宽度，但**不许换行** */
   .xz-jjb-hint{flex:1 1 auto;justify-content:center;padding:0;align-self:center;min-width:0;}
-  .xz-jjb-sk{min-width:0;padding:3px 4px 3px 6px;gap:4px;}
+  .xz-jjb-sk{min-width:0;max-width:146px;padding:4px 5px;gap:4px;}
   .xz-jjb-skname{font-size:10.5px;}
-  .xz-jjb-pill{font-size:8.5px;}
+  /* ★ v494：小框回来了，手机上把内距再压 1px，两枚并排仍放得下「地阶 + 敌方单体」 */
+  .xz-jjb-pill{font-size:8px;padding:1.5px 3px;border-radius:3px;}
   .xz-jjb-sknav{width:18px;font-size:13px;}
 
   /* ★★★ v473 修（用户 2026-10-30）：「手机端的人物卡片太长了，而且玩家反应，
@@ -25794,6 +25824,37 @@ var XZ_JJB_LEGACY = `
     st.textContent = XZ_JJB_SKIN + XZ_JJB_LEGACY;
     /* 只在首次插入；之后每次都只是重写上面那颗的 textContent（见函数开头注释）。 */
     if (!_oldSt) d.head.appendChild(st);
+
+    /* ══════════════════════════════════════════════════════════════════════
+       ★★★ v494：按钮皮肤的**兜底守卫**（第二道，故意用 !important + 字面色）★★★
+       病历：用户连报三次「杂项 / 自动战斗 变成白框」（2026-10-31，附 4 张截图）。
+       v492 已经把 '.xz-jjb-mb' 的基础规则补进 XZ_JJB_SKIN 了，本地真 Chrome 量出来
+       也确实是深底金边 —— 但它仍可能在真实环境里掉回浏览器默认 <button>：
+         ① 玩家装的是旧版卡（引擎 tag 没跟上）⇒ 那段规则**根本不存在**；
+         ② 令牌丢失（ ':root' 那段没注入 / 被宿主主题覆盖）⇒ 'var(--xz-panel)' 失效；
+         ③ 宿主全局 'button{...}' 带 !important 把底色抢回去。
+       前两条用"再加一条普通规则"是治不了的 —— 必须**字面色 + !important**。
+       ⚠ 只兜「底色 / 边框 / 文字 / 圆角」这四项，宽高字号一概不碰（那些由
+         '.xz-jjb-fn > …' 和各处自己的规则管，多写一条就会把四宫格挤歪）。
+       ⚠ ':not(.on)' 必须留：「自动战斗」开着时是金底（'.xz-jjb-mb.on'），
+         这条守卫若把它一起按成灰底，"开/关"就没法从颜色上区别了。
+       ⚠ 用**独立** <style>（id '-guard'）而不是拼进 SKIN：SKIN 是"设计稿"，
+         这条是"保险丝"，混在一起以后谁改设计都会误伤保险丝。
+       ══════════════════════════════════════════════════════════════════════ */
+    var _gOld = d.getElementById(PFX + '-guard');
+    var gs = _gOld || d.createElement('style');
+    gs.id = PFX + '-guard';
+    gs.textContent =
+      '.' + PFX + '-mb:not(.on),#' + PFX + '-restart2{' +
+      'appearance:none!important;-webkit-appearance:none!important;' +
+      /* ⚠ 这里必须写**字面实色** '#0c1016'（= --xz-panel 的值），不许写 var()：
+         这条守卫存在的意义就是"令牌可能取不到"，自己再去引用令牌等于白写。
+         也不许写半透明白（rgba(255,255,255,.04)）：它在深底上是一层灰雾，
+         和旁边实底的技能键并排时能看出色差，而且白框闸会把它判成"接近白"。 */
+      'background:#0c1016!important;' +
+      'border:1px solid rgba(255,255,255,.10)!important;' +
+      'color:#e9e5dc!important;border-radius:8px!important;}';
+    if (!_gOld) d.head.appendChild(gs);
   }
 
   /* ══════════ v69 面板定位：**逐条照抄早期斗法台脚本** ══════════

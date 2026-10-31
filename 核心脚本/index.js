@@ -8652,7 +8652,22 @@ function processTurnStartDots(fighter) {
     fighter.swordIntent = Math.min(swordIntentCap(fighter), (fighter.swordIntent || 0) + 1);
     dotLogs.push(fName + ' 【剑冢领域】剑意自生（' + fighter.swordIntent + '/5）');
   }
-  if (fighter.ningshenRounds > 0) fighter.ningshenRounds--;
+  /* ★★★ v506：'剑意' 机制**以前只倒计时、不产出** ★★★
+     它落 `ningshenRounds`，而那个字段全库只有三类出现：设置（16116）、
+     递减（就是这一行）、注释。**没有一处读它去做事** ⇒ 写「剑意:3」的结果是：
+     战报打一句「剑意蓄养」，三层手数空转完，期间一点效果都没有。
+     ── 为什么现在必须修，而不是删掉了事 ──────────────────────────────
+     世界书《招式字段》写着「剑意：层数加手数。蓄养剑意，层数越高出手越重」，
+     210 门预设里也有招式在用它。删引擎 = 那批招式静默失效（比死代码更坏）。
+     ⇒ 按手补上蓄养，与紧邻的 `domainRounds`（剑冢领域）、`yichaoRounds`（剑意潮生）
+        三支完全同构 —— 它们本来就是同一件事的三个触发条件。
+     ⚠ 自选池里**不摆**「剑意」：它和「势种」在做同一件事（都涨 swordIntent），
+       玩家分不清两者。见 07 的 EFF_POOL 与 `_v447_eff_picker` 的 INTERNAL_ONLY。 */
+  if (fighter.ningshenRounds > 0) {
+    fighter.ningshenRounds--;
+    fighter.swordIntent = Math.min(swordIntentCap(fighter), (fighter.swordIntent || 0) + 1);
+    dotLogs.push(fName + ' 【剑意】蓄养一层（' + fighter.swordIntent + '/' + swordIntentCap(fighter) + '）');
+  }
   var _rr = (fighter.passive && fighter.passive.effects) ? fighter.passive.effects : [];
   if (_rr.indexOf('损人') !== -1) {                                                   // 损人：每回合自损 3% 气血（最低留 1 点）
     var _selfCut = Math.max(1, Math.round(fighter.hp * 0.03));

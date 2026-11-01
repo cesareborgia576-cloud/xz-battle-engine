@@ -31570,6 +31570,12 @@ function build() {
       _reg.xzWBVersionState = xzWBVersionState;   /* ★ v367：状态栏那个版本徽章读它 */
       _reg.xzWBSetDlc = xzWBSetDlc;
       _reg.xzWBDlcState = xzWBDlcState;     /* ★ v357：状态栏那个按钮读状态用 */
+      /* ★ v529：**同步**版世界书条目读取的出口。
+         `xzWBDlcState` 是 Promise（要跨窗口取 API），而开局第 4 页的三级下拉
+         是**同一次渲染里同步拼出来的** —— 异步还没回来，下拉里就永远没有 DLC 城。
+         用户连着报两次「开启了斗罗宗条目，还是没有新增选项」，根因就在这个时序差。
+         ⇒ 把这个同步实现交出去，让界面侧能立刻拿到真实开关。 */
+      _reg.xzWBLocalEntries = xzWBLocalEntries;
       _reg.xzIsDlcEntry = xzIsDlcEntry;
       /* ★ v376：分包判据与包名解析 —— 07 的开局勾选框要按包列，必须能自己判包 */
       _reg.xzIsDlcEntryOf = xzIsDlcEntryOf;

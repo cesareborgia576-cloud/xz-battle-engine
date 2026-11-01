@@ -2176,7 +2176,18 @@ function countAllTerms(p) {
     p.divineSkills.forEach(function (sk) { if (Array.isArray(sk.effects)) n += sk.effects.length; });
   }
   if (p.artifact && Array.isArray(p.artifact.effects)) n += p.artifact.effects.length;
-  if (p.xinfa    && Array.isArray(p.xinfa.效果))    n += p.xinfa.效果.length;
+  /* ★ v529：玄诀可能有多门（记录型）。`p.xinfa.效果` 只在**单门形态**下存在，
+     记录型身上没有这个字段 ⇒ 少算全部玄诀的效果项 ⇒ `handsOf` 算出来的手数偏少。
+     这条正是「多门玄诀」改动把 `_v270` ⑦ 判红的地方（时序被手数带偏）。 */
+  if (p.xinfa && typeof p.xinfa === 'object') {
+    if (Array.isArray(p.xinfa.效果)) n += p.xinfa.效果.length;
+    else if (!p.xinfa.玄技名) {
+      for (var _kx in p.xinfa) {
+        var _vx = p.xinfa[_kx];
+        if (_vx && typeof _vx === 'object' && Array.isArray(_vx.效果)) n += _vx.效果.length;
+      }
+    }
+  }
   if (p.daoBuffs && Array.isArray(p.daoBuffs))     n += p.daoBuffs.length;
   return n;
 }
@@ -6687,6 +6698,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
      ⚠ 去重：同一门写两遍同一个机制名只留一条（`_hSeen`），
        否则 `heartEffects` 里重复项会让 `mpRegenPerRoundOf` 加两次。
      ══════════════════════════════════════════════════════════════════════════ */
+  /* ══ 所有门 effects 的并集（多门玄诀全部上场）══ */
   var _heartAllRaw = [];
   var heartEffects = [];
   try {
@@ -6702,14 +6714,14 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
       _heartAllRaw.push(String(_raw2 === undefined || _raw2 === null ? '' : _raw2));
       var _xf2 = (typeof XINFA_TABLE !== 'undefined' && XINFA_TABLE[_nm2]) ? XINFA_TABLE[_nm2] : null;
       var _effs2 = _xf2 ? _xf2.effects.slice() : parseEffectsList(_raw2);
-      if (typeof commonTermsOf === 'function') {
+      /* ⚠ 只有**表内**玄诀才拼通用效果项（与旧行为逐字一致） */
+      if (_xf2 && typeof commonTermsOf === 'function') {
         var _ex2 = commonTermsOf(_raw2, _hCap) || [];
         _ex2.forEach(function (x) { if (_effs2.indexOf(x) < 0) _effs2.push(x); });
       }
       _effs2.forEach(function (x) { if (!_hSeen[x]) { _hSeen[x] = 1; heartEffects.push(x); } });
     });
   } catch (eHE) {
-    /* 合并失败就退回单门 —— 宁可少算，不许整段抛错把建卡打断 */
     try { heartEffects = parseEffectsList(xzSkillEffFieldOf(heartRec)); } catch (eHE2) { heartEffects = []; }
   }
 
@@ -21343,7 +21355,14 @@ var XZJJ = (function () {
     /* ★ v43：填「配置加成」字段（让 handsOf 算得清） */
     f.skillCount = (p.skills ? p.skills.length : 0);
     f.weaponTier = qualityTierScore(p.artifact && p.artifact.品质);
-    f.heartTier  = qualityTierScore(p.xinfa   && p.xinfa.品质);
+    /* ★ v529：`p.xinfa` 现在可能是整份记录型（多门）—— `.品质` 在记录型上取不到，
+       会让 heartTier 恒 0（配置分掉档）。取**品阶最高那门**，与面板展示同一支。 */
+    f.heartTier  = qualityTierScore((function () {
+      try {
+        var _hm = (typeof xzServingHeartOf === 'function') ? xzServingHeartOf(p.xinfa) : null;
+        return (_hm && _hm.品质) || (p.xinfa && p.xinfa.品质) || '';
+      } catch (eHT) { return (p.xinfa && p.xinfa.品质) || ''; }
+    })());
     f.divineCount = (p.divineSkills ? p.divineSkills.length : 0);
     f.termCount = countAllTerms(p);
     f.hands = handsOf(f);

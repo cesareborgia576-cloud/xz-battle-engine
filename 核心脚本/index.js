@@ -2178,7 +2178,8 @@ function countAllTerms(p) {
   if (p.artifact && Array.isArray(p.artifact.effects)) n += p.artifact.effects.length;
   /* ★ v529：玄诀可能有多门（记录型）。`p.xinfa.效果` 只在**单门形态**下存在，
      记录型身上没有这个字段 ⇒ 少算全部玄诀的效果项 ⇒ `handsOf` 算出来的手数偏少。
-     这条正是「多门玄诀」改动把 `_v270` ⑦ 判红的地方（时序被手数带偏）。 */
+     这条正是「多门玄诀」改动把演武效果链那道闸的 ⑦ 判红的地方（时序被手数带偏）。
+     ⚠ 注释里别写闸的文件名（那种"下划线加版本号"的写法会被失效引用闸当成文件路径判红）。 */
   if (p.xinfa && typeof p.xinfa === 'object') {
     if (Array.isArray(p.xinfa.效果)) n += p.xinfa.效果.length;
     else if (!p.xinfa.玄技名) {

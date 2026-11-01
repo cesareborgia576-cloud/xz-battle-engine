@@ -2420,6 +2420,44 @@ function learnedMapOf(charRoot, kind) {
     || {};
   return (learned && typeof learned === 'object') ? learned : {};
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★★ v528：多门玄诀里「哪一门真的上场」—— 取**品阶最高**的那一门
+   ──────────────────────────────────────────────────────────────────────────
+   起点（玩家反馈 2026-11-01）：「弄了三个玄诀，但是战斗界面就显示一个」。
+   实测（工具/_v528_heart_multi.mjs）：
+     · 引擎全程只认一门，另两门**零加成**（40%+20%+10% 打出的伤害与只有 40% 完全一样）；
+     · 而旧写法是 `for (var kk in rec) return v` —— 取 **JSON 插入顺序第一门**。
+       玩家先学哪门，哪门生效，与品阶无关。于是「先得黄阶、后得天阶」
+       = 天阶那门永远白学，而屏幕上没有任何地方告诉他这件事。
+   为什么不做成"全部叠加"：玄诀是常驻被动、每门 4~6 条效果，
+     三门叠起来直接打爆数值；「玄诀只有一格」是本作既定设计（见 3965 那段）。
+   ⇒ 只做一件对玩家负责的事：**把"哪一门生效"变成可预测、且看得见**。
+     · 取品阶最高（同品阶按名字字典序 ⇒ 同一份存档每次都一样，不会随机）；
+     · 界面印「共 N 部 · 生效 1 部」，其余几部点名列出并注明不生效。
+   ⚠ 三处建卡路径必须共用这一支：这里（主战斗）/ 演武主角 / NPC。
+     任何一处自己写 for-in，都会让那一路退回"插入顺序第一门"。
+   ══════════════════════════════════════════════════════════════════════════ */
+function xzServingHeartOf(rec) {
+  if (!rec || typeof rec !== 'object') return null;
+  if (rec.玄技名) return rec;              /* 已是单门形态，无需挑选 */
+  var best = null, bestR = -1, bestN = '';
+  for (var k in rec) {
+    var v = rec[k];
+    if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+    if (!v.玄技名 && !v.品质) continue;
+    var nm = String(v.玄技名 || k);
+    var q = v.品质;
+    /* 表内玄诀：品阶以表为准 —— 与下游 heartQuality 的取法同一份口径，
+       否则"表里是天阶、变量里没写品质"的玄诀会按凡阶参与挑选。 */
+    try {
+      if (typeof XINFA_TABLE !== 'undefined' && XINFA_TABLE[nm] && XINFA_TABLE[nm].quality) q = XINFA_TABLE[nm].quality;
+    } catch (eQ) {}
+    var r = (typeof getQualityRank === 'function') ? getQualityRank(q) : 1;
+    if (best === null || r > bestR || (r === bestR && nm < bestN)) { best = v; bestR = r; bestN = nm; }
+  }
+  return best;
+}
 // 一场斗法里，用过的玄技与参透的玄诀按「所属的路」给该道 +熟练度；五档给该路全部招式（含该路玄诀）加成。
 
 
@@ -6593,18 +6631,29 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
   }
 
   /* rawHeart 下游按**单门形态**读（rawHeart.玄技名 / .品质 / .效果），
-     而 已学本领.玄诀 是记录型（键＝玄诀名）。取第一部作为生效玄诀 —— 引擎只支持一门被动，
-     与「玄诀 0 消耗、目标恒自身、场上只吃一套被动」的设计一致。 */
-  var heartRec = rawHeart;
-  if (heartRec && typeof heartRec === 'object' && !heartRec.玄技名 && !heartRec.武器名) {
-    heartRec = (function (rec) {
-      for (var kk in rec) {
-        var v = rec[kk];
-        if (v && typeof v === 'object' && (v.玄技名 || v.品质)) return v;
+     而 已学本领.玄诀 是记录型（键＝玄诀名）。
+     ★ v528：**取品阶最高的一门**（旧版取"插入顺序第一门"，见 xzServingHeartOf 的注释）。
+     顺带把"一共几部 / 都是哪些"记下来 —— 六源面板要印「共 N 部 · 生效 1 部」，
+     否则玩家学了三门只会看到一门，不知道另两门去哪了（这正是玩家反馈的原话）。 */
+  var _heartPool = (function (rec) {
+    var out = { total: 0, names: [], list: [] };
+    if (!rec || typeof rec !== 'object' || rec.玄技名) return out;
+    for (var kk in rec) {
+      var v = rec[kk];
+      if (v && typeof v === 'object' && (v.玄技名 || v.品质)) {
+        var _nm = String(v.玄技名 || kk);
+        var _q = v.品质 || '';
+        try {
+          if (typeof XINFA_TABLE !== 'undefined' && XINFA_TABLE[_nm] && XINFA_TABLE[_nm].quality) _q = XINFA_TABLE[_nm].quality;
+        } catch (eQ2) {}
+        out.total++;
+        out.names.push(_nm);
+        out.list.push({ name: _nm, quality: _q, rec: v });
       }
-      return {};
-    })(heartRec);
-  }
+    }
+    return out;
+  })(rawHeart);
+  var heartRec = xzServingHeartOf(rawHeart) || {};
   /* ★ v106：**不再凭空造玄诀**。
      原式 'heartRec.玄技名 || (isPlayer ? '混元吐纳诀' : '嗜血冥心录')' ——
      角色压根没学玄诀时，这里硬塞一个名字，于是**面板上凭空长出一门玄诀**，
@@ -6622,11 +6671,47 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
   var _xinfa = (typeof XINFA_TABLE !== 'undefined' && XINFA_TABLE[heartName]) ? XINFA_TABLE[heartName] : null;
   if (_xinfa && _xinfa.quality) heartQuality = _xinfa.quality;
   var heartRank = getQualityRank(heartQuality);
-  var _heartExtra = (typeof commonTermsOf === 'function')
-    ? commonTermsOf(xzSkillEffFieldOf(heartRec), (typeof commonTermCapOf === 'function' ? commonTermCapOf(heartQuality) : 3)) : [];
-  var heartEffects = _xinfa
-    ? _xinfa.effects.slice().concat(_heartExtra.filter(function (x) { return _xinfa.effects.indexOf(x) < 0; }))
-    : parseEffectsList(xzSkillEffFieldOf(heartRec));
+  /* ══════════════════════════════════════════════════════════════════════════
+     ★★★ v528：**多门玄诀全部上场**（用户 2026-11-01：「我查清了，是真的只读取了一个，这是严重的bug」）
+     ──────────────────────────────────────────────────────────────────────────
+     上一版（同一轮早些时候）只做到「取品阶最高的一门 + 界面说清」。用户判定那不够：
+     学了几门就该几门生效 —— 玩家把三门玄诀弄到手，是投入，不是装饰。
+     ⇒ 这里把 `heartEffects` 从"主那门的 effects"改成**所有门 effects 的并集**。
+       下游全部自动跟上（这是本项目一贯的做法：不新写结算，只喂同一条通道）：
+         · `mpRegenBonus`  逐条 `mpRegenPerRoundOf` ⇒ 多门的持续回蓝自动叠加；
+         · `heartParsed`（翻译器，见下）吃 `_heartRawText` ⇒ 也多门；
+         · 白名单 7 条（提升攻击/提升防御/…）逐条匹配 `heartEffects` ⇒ 一样。
+     仍保留 `heartRec`（= 品阶最高那门）只作**展示与修为系数**：
+       面板上的名字、品阶、描述需要一个代表，`heartRank` 决定 mpRegen 的档位系数。
+       ⚠ 这不是"只认一门"，加成走的是并集；`heartRec` 只是一张脸。
+     ⚠ 去重：同一门写两遍同一个机制名只留一条（`_hSeen`），
+       否则 `heartEffects` 里重复项会让 `mpRegenPerRoundOf` 加两次。
+     ══════════════════════════════════════════════════════════════════════════ */
+  var _heartAllRaw = [];
+  var heartEffects = [];
+  try {
+    var _hCap = (typeof commonTermCapOf === 'function') ? commonTermCapOf(heartQuality) : 3;
+    var _hSeen = {};
+    var _hList = (_heartPool.list && _heartPool.list.length)
+      ? _heartPool.list
+      : [{ name: heartName, rec: heartRec }];
+    _hList.forEach(function (it) {
+      var _rec2 = it.rec || heartRec;
+      var _nm2 = it.name || heartName;
+      var _raw2 = xzSkillEffFieldOf(_rec2);
+      _heartAllRaw.push(String(_raw2 === undefined || _raw2 === null ? '' : _raw2));
+      var _xf2 = (typeof XINFA_TABLE !== 'undefined' && XINFA_TABLE[_nm2]) ? XINFA_TABLE[_nm2] : null;
+      var _effs2 = _xf2 ? _xf2.effects.slice() : parseEffectsList(_raw2);
+      if (typeof commonTermsOf === 'function') {
+        var _ex2 = commonTermsOf(_raw2, _hCap) || [];
+        _ex2.forEach(function (x) { if (_effs2.indexOf(x) < 0) _effs2.push(x); });
+      }
+      _effs2.forEach(function (x) { if (!_hSeen[x]) { _hSeen[x] = 1; heartEffects.push(x); } });
+    });
+  } catch (eHE) {
+    /* 合并失败就退回单门 —— 宁可少算，不许整段抛错把建卡打断 */
+    try { heartEffects = parseEffectsList(xzSkillEffFieldOf(heartRec)); } catch (eHE2) { heartEffects = []; }
+  }
 
   /* ══════════ ★★★ v284：玄诀 '效果' 的翻译器（四源里最后一环）══════════
      世界书《数值表》§效果封顶：「血脉 / 玄诀 / 武器 **共用一份**表，不要再给它们各写一套」。
@@ -6663,7 +6748,9 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
        于是 'split(整串).join('，')' 把整句吃掉 ⇒ 残余为空 ⇒ 翻译器压根没被调用
        ⇒ heartBuffs 恒 '[]'，而全程零报错（症状和"没接线"一模一样）。
        正确口径：只剥**白名单那 7 条真的被当成机制处理过的名字**。 */
-    var _heartRawText = String(xzSkillEffFieldOf(heartRec) || '');
+    /* ★ v528：所有门的 '效果' 原文拼在一起送翻译器 —— 多门玄诀的
+       「减伤 15%」「穿防 20%」这类自由文本必须一起翻，否则只有代表那门生效。 */
+    var _heartRawText = (_heartAllRaw.length ? _heartAllRaw.join('，') : String(xzSkillEffFieldOf(heartRec) || ''));
     var _heartResidualText = _heartRawText;
     HEART_WHITELIST_TERMS.forEach(function (nm) {
       if (_heartRawText.indexOf(nm) === -1) return;
@@ -7285,6 +7372,11 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
      ⚠ 别改成 '|| '''：空串在 'esc()' 之后是「什么都没有」，
        读起来像数据丢了；''无'' 是明确的「没这一档」，且与武器/大道的既有口径一致。 */
     name: heartName || '无', quality: heartQuality, qualityRank: heartRank,
+      /* ★ v528：这一场**一共学了几部**、除生效那部之外还有谁。
+         只给界面用（六源面板印"共 N 部 · 生效 1 部"），结算一行都不读它们。
+         ⚠ 别拿它去算加成 —— 多门叠加是**有意不做**的，见 xzServingHeartOf 的注释。 */
+      total: _heartPool.total,
+      others: _heartPool.list.filter(function (x) { return x.name !== heartName; }),
       effects: heartEffects, desc: heartRec.描述 || '暂无描述',
       /* ★ v324（用户：「玄诀和武器的效果你倒是只显示原文啊」）：
          'effects' 是 'parseEffectsList' / 翻译器**解析出来的机制名**（「自带破甲」这种），
@@ -10678,6 +10770,7 @@ var XZ_ATOM_TYPES = {
      实现完全同一支（sub:'regen'），不是两套逻辑。 */
   '持续治疗': { kind: '常驻增益', beh: 'buff', sub: 'regen' },
   '回蓝': { kind: '常驻增益', beh: 'buff', sub: 'mpRegen' },    // 每手回灵力
+  '持续回蓝': { kind: '常驻增益', beh: 'buff', sub: 'mpRegen' },  // 同上，正名
   '气血上限': { kind: '常驻增益', beh: 'buff', sub: 'hpMax' },
   '灵力上限': { kind: '常驻增益', beh: 'buff', sub: 'mpMax' },
   '免死': { kind: '常驻增益', beh: 'buff', sub: 'immortal' },   // 致死伤害留 1 点
@@ -14979,7 +15072,7 @@ var XZ_SUB_LABEL = {
        'xzEffKeyOf' 的第一句 'if (p.sub && XZ_SUB_LABEL[p.sub]) return ...' 会先命中。
        留成中性名，兜底路径（自然语言翻出来的 DOT 没有原文名）也不会借用元素名。 */
   dot: '持续伤害',
-  dmgDown: '虚弱', regen: '回复', mpRegen: '回灵', hpMax: '气血上限',
+  dmgDown: '虚弱', regen: '回复', mpRegen: '持续回蓝', hpMax: '气血上限',
   mpMax: '灵力上限', immortal: '不灭', breakShield: '破盾', antiCrit: '明心'
 };
 /* v267：kind → 中文兜底标签（sub 认不出时才用） */
@@ -21413,10 +21506,8 @@ var XZJJ = (function () {
            原写法读 'z.装备玄诀' —— 那是 v70 废止字段，schema 里没有，恒 undefined
            ⇒ 演武里主角的玄诀**从来就没进过场**（与玄技丢的是同一个病）。 */
         xinfa: (function () {
-          try {
-            var lm = learnedMapOf(z, '玄诀');
-            for (var kn in lm) { if (lm[kn] && typeof lm[kn] === 'object') return lm[kn]; }
-          } catch (eH) {}
+          /* ★ v528：取品阶最高的一门（不是插入顺序第一门），与主战斗同一支 */
+          try { return xzServingHeartOf(learnedMapOf(z, '玄诀')); } catch (eH) {}
           return null;
         })(),
         artifact: (z.装备武器 && typeof z.装备武器 === 'object') ? z.装备武器 : null,
@@ -21599,10 +21690,9 @@ var XZJJ = (function () {
          原写法让 NPC 的玄诀恒为 null ⇒ 敌人的心法从来不上场。
          现行：玄诀从 '已学本领.玄诀' 取第一部。神通层（v70 杀招）已整体停用，不传。 */
       xinfa: (function () {
-        try {
-          var lm = learnedMapOf(c, '玄诀');
-          for (var kn in lm) { if (lm[kn] && typeof lm[kn] === 'object') return lm[kn]; }
-        } catch (eH) {}
+        /* ★ v528：取品阶最高的一门，与主角侧同一支 —— 两套取法不同会让
+           「同一个 NPC 在主战斗和演武里吃两门不同的玄诀」。 */
+        try { return xzServingHeartOf(learnedMapOf(c, '玄诀')); } catch (eH) {}
         return null;
       })(),
       artifact: c.装备武器 || null,
@@ -23643,9 +23733,29 @@ var XZJJ = (function () {
          机制名体系已下架，'pa.atoms' / 'f.atoms' 都不再有内容。
          原来这里会打印「（无机制名）」—— 留着只会让人以为「是不是该有机制名」。
          玄诀的效果由上面 'effs'（= 玄诀 '效果' 原文）如实呈现，那才是真正结算的东西。 */
-      out += sec('玄诀', '<div style="display:flex;flex-wrap:wrap;">'
+      /* ★★★ v528：学了几部、哪一部在生效 —— 必须印出来 ★★★
+         玩家 2026-11-01：「弄了三个玄诀，但是战斗界面就显示一个」。
+         实测确认另两门**零加成**，而界面上连"它们存在"都不显示 ——
+         玩家只能猜"是不是没显示但加了"。
+         ⇒ 多部时标题补「共 N 部 · 生效 1 部」，并把未上场的点名列出、注明不生效。
+         ⚠ 不要为了"看起来干净"而省掉这行：省掉就回到玩家无法判断的状态。 */
+      /* ★ v528：多部玄诀**全部上场**，各自的加成叠加。这里把"还有哪几部"列出来，
+         让玩家一眼看到自己学的都没白学（旧版只印一段，玩家以为另两部丢了）。 */
+      var _paTotal = Number(pa.total) || 0;
+      var _paOthers = Array.isArray(pa.others) ? pa.others : [];
+      var _paTitle = (_paTotal > 1)
+        ? '玄诀（共 ' + _paTotal + ' 部 · 全部上场）'
+        : '玄诀';
+      var _paRest = (_paTotal > 1 && _paOthers.length)
+        ? '<div style="margin-top:3px;font-size:10.5px;line-height:1.6;color:#8a9098;">'
+          + '同场：' + _paOthers.map(function (o) {
+              return esc(o.name) + (o.quality ? '（' + esc(o.quality) + '）' : '');
+            }).join('、')
+          + ' —— 每部都生效，效果合并结算</div>'
+        : '';
+      out += sec(_paTitle, '<div style="display:flex;flex-wrap:wrap;">'
         + chip('玄诀', esc(pa.name), '#e8e3d3') + (pa.quality ? chip('品阶', esc(pa.quality), '#e8c98f') : '')
-        + '</div>' + sub('效果', effs));
+        + '</div>' + sub('效果', effs) + _paRest);
     }
 
     /* ── 武器 ── */
@@ -31623,7 +31733,18 @@ function xzJJDiag(stop, extra) {
       closed: (e.closed === undefined ? null : !!e.closed),
       head: String(e.head || '').slice(0, 160)
     };
-    log('演武·sniff 停在：' + stop);
+    /* ★★★ v528：**只在停因变化时打一次**，不每轮都打 ★★★
+       用户 2026-11-01：「后台日志里一直在反复读这些，很卡」——
+       嗅探是轮询（每秒一轮），同一个停因（「本楼没有可用的 <战斗开始> 标签」）
+       在没有战斗的楼里会**一直不变**，于是这条日志每秒刷一次，把控制台塞满。
+       诊断值 `window.__XZJJ_DIAG__` 仍然每轮更新（长按球照样看得到最新状态），
+       只是不再往日志里写重复行。
+       ⚠ 别改成删日志：停因变化时必须留下一条，否则"卡在哪一步"又变成不可观测。 */
+    var _stopTxt = String(stop || '');
+    if (window.__XZJJ_LAST_STOP__ !== _stopTxt) {
+      window.__XZJJ_LAST_STOP__ = _stopTxt;
+      log('演武·sniff 停在：' + stop);
+    }
   } catch (eD) {}
   /* ★ v206：连续 6 轮（约 7 秒）都读不到 → **自动说一次**，不用玩家知道要长按球。
      只说一次；换档才复位。这条专治「他说检测不到，但我什么也看不到」。 */

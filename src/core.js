@@ -426,6 +426,7 @@ var XZ_ATOM_TYPES = {
      实现完全同一支（sub:'regen'），不是两套逻辑。 */
   '持续治疗': { kind: '常驻增益', beh: 'buff', sub: 'regen' },
   '回蓝': { kind: '常驻增益', beh: 'buff', sub: 'mpRegen' },    // 每手回灵力
+  '持续回蓝': { kind: '常驻增益', beh: 'buff', sub: 'mpRegen' },  // 同上，正名
   '气血上限': { kind: '常驻增益', beh: 'buff', sub: 'hpMax' },
   '灵力上限': { kind: '常驻增益', beh: 'buff', sub: 'mpMax' },
   '免死': { kind: '常驻增益', beh: 'buff', sub: 'immortal' },   // 致死伤害留 1 点
@@ -716,7 +717,7 @@ var XZ_SUB_LABEL = {
        'xzEffKeyOf' 的第一句 'if (p.sub && XZ_SUB_LABEL[p.sub]) return ...' 会先命中。
        留成中性名，兜底路径（自然语言翻出来的 DOT 没有原文名）也不会借用元素名。 */
   dot: '持续伤害',
-  dmgDown: '虚弱', regen: '回复', mpRegen: '回灵', hpMax: '气血上限',
+  dmgDown: '虚弱', regen: '回复', mpRegen: '持续回蓝', hpMax: '气血上限',
   mpMax: '灵力上限', immortal: '不灭', breakShield: '破盾', antiCrit: '明心'
 };
 

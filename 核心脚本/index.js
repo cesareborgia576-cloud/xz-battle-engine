@@ -21285,6 +21285,20 @@ var XZJJ = (function () {
             var x = p.xinfa;
             if (!x || typeof x !== 'object') return {};
             if (x.玄技名) return (function () { var o = {}; o[x.玄技名] = x; return o; })();
+            /* ★★★ v528：**记录型（多门）整份传下去** ★★★
+               用户在演武里报「还是只读取了一个玄诀」—— 真因就在这里：
+               `p.xinfa` 上一版被 `xzServingHeartOf()` 挑成了一门，
+               而这里又照着"单门"的假设重建，于是无论学了几门，演武只见一门。
+               主战斗（`statData` 就是整棵变量树）一直是 3 门，只有演武丢 ——
+               所以沙箱直调 `buildFighterFromData` 是绿的，实机却是红的。
+               ⚠ 这里的判据必须是「像不像一门玄诀记录」，不是「有没有 `玄技名`」：
+                 记录型的每个值才有 `玄技名`，记录型本身没有。 */
+            var out = {}, n = 0;
+            for (var _k in x) {
+              var _v = x[_k];
+              if (_v && typeof _v === 'object' && (_v.玄技名 || _v.品质)) { out[_k] = _v; n++; }
+            }
+            if (n) return out;
             var nm = x.名 || '无';
             if (nm === '无') return {};
             var one = {};
@@ -21506,8 +21520,18 @@ var XZJJ = (function () {
            原写法读 'z.装备玄诀' —— 那是 v70 废止字段，schema 里没有，恒 undefined
            ⇒ 演武里主角的玄诀**从来就没进过场**（与玄技丢的是同一个病）。 */
         xinfa: (function () {
-          /* ★ v528：取品阶最高的一门（不是插入顺序第一门），与主战斗同一支 */
-          try { return xzServingHeartOf(learnedMapOf(z, '玄诀')); } catch (eH) {}
+          /* ★★★ v528：**整份记录型原样传下去**，不在这里挑一门 ★★★
+             （用户 2026-11-01 在演武里实测「还是只读取了一个玄诀」）
+             上一版这里是 `xzServingHeartOf(...)` —— 挑成单门，
+             下游的 statData 重建再按"单门"处理，于是演武永远只有一门。
+             挑选只该发生在**展示**那一层（`f.passive` 取品阶最高那门当门面），
+             结算要的是全部。 */
+          try {
+            var _lm = learnedMapOf(z, '玄诀');
+            var _n = 0;
+            for (var _k2 in _lm) { var _v2 = _lm[_k2]; if (_v2 && typeof _v2 === 'object' && (_v2.玄技名 || _v2.品质)) _n++; }
+            if (_n) return _lm;
+          } catch (eH) {}
           return null;
         })(),
         artifact: (z.装备武器 && typeof z.装备武器 === 'object') ? z.装备武器 : null,

@@ -14062,7 +14062,23 @@ function calcDamage(attacker, defender, skill, isAoe) {
      印记挂了、倒计时会走、面板有标记，伤害一分不多（v277 闸 A1/A2 红了两版）。
      v279 把赋值挪到读取前（'defender.markRounds > 0 ? 0.15 : 0'），这里只留注释接力。 */
   // v4 路线机制名：固定穿防 + 按目标状态层数穿防（按剧毒穿防／穿防暴击III／无视护盾穿防III…）
-  if (isSkill) {
+  /* ★★★ v531：这段**不再**包在 `if (isSkill)` 里 ★★★
+     病历（真引擎实测，剑修·萧决 武器「穿防:20｜松纹剑脊，刃口泛青自带破甲」，
+           对手清空血脉/玄诀/武器，无任何减伤）：
+             普攻  [属性9          -> 54]   ← 一个破防字都没有
+             招式  [属性9【破防 +20%】-> 11]  ← 有
+     ⇒ 同一把剑，出招式穿防、普攻不穿防。玩家武器上那句「自带破甲」在普攻时是纯文字，
+       而普攻/招式的比例因此从设计口径的 50% 掉到 41.7%（0.5 / 1.2）。
+     根因：`mechSumField(attacker,'pierce')` 读的是 **artifactBuffs / bloodBuffs / heartBuffs
+       这常驻三源**（武器、血脉、玄诀），它们跟"这招带不带穿防"毫无关系，
+       却被 `isSkill` 一起挡住了。
+     ⚠ 边界要分清，别合并：
+       · 常驻三源的穿防 → 任何一次出手都生效（本节，含普攻）
+       · 招式 '效果' 里写的穿防 → 只作用于**这一击**（下面 v401 那段，仍包在 isSkill 内）
+       · `heartPierce`（建卡期算好的破甲）→ 本来就在 isSkill 外面，不受本改影响
+     ⚠ `stackPierce`（按目标状态层数穿防）也属于常驻机制（挂在 mechBuffs 上），
+       一并挪出来；它读的是 `defender` 的状态层数，普攻时同样成立。 */
+  {
     try {
       var _fpAdd = Math.min(0.35, mechSumField(attacker, 'pierce'));
       skillPierce += _fpAdd; _atomPierceVuln += _fpAdd;   /* ★ v124：机制名穿防→破防乘区（effDef 不承伤，旧路全死） */

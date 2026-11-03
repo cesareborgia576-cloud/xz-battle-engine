@@ -15,8 +15,8 @@
      （它改的是本文件，因为卡里那一行没有版本号可改）。
    ============================================================================ */
 /* CORE-4 · 脚本战斗系统模块（酒馆助手脚本）
-   读：战斗状态 / 主角信息 / 人物列表 / 背包 / 正文标签
-   写：伤势·经验·境界·四维点·天骄、灵宠成长值、战斗状态（均为少数指定字段）
+   读：主角信息 / 人物列表 / 背包 / 正文标签（**战斗态只看正文里的 <战斗开始> 标签**，v1.052 起不再有「战斗状态」变量）
+   写：伤势·经验·境界·四维点·天骄、灵宠成长值（均为少数指定字段）
    触发：正文 <战斗开始> 标签、面板按钮、状态栏跨窗口桥调用
    字段与规则清单见项目文档，不随卡导出。
 
@@ -3641,33 +3641,12 @@ function _checkBattleTriggerInner(force) {
     var re = /<\s*(?:战斗开始|斗法开始)\s*[^>]*>([\s\S]*?)<\s*\/\s*(?:战斗开始|斗法开始)\s*>/i;
     var match = info.text.match(re);
     if (match && match[1]) {
-      var statData = getRawStatData();
-      var isBattleActive = statData && (statData.战斗状态 === true || statData.战斗状态 === 'true');
-      // 兜底：本楼已给出 <战斗开始> 并写明敌方人员，但「战斗状态」还没落成 true
-      // （开场白的 JSONPatch 未生效、模型忘了写、或变量初始化时机不对）——
-      // 由脚本自己把它补成 true，不让整场戏卡在待战状态。
-      if (!isBattleActive) {
-        try {
-          var forceVars = readMvuVars();
-          forceVars.战斗状态 = true;
-          writeMvuVars(forceVars);
-          var backChk = readMvuVars();
-          if (backChk && (backChk.战斗状态 === true || backChk.战斗状态 === 'true')) {
-            isBattleActive = true;
-            log('战斗状态兜底：已由脚本置为 true');
-            toast('斗法器：检测到 <战斗开始>，已自动把「战斗状态」置为 true。', 'success');
-          } else {
-            throw new Error('回读校验失败：战斗状态 = ' + (backChk ? backChk.战斗状态 : 'null'));
-          }
-        } catch (eForce) { log('战斗状态兜底失败', eForce); }
-      }
-      // v5 兜底②：本楼确实写了 <战斗开始> 且写明敌方人员时，就算变量写不进去（MVU 不可用/只读），
-      // 也按本楼标签列阵——测试与开场白不会再卡在待战状态。
-      if (!isBattleActive) {
-        if (!/(敌方|敌阵|来敌)\s*[:：]/.test(match[1])) return;
-        log('战斗状态写不进变量，按本楼 <战斗开始> 标签继续列阵');
-        toast('斗法器：战斗状态写入失败，已按本楼 <战斗开始> 标签直接列阵。', 'warn');
-      }
+      /* ★ v1.052：**「战斗状态」变量整个删掉 —— 标签就是真相**。
+         作者原话：「你都他妈输出战斗开始了，为什么还有他妈看战斗状态？」
+         原来这里还有一整套「兜底把变量置 true + 回读校验」，现在没有第二个真相源可写。
+         本楼有 <战斗开始> 标签 = 有战斗；没有标签 = 没有战斗。 */
+      var isBattleActive = true;
+
 
       if (BattleState._lastProcessedMesId === info.id) return;
       if (BattleState._cancelledMesId === info.id && !force) return;
@@ -3699,7 +3678,7 @@ function _checkBattleTriggerInner(force) {
       } catch (eTeam) { log('队友参战选择（斗法台已停用，跳过）', eTeam); }
 
       // ===== 【境界压制 · 越两个大境界不接战】=====
-      // 差距 ≥2 个大境界时直接不列阵：把「战斗状态」复位为 false 并提示，避免面板与正文对不上。
+      // 差距 ≥2 个大境界时直接不列阵并提示，避免面板与正文对不上（v1.052：不再复位任何变量）。
       try {
         var heroRealm = (statData && statData.主角信息 && statData.主角信息.境界) || '';
         var panelMap = {};
@@ -3721,10 +3700,7 @@ function _checkBattleTriggerInner(force) {
           var gapMsg = '【境界压制】' + (heroRealm || '？') + ' 对 ' + (worstU.realm || '？') + '，相差 ' + gapInfo.gap + ' 个大境界（' + (worstU.name || '？') + '）——此战不列阵、不触发战斗。';
           log(gapMsg);
           toast(gapMsg + ' 已按剧情处理：由高境界者压服。', 'warn');
-          try {
-            var gapVars = readMvuVars();
-            if (gapVars && gapVars.战斗状态 !== false) { gapVars.战斗状态 = false; writeMvuVars(gapVars); }
-          } catch (eg2) {}
+
           BattleState._lastProcessedMesId = info.id;   // 记下已处理，避免每 1.2s 反复提示
           return;
         }
@@ -8076,10 +8052,9 @@ function abortBattle() {
     BattleState.selectedTargets = [];
     try {
       var vars = readMvuVars();
-      vars.战斗状态 = false;
       vars.战斗模式 = '无';
       writeMvuVars(vars);
-    } catch (e2) { log('退出斗法时写回 战斗状态 失败', e2); }
+    } catch (e2) { log('退出斗法时写回 战斗模式 失败', e2); }
     removeSpectateJoinButton();
     try { if (typeof closePanel === 'function') closePanel(); } catch (e3) {}
     toast('已退出这场斗法（未做任何结算），正文可继续演下去。', 'info');
@@ -19354,7 +19329,7 @@ function generateBattleReport() {
   } else {
     s += '· 伤势写回变量未成功（' + ((rw && rw.applied && rw.applied.err) || '未知原因') + '），请提醒玩家查看斗法台与控制台。\n';
   }
-  s += '· 模型只需把 `战斗状态` 置回 false（若脚本已关闭就不必再写）；以上伤势 / 灵宠成长值均已由斗法器写入，正文不要再算一遍、也不要写进变量更新块；**经验值与境界不在此列**（战斗不产经验，只按修炼档位写）。\n';
+  s += '· **不用再写「战斗状态」**（那个字段已删，脚本以 <战斗开始> 标签为准）；以上伤势 / 灵宠成长值均已由斗法器写入，正文不要再算一遍、也不要写进变量更新块；**经验值与境界不在此列**（战斗不产经验，只按修炼档位写）。\n';
   s += '· 天骄压制：非天骄攻击天骄时伤害 −10%（普通天骄）/ −20%（大天骄）/ −35%（天选之子），已计入上述伤害；天骄打非天骄无额外加成。★ 它是**最后一环乘区**：增伤/减伤/破防/暴击算完后再打折，所以明细里那个『受××压制 -X%』是真扣掉的、不是摆设。\n';
   s += '· 流派与兵器（严格对口）：剑法宜持剑、刀法宜持刀、枪法宜持枪、特殊法宜持特殊法器（剑刀枪之外的兵器）；体术与纯法宜徒手（v43：皆非强制）。★ v43 起武器**不再禁招**：兵器不对口照样能放（只是吃不到兵器那一路的加成），正文不要再写“使不出来”。\n';
   var ov = BattleState.sideOverflow;
@@ -19374,25 +19349,13 @@ function generateBattleReport() {
 
 function fillToInput(text) {
   try {
-    // 注入战报的同时，脚本顺手把「战斗状态」关掉（模型那侧不会再重复写；回读校验一下）
-    var closedBattle = false;
-    var closeErr = '';
-    try {
-      var vars = readMvuVars();
-      if (vars.战斗状态 !== false) {
-        vars.战斗状态 = false;
-        writeMvuVars(vars);
-        var back = readMvuVars();
-        if (back.战斗状态 !== false) throw new Error('回读校验失败：战斗状态仍为 ' + back.战斗状态);
-        closedBattle = true;
-      } else {
-        closedBattle = true;
-      }
-    } catch (eClose) { closeErr = errMsg(eClose); log('关闭战斗状态失败', eClose); }
+    /* ★ v1.052：原来这里会写 `战斗状态=false` 把战斗"关掉"—— 变量已删，这段整套去掉。
+       现在关战斗靠**下一楼没有 <战斗开始> 标签**，不需要第二个真相源。 */
+    var closedBattle = true;
 
     var doc = getDoc();
     var ta = doc.querySelector('#send_textarea');
-    var tail = closedBattle ? '，并已把「战斗状态」置回 false' : ('（注意：战斗状态未关闭：' + closeErr + '）');
+    var tail = '';
     if (ta) {
       ta.value = text;
       ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -20867,7 +20830,7 @@ function initPlugin() {
         try {
           checkBattleTrigger();
           if (BattleState.phase === 'idle' || !BattleState.active) {
-            toast('未找到可重开的战局：本楼没有 <战斗开始> 标签，或「战斗状态」不是 true。请让剧情重新给出战斗标签。', 'warn');
+            toast('未找到可重开的战局：本楼没有 <战斗开始> 标签。请让剧情重新给出战斗标签。', 'warn');
           }
         } catch (e2) { log('重开战局异常', e2); }
       }, 80);
@@ -21158,7 +21121,7 @@ var XZJJ = (function () {
             临时指向本局，真引擎写的播报原样导入演武日志，finally 一律还原。
 
      于是「演武里看到的一切」与「主战斗里发生的一切」由**同一套代码**算出。
-     边界：本模块仍不写 MVU、不改主战斗状态（withBattleState 有 finally 兜底）。 */
+     边界：本模块仍不写 MVU、不碰战斗态（withBattleState 有 finally 兜底）。 */
 
   /* 本路「出手序」：从玄技表按**位次**挑 4 门**进攻**招式（增益/神通位不占出手序）。
      为什么按位次：主战斗是「一手一招、招式递进」；随机取会让每局不可复现。
@@ -21417,7 +21380,7 @@ var XZJJ = (function () {
   /* ═══ 真引擎的上下文接管 ═══
      真引擎的算伤害链会读 BattleState（round / tickCount / allies / enemies）
      并往 BattleState.logs 写播报。演武要复用这条链，就得把这些字段**临时**指向本局，
-     收尾在 finally 里逐项还原 —— 中途抛异常也不会把主战斗状态留在演武上下文里。
+     收尾在 finally 里逐项还原 —— 中途抛异常也不会把战斗态留在演武上下文里。
      真引擎写的播报（带 HTML 标签）剥离后原样导入演武日志：那是「六源生效」的原始证据。 */
   function stripTags(s) {
     return String(s === undefined || s === null ? '' : s)
@@ -22538,7 +22501,7 @@ var XZJJ = (function () {
        applyDirectDamage     —— 单发 70% 与单回合 60% 双闸门 → 真扣血 → 自动判死
        applySkillMultiEffects—— ①击中效果项 + 机制名 + 大道「命中侧」（减速/灼烧/吸血/连环/反震…）
        三件都在 withBattleState 里跑：真引擎读的 BattleState 指向本局，
-       它写的播报原样导入日志，收尾还原 —— 主战斗状态零污染。 */
+       它写的播报原样导入日志，收尾还原 —— 战斗态零污染。 */
     /* ★ v278：'var _hpBefore = ...' 已删 —— 定义后从不读取。
        它本是「打之前多少血」的快照，用来算这一手掉了多少；
        后来播报改成直接用 'out.dmg'（引擎给的真实伤害），快照就没人要了，变量忘了删。 */
@@ -23057,7 +23020,7 @@ var XZJJ = (function () {
      斗法台那套（generateBattleReport / fillToInput）与极简演武共用同一个真引擎，
      这里按演武的 'S' 结构重写一份，字段与文案**与斗法台同口径**，
      只是把「轮」换成演武的「息」（本模块没有回合）。
-     写回变量：只关「战斗状态」（伤势状态已废除 —— 气血自己说话，经验/境界不写，战斗不产经验）。 */
+     写回变量：不写战斗状态（该字段 v1.052 已删；伤势状态已废除 —— 气血自己说话，经验/境界不写，战斗不产经验）。 */
   function generateJJReport() {
     var allies = S.fighters.filter(function (f) { return f.side === 'ally'; });
     var enemies = S.fighters.filter(function (f) { return f.side === 'enemy'; });
@@ -23168,7 +23131,7 @@ var XZJJ = (function () {
         out.mpLeft = Math.max(0, Math.round(Number(me.mp) || 0));
         out.mpMax = Math.max(1, Math.round(Number(me.maxMp) || 0));
       }
-      /* ① 回写：只写主角那两个**当前值** + 战斗状态，**不碰别的字段**
+      /* ① 回写：只写主角那两个**当前值**，**不碰别的字段**
          （战斗不产经验、不写境界、不写伤势 —— 见 generateJJReport 上方那段口径） */
       try {
         var vars = readMvuVars();
@@ -23194,7 +23157,6 @@ var XZJJ = (function () {
             if (isFinite(_capMp348b) && _capMp348b > 0 && z.灵力 > _capMp348b) z.灵力 = Math.round(_capMp348b);
           } catch (eCap348b) {}
         }
-        vars.战斗状态 = false;
         writeMvuVars(vars);
         out.ok = true;
       } catch (eW) { out.note = '变量回写失败：' + ((eW && eW.message) || eW); }
@@ -23207,7 +23169,7 @@ var XZJJ = (function () {
 
   /* ★ v198 opts.keepPanel：逃跑时走这条。
      逃跑后玩家多半还想在决策面板上选「详写/一笔带过」，所以**不关面板**、不注入输入栏，
-     只把气血/灵力与「战斗状态=false」落进变量。面板仍在，玩家选完再点确认注入。 */
+     只把气血/灵力落进变量。面板仍在，玩家选完再点确认注入。 */
   function injectJJReport(opts) {
     var keepPanel = !!(opts && opts.keepPanel);
     var text = generateJJReport();
@@ -23218,7 +23180,7 @@ var XZJJ = (function () {
        但之前注入只关「战斗状态」，**从来不回写主角的气血与灵力** ——
        于是打完一看变量面板：血还是满的、蓝还是满的，这一局等于白打。
        斗法台的 fillToInput 是带这一步的（用户要「完全参考斗法台」）。
-       做法：一次读、一次写（战斗状态 + 气血 + 灵力 + 上限），写完**回读校验**，
+       做法：一次读、一次写（气血 + 灵力 + 上限），写完**回读校验**，
        三项任一不通过就在战报尾巴上如实报出来，不静默。 */
     try {
       var vars = readMvuVars();
@@ -23282,10 +23244,7 @@ var XZJJ = (function () {
          ⚠ 必须一起删，不能留着：写一个 schema 里没有的键不会报错，会把它**重新长回变量树**，
            下次谁看见都以为这字段还活着。战斗界面里的增减益本来就挂在引擎的 fighter 上，
            随战局结束自然消失，不需要谁来清。 */
-      vars.战斗状态 = false;
       writeMvuVars(vars);
-      var back = readMvuVars();
-      if (back.战斗状态 !== false) throw new Error('回读校验失败：战斗状态仍为 ' + back.战斗状态);
       closedBattle = true;
       if (me && z) {
         var z2 = back.主角信息 || back.主角 || {};
@@ -23300,9 +23259,9 @@ var XZJJ = (function () {
       var d = d0();
       var ta = d.querySelector('#send_textarea');
       var tail = closedBattle
-        ? ('，已把「战斗状态」置回 false'
+        ? (''
           + (hpWrote || mpWrote ? ('、主角气血/灵力已按本局结算回写') : ''))
-        : ('（注意：战斗状态未关闭：' + closeErr + '）');
+        : '';
       if (keepPanel) {
         push('已脱身结算' + tail + writeNote + '。战报仍在本面板，选完再点确认注入。', 'sys');
         try { return; } catch (eKp) {}
@@ -23320,7 +23279,7 @@ var XZJJ = (function () {
       /* ★★★ v168（用户：「注入完酒馆之后已经关上了，但是随后又自动弹出战斗界面」）★★★
          closeJJ 只清 S 和 timer，**没有把这个楼层标记成「已处理」**。
          于是 1.2s 轮询下一次进来时：
-           · '战斗状态' 被 sniff 的「兜底置 true」重新写成 true（对，它每次都强制置 true）；
+           · （v1.052：'战斗状态' 变量已删，不再有'兜底置 true'这回事；
            · 如果这一楼此前从未走到过 sniff 的开战分支（比如玩家是点悬浮球/选人面板开的局），
              '__XZJJ_LAST_MES__' 根本不是本楼 ⇒ ⑥ 的防重入不成立 ⇒ 一路 startJJ ⇒ 又弹战斗界面。
          修法：注入时**主动把本楼写成「已处理 + 已取消」**，两道记账一起落。
@@ -29118,7 +29077,7 @@ function build() {
      为什么必须是「改世界书」而不是「改内存开关」：
        两套战斗规则**同时进上下文**才是万恶之源 —— 模型左手拿到「每楼必写 <xz_chain>、
        必出六块面板」，右手拿到「脚本接管就别写」，它只能靠一句自然语言去裁决；
-       而裁决必须发生在**动笔之前**，那一刻 '<战斗开始>' 还没写、'战斗状态' 还是 false
+       而裁决必须发生在**动笔之前**，那一刻 '<战斗开始>' 还没写
        （'战斗状态' 是脚本读完正文才写入的，永远慢一轮）。
        与其教它怎么裁决，不如**根本不让两套规则同时在场**：
          · 脚本模式 → 《脚本战斗系统》开、《骰子战斗系统》关；
@@ -30000,10 +29959,7 @@ function build() {
         if (st && !st.over && typeof window.xzJJ.close === 'function') window.xzJJ.close();
       }
     } catch (e1) {}
-    try {
-      var vars = readMvuVars();
-      if (vars && vars.战斗状态 !== false) { vars.战斗状态 = false; writeMvuVars(vars); }
-    } catch (e2) {}
+
   }
   function xzModePaint(mode) {
     try {
@@ -31514,10 +31470,7 @@ function build() {
         log('演武·close 时没有局在显示（换档清理），不记任何账');
       }
     } catch (eMk) {}
-    try {
-      var v = readMvuVars();
-      if (v && v.战斗状态 !== false) { v.战斗状态 = false; writeMvuVars(v); }
-    } catch (eV) {}
+
 
     var ov = q('overlay');
     xzOverlayHide(ov);
@@ -31749,13 +31702,13 @@ try { window.xzJJ = XZJJ; } catch (eJJ) {}
         （斗法台注释：「force=true 时排到下一个宏任务再跑，别被自己的栈吞掉」）
      ② 流式守卫：is_generating（self / window.parent / window.top 三处都判）
      ③ 正则：/<\s*(?:战斗开始|斗法开始)\s*[^>]*>([\s\S]*?)<\s*\/\s*(?:战斗开始|斗法开始)\s*>/i
-     ④ 战斗状态兜底：本楼有标签但变量没落 true → 脚本置 true + **回读校验**
+     ④ （v1.052：原「战斗状态兜底」已删 —— 标签在就是有战斗，不再写变量）
      ⑤ 兜底②：写不进变量（MVU 只读/不可用）但本楼写了敌方人员 → 照样列阵
      ⑥ 防重入记账：_lastProcessedMesId / _cancelledMesId（同一楼只处理一次）
      ⑦ 三层挡：BattleState.active / phase==='battle' / phase==='ready'
      ⑧ 名单解析：parseNamesFromBracketList 拆 [敌方人员] / [我方人员]
      ⑨ 队友参战选择：ask/all/none 三态 + localStorage 记住 + 取消可重来
-     ⑩ 境界压制：差距 >= 2 个大境界 → 不接战、战斗状态复位 false、提示（斗法台同款）
+     ⑩ 境界压制：差距 >= 2 个大境界 → 不接战并提示（斗法台同款）
      ⑪ 列阵：prepareBattle 的等价物 = window.xzJJ.beginBattleFromRoster(allies, enemies)
      ⑫ 注册：CHARACTER_MESSAGE_RENDERED + MESSAGE_UPDATED 两事件 +
         1200ms 轮询 + 1800ms 看门狗；重复加载先清旧计时器（同一 id 槽位）
@@ -32019,7 +31972,7 @@ function xzJJSniffInner(force) {
     } catch (eWk) {}
     var match = [null, _tag.inner];
     /* ★ v170：骰子裁定模式 → **连「战斗状态」都不许改**，直接把这一楼交给模型自己裁定。
-       位置很关键：必须在下面「④ 战斗状态兜底」**之前** return，
+       位置很关键：必须在下面「④」**之前** return，
        否则会先把 '战斗状态' 写成 true —— 那正好是「模型明明该走骰子，
        却被一个 true 的变量误导成脚本局」的根源。
        ★ v204：模式改读**实时**世界书（xzJJBattleMode），且挡下时**必须说一声** ——
@@ -32035,12 +31988,13 @@ function xzJJSniffInner(force) {
           toast('演武台：现在是【骰子裁定】模式，脚本不接 <战斗开始>。要打就点右上角模式球切回【脚本结算】。', 'warn');
         }
       } catch (eTip) {}
-      log('演武·骰子裁定模式：忽略本楼 <战斗开始>，不改战斗状态、不列阵');
+      log('演武·骰子裁定模式：忽略本楼 <战斗开始>，不列阵');
       return;
     }
 
     var statData = (typeof getRawStatData === 'function') ? getRawStatData() : null;
-    var isBattleActive = !!(statData && (statData.战斗状态 === true || statData.战斗状态 === 'true'));
+    /* ★ v1.052：标签即真相（同斗法器）—— 变量已删。 */
+    var isBattleActive = true;
 
     /* ★★ v201：本楼已记账 ⇒ 整轮 sniff 到此为止（**必须在兜底置 true 之前**）。
        旧顺序是「先兜底把 战斗状态 写成 true，隔十几行才判 ⑥ 防重入」，
@@ -32056,28 +32010,7 @@ function xzJJSniffInner(force) {
       return;
     }
 
-    /* ④ 战斗状态兜底：置 true + 回读校验（照抄:2186-2203） */
-    if (!isBattleActive) {
-      try {
-        var forceVars = readMvuVars();
-        forceVars.战斗状态 = true;
-        writeMvuVars(forceVars);
-        var backChk = readMvuVars();
-        if (backChk && (backChk.战斗状态 === true || backChk.战斗状态 === 'true')) {
-          isBattleActive = true;
-          log('演武·战斗状态兜底：已由脚本置为 true（回读校验通过）');
-        } else {
-          throw new Error('回读校验失败：战斗状态 = ' + (backChk ? backChk.战斗状态 : 'null'));
-        }
-      } catch (eForce) { log('演武·战斗状态兜底失败', eForce); }
-    }
 
-    /* ⑤ 兜底②：写不进变量但本楼写了敌方人员 → 照样列阵（照抄:2204-2210） */
-    if (!isBattleActive) {
-      if (!/(敌方|敌阵|来敌)\s*[:：]/.test(match[1])) return;
-      log('演武·战斗状态写不进变量，按本楼 <战斗开始> 标签继续列阵');
-      toast('演武台：战斗状态写入失败，已按本楼 <战斗开始> 标签直接列阵。', 'warn');
-    }
 
     /* ⑥ 防重入记账（照抄:2212-2213；★ v61 键改成 档位指纹@楼号
        ★ v202 再追加正文内容指纹 —— 同一楼重新生成时楼号不变，只按楼号记会把整楼封死） */

@@ -32233,10 +32233,7 @@ function xzJJSniffInner(force) {
         var gapMsg = '【境界压制】' + (heroRealm || '？') + ' 对 ' + (worstU.realm || '？') + '，相差 ' + gapInfo.gap + ' 个大境界（' + (worstU.name || '？') + '）——此战不列阵、不触发战斗。';
         log(gapMsg);
         toast(gapMsg + ' 已按剧情处理：由高境界者压服。', 'warn');
-        try {
-          var gapVars = readMvuVars();
-          if (gapVars && gapVars.战斗状态 !== false) { gapVars.战斗状态 = false; writeMvuVars(gapVars); }
-        } catch (eg2) {}
+
         window.__XZJJ_LAST_MES__ = _mk;   /* 记下已处理（档位指纹@楼号），避免每 1.2s 反复提示 */
         return;
       }

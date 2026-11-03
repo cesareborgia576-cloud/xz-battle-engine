@@ -29744,10 +29744,9 @@ function build() {
      ⚠ 这里**必须**用 'xzIsDlcEntryOf(e, pack)' 而不是 'xzIsDlcEntry(e)'：
        用了后者就变成「开斗破把斗罗也开了」，而这个 bug 在单包时代看不出来。
        闸＝'工具/_v352_dlc_gate.mjs' 的 ⑤（真跑 set(false,'斗破') 后斗罗条目必须没动）。 */
-  function xzWBSetDlc(want, pack) {
-    var on = !!want;
-    var PK = String(pack == null ? '' : pack);
-    function hitThis(e) { return xzIsDlcEntryOf(e, PK); }
+  /* ★ v1.053：主体抽出来，DLC 与「按标题开关单条」共用一套三条路（原生 API → 牌堆直改 → setLorebookEntries）。
+     ⚠ 下面是历史实现整体搬过来的，**不要**在里面另起判据。 */
+  function xzWBSetWhere(on, hitThis, PK) {
     return new Promise(function (resolve) {
       var names = xzWBNames();
       var getE = xzPickFn('getLorebookEntries');
@@ -29843,6 +29842,23 @@ function build() {
         });
       });
     });
+  }
+  /* ★ v1.053：DLC 批量开关（按 `dlc-<包>-` 前缀） */
+  function xzWBSetDlc(want, pack) {
+    var on = !!want;
+    var PK = String(pack == null ? '' : pack);
+    return xzWBSetWhere(on, function (e) { return xzIsDlcEntryOf(e, PK); }, PK);
+  }
+  /* ★ v1.053：**按标题精确开关一条**世界书条目（亲缘预设用）。
+     ⚠ 标题逐字相等，不许模糊匹配 —— 否则会误开同名的别的东西。 */
+  function xzWBSetEntry(want, title) {
+    var on = !!want;
+    var T = String(title == null ? '' : title);
+    if (!T) return Promise.resolve({ ok: false, n: 0, api: 0, local: 0, on: on, msg: '没给条目标题' });
+    return xzWBSetWhere(on, function (e) {
+      var t = String((e && (e.title || e.comment)) || '');
+      return t === T;
+    }, '');
   }
   /* 改一个条目的开关。三条路依次试（写法参照 D:/迅雷下载/酒馆助手脚本-开局 (21).json）：
        ① 'updateWorldbookWith(书, entries => entries.map(改目标), { render: 'immediate' })'
@@ -31538,6 +31554,7 @@ function build() {
       _reg.xzSummonUnit = xzSummonUnit;
       _reg.xzWBVersionState = xzWBVersionState;   /* ★ v367：状态栏那个版本徽章读它 */
       _reg.xzWBSetDlc = xzWBSetDlc;
+      _reg.xzWBSetEntry = xzWBSetEntry;   /* ★ v1.053：按标题开关单条世界书条目（亲缘预设） */
       _reg.xzWBDlcState = xzWBDlcState;     /* ★ v357：状态栏那个按钮读状态用 */
       /* ★ v529：**同步**版世界书条目读取的出口。
          `xzWBDlcState` 是 Promise（要跨窗口取 API），而开局第 4 页的三级下拉

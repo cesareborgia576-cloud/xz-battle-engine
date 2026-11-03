@@ -502,7 +502,7 @@ for (const fld of ['crit', 'critDmg', 'dr', 'pierce', 'dmg', 'dmgDown', 'vuln', 
 both('mechBuffsOf', [F], '机制汇总');
 both('mechBuffsOf', [{}], '机制汇总');
 both('atomHas', [F, '任意'], '原子存在');
-both('swordIntentCap', [F], '剑意上限');
+both('swordIntentCap', [F], '叠层增伤上限');
 both('xzTrackAdd', [F, 50], '轨迹推进');
 both('xzTrackAdd', [F, -100], '轨迹推进');
 for (const st of ['v75BuffPct', 'v75DrPct', 'v75HasteRounds', 'tempEvadeBoost']) {

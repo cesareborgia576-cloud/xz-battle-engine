@@ -50,7 +50,7 @@ window.XZBattle.version
 | **战斗判定** | `rollHit` / `hitBonus` / `evadeValue` / `critRate` / `dr` / `vuln` / `perm` | 一次交手的四步 |
 | **机制读写** | `mechVal` / `mechFlag` / `mechStr` / `mechSub` / `mechSumField` / `mechBuffs` | 引擎的「属性袋」 |
 | **招式原子** | `skillAtoms` / `nameKey` / `skillKey` / `atomName` | 某招翻译出来的原子 |
-| **其它** | `trackAdd` / `swordIntentCap` / `setTransStore` | 轨迹、剑意、翻译缓存注入 |
+| **其它** | `trackAdd` / `swordIntentCap` / `setTransStore` | 轨迹、叠层增伤、翻译缓存注入 |
 | **逃生口** | `raw` | 43 个原始函数全在里面 |
 
 ---

@@ -476,7 +476,7 @@ function xzSkillIsSword(name) {
   /* 前缀写法不统一时（「剑系 · X」「剑系.X」「［剑系］X」）也认，但只在**开头**认。 */
   if (/^[\s\[【（(]*剑系\s*[·・‧∙.。]\s*\S/.test(s)) return true;
   if (/^[\s\[【（(]*剑系[\s\]】）)]/.test(s)) return true;
-  /* 过渡兼容：以剑起头（剑法/剑诀/剑意…），以及老写法「XX剑法」以外的剑字开头 */
+  /* 过渡兼容：以剑起头（剑法/剑诀/叠层增伤…），以及老写法「XX剑法」以外的剑字开头 */
   if (/^\s*剑/.test(s)) return true;
   return false;
 }
@@ -504,7 +504,7 @@ function xzCleanSkillName(name) {
   var m = /^\[?【?\(?（?\s*剑系\s*[·・‧∙.。]?\s*([\s\S]+?)\s*\]?】?\)?）?$/.exec(s);
   if (m && m[1]) return XZ_SWORD_TAG + m[1];
   /* 老写法「剑法·X」「剑诀·X」→ 剑系·X（同一个族，不该在卡面上出现两种前缀） */
-  var m2 = /^\[?【?\(?（?\s*(?:剑法|剑诀|剑术|剑道|剑意)\s*[·・‧∙.。]\s*([\s\S]+?)\s*\]?】?\)?）?$/.exec(s);
+  var m2 = /^\[?【?\(?（?\s*(?:剑法|剑诀|剑术|剑道|叠层增伤)\s*[·・‧∙.。]\s*([\s\S]+?)\s*\]?】?\)?）?$/.exec(s);
   if (m2 && m2[1]) return XZ_SWORD_TAG + m2[1];
   /* 不带任何前缀、但确实是剑招（以剑起头）→ 补前缀 */
   if (/^\s*剑/.test(s)) return XZ_SWORD_TAG + s;
@@ -1333,10 +1333,10 @@ function rootParamKeys(params) {
 function rootNum(x) { return (typeof x === 'number' && isFinite(x)) ? x : 0; }
 
 /* ═══ 势种层数的唯一出口（04:3862 v2StateVal / 04:3867 v2StateSet）═══
-   为什么必须走出口：引擎对「剑意」走 f.swordIntent（上限 swordIntentCap），
+   为什么必须走出口：引擎对「叠层增伤」走 f.swordIntent（上限 swordIntentCap），
    其余势种才走 f.v2stk（上限 10）—— 见 04:3861 注释。
    此前 stateAdd/statePay 直接写 f.v2stk，**绕过了这条分流** ⇒
-   57 条「挂层·剑意」全部落进引擎从不读取的槽（本批最隐蔽的一个「写了但没生效」）。
+   57 条「挂层·叠层增伤」全部落进引擎从不读取的槽（本批最隐蔽的一个「写了但没生效」）。
    内嵌进 04：用引擎函数（函数声明 hoisting ⇒ 天然可用，与 xzHeal / xzShieldSet 同理）。
    独立跑（harness）：用下面的同签名内置实现，保证根层仍可脱离 04 测试。 */
 var _v2StateVal = (typeof v2StateVal === 'function')
@@ -1426,8 +1426,8 @@ var ROOT_OPS = {
     f[fd] = true;
   },
   /* 修饰：势种层数·挂（+） —— 参数：势种、层数
-     ★ 走引擎势种出口 _v2StateVal/_v2StateSet（含「剑意 → f.swordIntent」分流），
-       不再直写 f.v2stk —— 否则剑意会落进引擎从不读取的槽。 */
+     ★ 走引擎势种出口 _v2StateVal/_v2StateSet（含「叠层增伤 → f.swordIntent」分流），
+       不再直写 f.v2stk —— 否则叠层增伤会落进引擎从不读取的槽。 */
   stateAdd: function (f, v, entry, p) {
     if (!f) return;
     var st = p.势种, n = p.层数;
@@ -3264,26 +3264,26 @@ var SKILL_LOADS = [
             { name: '剑冢领域', pos: '领域', quality: '天阶', atk: '单体', eff: '气场铺展自成天地，三回合内气机自生不绝（剑冢领域）' },
             { name: '一剑破万法', pos: '本命杀招', quality: '天阶', atk: '单体', eff: '兑付全部势种，每重 +9%，并无视护盾' },
             { name: '剑心不灭', pos: '保命翻盘', quality: '天阶', atk: '单体', eff: '命悬一线，强留一口先天生机（每场一次）（剑心不灭）' },
-            { name: '凝意守心', pos: '架势式', quality: '地阶', atk: '单体', eff: '两回合内每次命中额外蓄养剑意（暴击提升,凝意,凝意守心）' },
-            { name: '剑意潮生', pos: '本命式', quality: '天阶', atk: '单体', eff: '剑意 ≥3 层时每回合自行再蓄 1 层（剑意潮生）' },
+            { name: '凝意守心', pos: '架势式', quality: '地阶', atk: '单体', eff: '两回合内每次命中额外蓄养叠层增伤（暴击提升,凝意,凝意守心）' },
+            { name: '剑意潮生', pos: '本命式', quality: '天阶', atk: '单体', eff: '叠层增伤 ≥3 层时每回合自行再蓄 1 层（剑意潮生）' },
             { name: '点星刺', pos: '起手式', quality: '玄阶', atk: '单体', eff: '单体一击，本击暴击率提升（暴击提升）' },
             { name: '双星追月', pos: '连击式', quality: '玄阶', atk: '单体', eff: '一招方出二招紧随，瞬息连递两重气机（连击）' },
             { name: '剑落如星', pos: '范围式', quality: '地阶', atk: '范围', eff: '全体一击，残血目标额外受力（碎星）' },
             { name: '凌虚剑步', pos: '身法式', quality: '玄阶', atk: '单体', eff: '行动条前拉并提升暴击（疾行,暴击提升）' },
-            { name: '一剑贯心', pos: '终结式', quality: '天阶', atk: '单体', eff: '单体重击，兑付全部剑意，每层 +12%（暴击提升）' },
-            { name: '星陨剑诀', pos: '绝式', quality: '天阶', atk: '单体', eff: '需剑意 ≥3：兑付＋必暴＋穿防 40%，并压制对方回灵（封脉）' },
-            { name: '通明剑心', pos: '本命式', quality: '天阶', atk: '单体', eff: '心念通明：暴击率 +20%，每层剑意额外 +2% 暴击（通明剑心）' },
-            { name: '通明领域', pos: '领域', quality: '天阶', atk: '单体', eff: '三回合内每回合自生剑意并大幅提升暴击（领域,通明剑心）' },
+            { name: '一剑贯心', pos: '终结式', quality: '天阶', atk: '单体', eff: '单体重击，兑付全部叠层增伤，每层 +12%（暴击提升）' },
+            { name: '星陨剑诀', pos: '绝式', quality: '天阶', atk: '单体', eff: '需叠层增伤 ≥3：兑付＋必暴＋穿防 40%，并压制对方回灵（封脉）' },
+            { name: '通明剑心', pos: '本命式', quality: '天阶', atk: '单体', eff: '心念通明：暴击率 +20%，每层叠层增伤额外 +2% 暴击（通明剑心）' },
+            { name: '通明领域', pos: '领域', quality: '天阶', atk: '单体', eff: '三回合内每回合自生叠层增伤并大幅提升暴击（领域,通明剑心）' },
             { name: '分光式', pos: '起手式', quality: '玄阶', atk: '范围', eff: '一击波及另一名敌人（范围增加1）' },
             { name: '万剑连珠', pos: '连击式', quality: '玄阶', atk: '范围', eff: '对敌连击，叠意更快（连击）' },
             { name: '万剑归墟', pos: '范围式', quality: '地阶', atk: '范围', eff: '全体一击，负面扩散（蔓延）' },
             { name: '剑阵起', pos: '架势式', quality: '地阶', atk: '单体', eff: '凝神守一，两回合内周天增益（铁壁）' },
             { name: '剑遁', pos: '身法式', quality: '玄阶', atk: '单体', eff: '行动条前拉并获得护盾（疾行,护体灵盾）' },
-            { name: '群剑穿心', pos: '终结式', quality: '天阶', atk: '范围', eff: '对全体兑付全部剑意，每层 +12%' },
-            { name: '万剑归一', pos: '绝式', quality: '天阶', atk: '范围', eff: '需剑意 ≥3：全体兑付＋必暴＋穿防 40%（斩天）' },
+            { name: '群剑穿心', pos: '终结式', quality: '天阶', atk: '范围', eff: '对全体兑付全部叠层增伤，每层 +12%' },
+            { name: '万剑归一', pos: '绝式', quality: '天阶', atk: '范围', eff: '需叠层增伤 ≥3：全体兑付＋必暴＋穿防 40%（斩天）' },
             { name: '剑冢召引', pos: '本命式', quality: '天阶', atk: '单体', eff: '目标越多越强，负面可扩散（碎星,蔓延）' },
-            { name: '万剑领域', pos: '领域', quality: '天阶', atk: '范围', eff: '三回合内每回合自生剑意，范围技更强（领域,蔓延）' },
-            { name: '剑雨倾天', pos: '本命杀招', quality: '天阶', atk: '范围', eff: '需剑意 ≥3：全体兑付，每层 +9%，无视护盾（斩天）' }] },
+            { name: '万剑领域', pos: '领域', quality: '天阶', atk: '范围', eff: '三回合内每回合自生叠层增伤，范围技更强（领域,蔓延）' },
+            { name: '剑雨倾天', pos: '本命杀招', quality: '天阶', atk: '范围', eff: '需叠层增伤 ≥3：全体兑付，每层 +9%，无视护盾（斩天）' }] },
         { route: '刀', items: [
             { name: '横斩', pos: '起手式', quality: '玄阶', atk: '单体', eff: '①流血流：起手蓄势，引动真芒，于敌身种下本路势种' },
             { name: '连环削骨', pos: '连击式', quality: '玄阶', atk: '单体', eff: '①流血流：一招方出二招紧随，瞬息连递两重气机' },
@@ -4112,7 +4112,7 @@ var SKILL_TABLE = {
   '剑心通明': { 流派:'剑', 路线:'②剑心流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'地阶', 系数:1.00, pos:'架势式', roots: ['加攻·穿防·32', '破盾·100', '疗友·0.045', '加速·0.06'] },
   '御剑凌空': { 流派:'剑', 路线:'①暴击流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'玄阶', 系数:1.00, pos:'身法式', roots: ['减伤·0.2', '加盾·0.1', '拉条·起手·60'] },
   '剑意斩':   { 流派:'剑', 路线:'①暴击流', 属性:'无', 攻击类型:'单体', 玄技类型:'进攻', 品质:'天阶', 系数:1.19, pos:'终结式', st:'暴击', gain:1, roots: ['挂层·破甲·1', '削防·穿防·10', '拉条·未命中·100', '拉条·80'] },
-  '万剑归宗': { 流派:'剑', 路线:'①暴击流', 属性:'无', 攻击类型:'单体', 玄技类型:'进攻', 品质:'天阶', 系数:1.25, pos:'绝式', st:'暴击', gain:1, 需剑意:3, roots: ['挂层·破甲·1', '削防·穿防·10', '拉条·未命中·100', '拉条·起手·120'] },
+  '万剑归宗': { 流派:'剑', 路线:'①暴击流', 属性:'无', 攻击类型:'单体', 玄技类型:'进攻', 品质:'天阶', 系数:1.25, pos:'绝式', st:'暴击', gain:1, 需叠层增伤:3, roots: ['挂层·破甲·1', '削防·穿防·10', '拉条·未命中·100', '拉条·起手·120'] },
   // ---------- 剑路三选一 ----------
   '剑冢领域':   { 流派:'剑', 路线:'①暴击流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'天阶', 系数:1.50, pos:'领域', st:'暴击', gain:1, roots: ['加攻·穿防·32', '破盾·100', '增暴·0.1', '加盾·0.06', '加速·0.08'] },
   '一剑破万法': { 流派:'剑', 路线:'①暴击流', 属性:'无', 攻击类型:'单体', 玄技类型:'进攻', 品质:'天阶', 系数:1.50, pos:'本命杀招', 破盾:1, roots: ['挂层·破甲·1', '拉条·起手·120', '削防·穿防·10', '增爆伤·0.2'] },
@@ -4124,7 +4124,7 @@ var SKILL_TABLE = {
   '剑落如星': { 流派:'剑', 路线:'②剑心流', 属性:'无', 攻击类型:'范围', 玄技类型:'进攻', 品质:'地阶', 系数:1.06, pos:'范围式', st:'暴击', gain:1, roots: ['磨血·0.38', '增暴·0.075'] },
   '凌虚剑步': { 流派:'剑', 路线:'②剑心流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'玄阶', 系数:1.00, pos:'身法式', roots: ['拉条·90', '拉条·起手·60'] },
   '一剑贯心': { 流派:'剑', 路线:'②剑心流', 属性:'无', 攻击类型:'单体', 玄技类型:'进攻', 品质:'天阶', 系数:1.19, pos:'终结式', st:'暴击', gain:1, roots: ['挂层·破甲·1', '挂层·随机·1', '削防·穿防·10', '增爆伤·0.2'] },
-  '星陨剑诀': { 流派:'剑', 路线:'②剑心流', 属性:'无', 攻击类型:'单体', 玄技类型:'进攻', 品质:'天阶', 系数:1.22, pos:'绝式', st:'暴击', gain:1, 需剑意:3, roots: ['磨血·0.38', '破盾·40', '回血·0.04', '加攻·0.1'] },
+  '星陨剑诀': { 流派:'剑', 路线:'②剑心流', 属性:'无', 攻击类型:'单体', 玄技类型:'进攻', 品质:'天阶', 系数:1.22, pos:'绝式', st:'暴击', gain:1, 需叠层增伤:3, roots: ['磨血·0.38', '破盾·40', '回血·0.04', '加攻·0.1'] },
   '通明剑心': { 流派:'剑', 路线:'②剑心流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'天阶', 系数:1.00, pos:'本命式', roots: ['加攻·残血·45', '增暴·0.12', '疗友·0.06', '加速·0.08', '增暴·0.1'] },
   '通明领域': { 流派:'剑', 路线:'②剑心流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'天阶', 系数:1.50, pos:'领域', st:'暴击', gain:1, roots: ['加攻·穿防·32', '破盾·100', '减伤·0.1', '增暴·0.1', '加攻·0.1'] },
 
@@ -4135,10 +4135,10 @@ var SKILL_TABLE = {
   '剑阵起':   { 流派:'剑', 路线:'③万剑流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'地阶', 系数:1.00, pos:'架势式', roots: ['加攻·残血·45', '增暴·0.12', '减伤·0.09', '拉条·60'] },
   '剑遁':     { 流派:'剑', 路线:'③万剑流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'玄阶', 系数:1.00, pos:'身法式', roots: ['减伤·0.2', '加盾·0.1', '加攻·0.04'] },
   '群剑穿心': { 流派:'剑', 路线:'③万剑流', 属性:'无', 攻击类型:'范围', 玄技类型:'进攻', 品质:'天阶', 系数:1.16, pos:'终结式', st:'暴击', roots: ['挂层·破甲·1', '削防·穿防·10', '拉条·80'] },
-  '万剑归一': { 流派:'剑', 路线:'③万剑流', 属性:'无', 攻击类型:'范围', 玄技类型:'进攻', 品质:'天阶', 系数:1.25, pos:'绝式', st:'暴击', gain:1, 需剑意:3, roots: ['挂层·破甲·1', '击退·50', '饮灵·0.07'] },
+  '万剑归一': { 流派:'剑', 路线:'③万剑流', 属性:'无', 攻击类型:'范围', 玄技类型:'进攻', 品质:'天阶', 系数:1.25, pos:'绝式', st:'暴击', gain:1, 需叠层增伤:3, roots: ['挂层·破甲·1', '击退·50', '饮灵·0.07'] },
   '剑冢召引': { 流派:'剑', 路线:'③万剑流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'天阶', 系数:1.00, pos:'本命式', st:'暴击', gain:1, roots: ['加攻·残血·45', '增暴·0.12', '加速·0.08', '减伤·0.1', '加攻·0.08'] },
   '万剑领域': { 流派:'剑', 路线:'③万剑流', 属性:'无', 攻击类型:'范围', 玄技类型:'增益', 品质:'天阶', 系数:1.50, pos:'领域', st:'暴击', gain:1, roots: ['减伤·0.2', '加盾·0.1', '减伤·0.1', '加速·0.08', '加攻·0.08'] },
-  '剑雨倾天': { 流派:'剑', 路线:'③万剑流', 属性:'无', 攻击类型:'范围', 玄技类型:'进攻', 品质:'天阶', 系数:1.50, pos:'本命杀招', 破盾:1, 需剑意:3, roots: ['挂层·破甲·1', '饮灵·0.07', '回血·0.04'] },
+  '剑雨倾天': { 流派:'剑', 路线:'③万剑流', 属性:'无', 攻击类型:'范围', 玄技类型:'进攻', 品质:'天阶', 系数:1.50, pos:'本命杀招', 破盾:1, 需叠层增伤:3, roots: ['挂层·破甲·1', '饮灵·0.07', '回血·0.04'] },
 
   // ---------- 路线① 剑意流 补两门 ----------
   '凝意守心': { 流派:'剑', 路线:'①暴击流', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'地阶', 系数:1.00, pos:'架势式', roots: ['加攻·0.05', '增闪·0.22', '增爆伤·0.15'] },
@@ -4501,7 +4501,7 @@ var SKILL_TABLE = {
   '先手符':     { 流派:'通用', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'玄阶', 系数:1.00, 效果: ['拉条:750'], pos:'通用式', roots: ['增暴·5'] },
   '疾风连动':   { 流派:'通用', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'地阶', 系数:1.00, 效果: ['拉条:750'], pos:'通用式', roots: ['拉条·未命中·75', '反震·0.03'] },
   '御风借势':   { 流派:'通用', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'天阶', 系数:1.00, 效果: ['拉条:2:2'], pos:'通用式', roots: ['拉条·未命中·100', '疗友·0.06', '增暴·0.1'] },
-  '定神符':     { 流派:'通用', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'玄阶', 系数:1.00, 效果: ['免控:1'], pos:'通用式', roots: ['增暴·5'] },
+  '定神符':     { 流派:'通用', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'玄阶', 系数:1.00, 效果: ['净化:1'], pos:'通用式', roots: ['增暴·5'] },
   '卸力诀':     { 流派:'通用', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'玄阶', 系数:1.00, 效果: ['净化:1', '减伤:40:2'], pos:'通用式', roots: ['增暴·5'] },
   '裂甲钉':     { 流派:'通用', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'地阶', 系数:1.00, 效果: ['穿防:20:2'], pos:'通用式', roots: ['加盾·4.5', '拉条·未命中·75'] },
   '金刚护体':   { 流派:'通用', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'玄阶', 系数:1.00, 效果: ['护盾:150:2'], pos:'通用式', roots: ['疗友·0.03'] },
@@ -4518,7 +4518,7 @@ var SKILL_TABLE = {
   '破法决':     { 流派:'通用', 属性:'无', 攻击类型:'单体', 玄技类型:'增益', 品质:'地阶', 系数:1.00, 效果: ['驱散:1'], pos:'通用式', roots: ['拉条·60', '加攻·0.075'] }
 };
 
-// v2 状态层数：剑路的「剑意」沿用引擎既有 swordIntent；其余路的状态统一进 f.v2stk
+// v2 状态层数：剑路的「叠层增伤」沿用引擎既有 swordIntent；其余路的状态统一进 f.v2stk
 function v2StateVal(f, key) {
   if (!f) return 0;
   if (key === '暴击') return f.swordIntent || 0;
@@ -4734,7 +4734,7 @@ var SKELETON_DESC = {
      · 「肉身」另有 onHurt —— 挨打时也自行叠 1 层；
      · 层数到顶（V2_STATES[name].max）触发一次**满层质变**（每场每状态一次）；
      · 写了「需X」的招式是**兑付式**：出手前该势种层数要够（v60 起写进 v2need/v2needState，
-       旧写法只认「需剑意」，火路的「需灼烧」是死数据 —— 已一并修好）。
+       旧写法只认「需叠层增伤」，火路的「需灼烧」是死数据 —— 已一并修好）。
 
    每个势种给**两枚**可点机制名（只做表达，不进 STYLE_ATOM 抽取池、不跨路、不参与随机）：
      堆层·X（叠给谁 / 最多几层 / 满了触发什么）/ 兑付·X（需X 的门槛）。
@@ -5132,7 +5132,7 @@ function mechStateCapBonus(f, stateName) {
   });
   return n2;
 }
-/* 剑意上限（剑心澄明：5 → 7）。全工程「剑意封顶」的唯一出口。 */
+/* 叠层增伤上限（剑心澄明：5 → 7）。全工程「叠层增伤封顶」的唯一出口。 */
 function swordIntentCap(f) {
   var cap = 5 + Math.max(0, Math.round(mechVal(f, 'swordIntentMaxBonus')));
   try { if (f && f._swordCapTemp) cap += Math.round(f._swordCapTemp); } catch (eSIC) {}
@@ -5781,7 +5781,7 @@ out.流派 = t.流派; // 强度系数下架：不再写入
   if (_base.length) out.效果 = _base; else delete out.效果;
   out.v2pos = t.pos || '';
   /* ★ v60：绝式门槛改成**通用的势种门槛**。
-     旧写法只认 '需剑意' ⇒ 火路表里的 '需灼烧:3'（焚尽归墟 / 真火焚天）是**死数据**：
+     旧写法只认 '需叠层增伤' ⇒ 火路表里的 '需灼烧:3'（焚尽归墟 / 真火焚天）是**死数据**：
      写了、玩家看得见，引擎从不检查。这与本工程的铁律（写了就必须生效）冲突，
      也与用户「别搞那种隐藏机制 / 我要一目了然」的口径冲突。
      现在逐条扫表：哪个「需X」有值就取哪个，X 一并存进 v2needState。 */
@@ -6073,7 +6073,7 @@ function _normalizeSkillItemCore(s, unit) {
     isSword: isSword,
     v2pos: s.v2pos || '',
     v2need: Number(s.v2need || 0),
-    v2needState: s.v2needState || '',       // ★ v60：门槛看的是哪个势种（旧档只有需剑意 → '暴击'）
+    v2needState: s.v2needState || '',       // ★ v60：门槛看的是哪个势种（旧档只有需叠层增伤 → '暴击'）
     v2st: s.v2st || '',
     v2gain: Number(s.v2gain || 0),
     v2pierceShield: Number(s.v2pierceShield || 0),
@@ -8732,33 +8732,33 @@ function processTurnStartDots(fighter) {
      ⚠ 下面这两支**保留**，它们与势种无关，各有独立写入源：
        · 'yichaoRounds'（本命《剑意潮生》，v2 存档）
        · 'domainRounds'（剑路【剑冢领域】，建卡期玄诀给的旗标）
-       —— 两者都涨 'swordIntent'，与「剑意」机制同一个消费口径。 */
-  // ===== v2 本命《剑意潮生》：剑意 ≥3 层时每回合自行再蓄 1 层 =====
+       —— 两者都涨 'swordIntent'，与「叠层增伤」机制同一个消费口径。 */
+  // ===== v2 本命《剑意潮生》：叠层增伤 ≥3 层时每回合自行再蓄 1 层 =====
   if (fighter.yichaoRounds > 0 && (fighter.swordIntent || 0) >= 3) {
     fighter.swordIntent = Math.min(swordIntentCap(fighter), (fighter.swordIntent || 0) + 1);
-    dotLogs.push(fName + ' 【剑意潮生】剑意自生（' + fighter.swordIntent + '/5）');
+    dotLogs.push(fName + ' 【剑意潮生】叠层增伤自生（' + fighter.swordIntent + '/5）');
   }
-  // ===== v2 剑路【剑冢领域】：三回合内自身每回合自行蓄养 1 层剑意 =====
+  // ===== v2 剑路【剑冢领域】：三回合内自身每回合自行蓄养 1 层叠层增伤 =====
   if (fighter.domainRounds > 0) {
     fighter.domainRounds--;
     fighter.swordIntent = Math.min(swordIntentCap(fighter), (fighter.swordIntent || 0) + 1);
-    dotLogs.push(fName + ' 【剑冢领域】剑意自生（' + fighter.swordIntent + '/5）');
+    dotLogs.push(fName + ' 【剑冢领域】叠层增伤自生（' + fighter.swordIntent + '/5）');
   }
-  /* ★★★ v506：'剑意' 机制**以前只倒计时、不产出** ★★★
+  /* ★★★ v506：'叠层增伤' 机制**以前只倒计时、不产出** ★★★
      它落 `ningshenRounds`，而那个字段全库只有三类出现：设置（16116）、
-     递减（就是这一行）、注释。**没有一处读它去做事** ⇒ 写「剑意:3」的结果是：
-     战报打一句「剑意蓄养」，三层手数空转完，期间一点效果都没有。
+     递减（就是这一行）、注释。**没有一处读它去做事** ⇒ 写「叠层增伤:3」的结果是：
+     战报打一句「叠层增伤蓄养」，三层手数空转完，期间一点效果都没有。
      ── 为什么现在必须修，而不是删掉了事 ──────────────────────────────
-     世界书《招式字段》写着「剑意：层数加手数。蓄养剑意，层数越高出手越重」，
+     世界书《招式字段》写着「叠层增伤：层数加手数。蓄养叠层增伤，层数越高出手越重」，
      210 门预设里也有招式在用它。删引擎 = 那批招式静默失效（比死代码更坏）。
      ⇒ 按手补上蓄养，与紧邻的 `domainRounds`（剑冢领域）、`yichaoRounds`（剑意潮生）
         三支完全同构 —— 它们本来就是同一件事的三个触发条件。
-     ⚠ 自选池里**不摆**「剑意」：它和「势种」在做同一件事（都涨 swordIntent），
+     ⚠ 自选池里**不摆**「叠层增伤」：它和「势种」在做同一件事（都涨 swordIntent），
        玩家分不清两者。见 07 的 EFF_POOL 与 `_v447_eff_picker` 的 INTERNAL_ONLY。 */
   if (fighter.ningshenRounds > 0) {
     fighter.ningshenRounds--;
     fighter.swordIntent = Math.min(swordIntentCap(fighter), (fighter.swordIntent || 0) + 1);
-    dotLogs.push(fName + ' 【剑意】蓄养一层（' + fighter.swordIntent + '/' + swordIntentCap(fighter) + '）');
+    dotLogs.push(fName + ' 【叠层增伤】蓄养一层（' + fighter.swordIntent + '/' + swordIntentCap(fighter) + '）');
   }
   var _rr = (fighter.passive && fighter.passive.effects) ? fighter.passive.effects : [];
   if (_rr.indexOf('损人') !== -1) {                                                   // 损人：每回合自损 3% 气血（最低留 1 点）
@@ -9301,9 +9301,9 @@ function executePlayerAutoTurn(actor) {
       if (sk.mpCost && p.mp < sk.mpCost) continue;
       if (sk.blocked) continue;                        // 兵器不匹配 → 无法施展
       /* v2 绝式门槛：势种层数够才可施展。
-         ★ v60：势种通用化 —— self 势种（剑意/岩固/疾风/蓄能/肉身/军阵）看自己；
+         ★ v60：势种通用化 —— self 势种（叠层增伤/岩固/疾风/蓄能/肉身/军阵）看自己；
             foe 势种（灼烧/剧毒/浸润/寒霜/流血）看**要打的那个人**（先按「血最少的存活敌人」定目标，
-            与下面选目标的顺序同一口径）。旧写法恒查「剑意」，火路的需灼烧从来没人查。 */
+            与下面选目标的顺序同一口径）。旧写法恒查「叠层增伤」，火路的需灼烧从来没人查。 */
       if (sk.v2need) {
         var _ndSt = sk.v2needState || '暴击';
         var _ndDef = (typeof V2_STATES !== 'undefined' && V2_STATES[_ndSt]) ? V2_STATES[_ndSt] : {};
@@ -9828,10 +9828,10 @@ function executeBuffSkill(actor, skill, shownAs, forUnit) {
        · 7 个本来就有正式机制名 → 直接改用机制名
          （增暴→'暴击' 增闪→'闪避' 加盾→'护盾' 回灵→'回蓝' 加攻→'增伤'
            加速→'提速' 格挡→'减伤'）
-       · 10 个此前**没在机制名表登记过** → 登记成正式机制名（'反震' '拉条' '免控'
-         '净化' '驱散' '乱序' '换命' '焚身' '剑意' '势种'），实现在
+       · 10 个此前**没在机制名表登记过** → 登记成正式机制名（'反震' '拉条' '净化'
+         '净化' '驱散' '乱序' '换命' '焚身' '叠层增伤' '势种'），实现在
          'applyV75Effects' 的 buff 分支（那里有 '_bsub === 'thorns'' 等十支）
-     ⚠ 不许「跟着旧表一起删」：反震流 / 拉条 / 免控 / 驱散是**玩法**，不是招式名。
+     ⚠ 不许「跟着旧表一起删」：反震流 / 拉条 / 净化 / 驱散是**玩法**，不是招式名。
        删壳保肉 —— 壳是「招式名当键」，肉是「这些行为真的会发生」。
 
      ── 去重怎么保证（原来靠 '_mechOnce'）────────────────────────────
@@ -10901,21 +10901,21 @@ var XZ_ATOM_TYPES = {
      淬锋 / 金身不坏…）映射到 22 个内部行为。那 22 个行为里：
        · 7 个本来就有正式机制名 → 直接改用它（增暴→暴击、增闪→闪避、加盾→护盾、
          回灵→回蓝、加攻→增伤、加速→提速、格挡→减伤）
-       · 10 个**此前根本没在机制名表登记过**（反震 / 拉条 / 免控 / 净化 / 驱散 /
-         乱序 / 换命 / 焚身 / 剑意 / 势种）—— 它们不是招式，是缺了名字的机制。
+       · 10 个**此前根本没在机制名表登记过**（反震 / 拉条 / 净化 / 净化 / 驱散 /
+         乱序 / 换命 / 焚身 / 叠层增伤 / 势种）—— 它们不是招式，是缺了名字的机制。
      ⇒ 正确做法是把这 10 个**登记成正式机制名**，而不是跟着旧表一起删。
-       删掉 = 砍玩法（反震流、拉条、免控、驱散全没了），那是另一回事，用户没要。
+       删掉 = 砍玩法（反震流、拉条、净化、驱散全没了），那是另一回事，用户没要。
 
      ── 命名口径（每一处都对着旧表里的一个招式名）────────────────────
        '反震'   ← 反震 / 金身不坏      （受击回震对方）
        '拉条'   ← 疾风连动 / 御风借势  （前拉行动条）
-       '免控'   ← 定神符              （化解下一次控制）
+       '净化'   ← 定神符              （化解下一次控制）
        '净化'   ← 清除负面            （清掉自身负面）
        '驱散'   ← 破法                （散掉对方增益）
        '乱序'   ← 奇门                （推退对方行动条）
        '换命'   ← 换命                （与同伴交换气血比例）
        '牺牲'   ← 焚身诀              （割血换增伤；★ v468 用户点名改名）
-       '剑意'   ← 凝意守心 / 剑意潮生 / 剑冢领域（蓄养剑意层）
+       '叠层增伤'   ← 凝意守心 / 剑意潮生 / 剑冢领域（蓄养叠层增伤层）
        '势种'   ← 领域 / 通明领域      （每回合自生本路势种）
      ⚠ 名字全在 4 个汉字以内（'XZ_ATOM_LINE_RE' 是 '[一-龥]{1,4}'），超了匹配不上。
      ⚠ 这批的**实现在 'applyV75Effects'**（与其它 buff 同一个分发器），
@@ -10926,22 +10926,22 @@ var XZ_ATOM_TYPES = {
      统一 '机制:数值[:手数]'，与其它机制一致：
        '反震:15:2' = 两手内受击回震本击伤害的 15%
        '拉条:120'  = 前拉 120 点行动条（绝对值，与 trackOnStart 同单位）
-       '免控:1'    = 化解下一次控制
+       '净化:1'    = 化解下一次控制
        '净化:1' / '驱散:1' = 清一条（数值即条数，0/省略按 1 算）
        '乱序:200'  = 对方全体退条 200
        '换命:30'   = 与同伴交换气血比例（数值为可交换的最大百分点差）
        '牺牲:20:2' = 割 20% 气血，两手内增伤
-       '剑意:1:2'  = 两手内每次命中额外蓄养 1 层剑意
+       '叠层增伤:1:2'  = 两手内每次命中额外蓄养 1 层叠层增伤
        '势种:3'    = 三手内每回合自生 1 层本路势种 */
   '反震': { kind: '常驻增益', beh: 'buff', sub: 'thorns' },
   '拉条': { kind: '常驻增益', beh: 'buff', sub: 'track' },
-  '免控': { kind: '常驻增益', beh: 'buff', sub: 'immuneCtrl' },
+  '净化': { kind: '常驻增益', beh: 'buff', sub: 'immuneCtrl' },
   '净化': { kind: '常驻增益', beh: 'buff', sub: 'cleanse' },
   '驱散': { kind: '常驻增益', beh: 'buff', sub: 'dispel' },
   '乱序': { kind: '常驻增益', beh: 'buff', sub: 'shuffle' },
   '换命': { kind: '常驻增益', beh: 'buff', sub: 'swapHp' },
   '牺牲': { kind: '常驻增益', beh: 'buff', sub: 'burnSelf' },
-  '剑意': { kind: '常驻增益', beh: 'buff', sub: 'swordStack' }
+  '叠层增伤': { kind: '常驻增益', beh: 'buff', sub: 'swordStack' }
   /* ★★★ v514：'势种' **已下架** ★★★
      用户 2026-10-31 原话：「势种删掉啊，没有势种这个东西，势种是早期的东西，
                             现在只有叠层」。
@@ -11345,7 +11345,7 @@ function _v75ParseEffect(text) {
              '拉条:N'  —— N 是**行动条点数**（与 trackOnStart 同单位，量级 60~1000）。
                           若按百分比落值，'拉条:750' 会变 7.5，再 ×100 才回 750 ——
                           绕一圈且中间任何一处取整都会丢精度，直接当绝对值最干净。
-             '免控:N'  —— N 是**可化解的次数**（1、2），不是比率。
+             '净化:N'  —— N 是**可化解的次数**（1、2），不是比率。
              '净化:N' / '驱散:N' / '乱序:N' 同理是**条数/点数**，不是百分比。
            ('换命' 的百分比语义保留 —— 它比的是"气血比例差",是要 /100 的。) */
         var _flatSubs450 = { track: 1, immuneCtrl: 1, cleanse: 1, dispel: 1, shuffle: 1 };
@@ -13891,11 +13891,11 @@ function calcDamage(attacker, defender, skill, isAoe) {
       } catch (eL3) {}
     } catch (eAu2) { skill._evOverride = qualityPowerOf(skill && skill.品质); }
   }
-  // ===== v2 位次结算（剑路）：终结式兑付剑意 / 绝式需 ≥3 层、必暴 + 穿防 =====
+  // ===== v2 位次结算（剑路）：终结式兑付叠层增伤 / 绝式需 ≥3 层、必暴 + 穿防 =====
   // 护栏「兑付即清零」：层数换来的加成结算后一律归零，杜绍左脚踩右脚
   var _v2pos = (isSkill && skill.v2pos) || '';
-  var _v2key = (isSkill && skill.v2st) || '暴击';           // 本路主状态（老写法默认剑意）
-  // 挂给自己的状态（岩固/疾风/蓄能/剑意/肉身）从自身取；挂给敌人的状态（破甲/剧毒/浸润/灼烧/寒霜/流血）从目标取
+  var _v2key = (isSkill && skill.v2st) || '暴击';           // 本路主状态（老写法默认叠层增伤）
+  // 挂给自己的状态（岩固/疾风/蓄能/叠层增伤/肉身）从自身取；挂给敌人的状态（破甲/剧毒/浸润/灼烧/寒霜/流血）从目标取
   var _v2self = !(typeof V2_STATES !== 'undefined' && V2_STATES[_v2key] && V2_STATES[_v2key].side === 'foe');
   var _v2holder = _v2self ? attacker : defender;
   // 兑付前快照：终结式/绝式会先把层数清零，特色判定（火·真火、冰·斩杀）必须读兑付前的值
@@ -13903,7 +13903,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
     ? { 灼烧: v2StateVal(defender, '灼烧'), 寒霜: v2StateVal(defender, '减速'), 剧毒: v2StateVal(defender, '剧毒'), 破甲: v2StateVal(defender, '破甲') }
     : { 灼烧: 0, 寒霜: 0, 剧毒: 0, 破甲: 0 };
   var _v2amp = 0, _v2pierce = 0, _v2forceCrit = false, _v2ignoreShield = false;
-  /* ★ v34：剑·万剑归墟 keepSwordIntent —— 绝式/杀招兑付剑意后保留 N 层（不满归零） */
+  /* ★ v34：剑·万剑归墟 keepSwordIntent —— 绝式/杀招兑付叠层增伤后保留 N 层（不满归零） */
   var _keepN = 0;
   try { if (_v2key === '暴击') _keepN = Math.max(0, Math.round(mechVal(attacker, 'keepSwordIntent'))); } catch (eKeep) {}
   // 通用武器共鸣效果项：拥有【万器共鸣】或【万器归一】时按武器品阶穿防
@@ -13919,15 +13919,15 @@ function calcDamage(attacker, defender, skill, isAoe) {
       _v2amp = _stk * 0.09;
       _v2ignoreShield = !!(skill.v2pierceShield);
       if (!_keepStk) v2StateSet(_v2holder, _v2key, _keepN);
-      BattleState.logs.push('<span style="color:var(--text-muted, #b7b8b3)">【一剑破万法】兑付 ' + _stk + ' 层剑意，破尽护体！</span>');
+      BattleState.logs.push('<span style="color:var(--text-muted, #b7b8b3)">【一剑破万法】兑付 ' + _stk + ' 层叠层增伤，破尽护体！</span>');
     } else if (_v2pos === '终结式') {
       _v2amp = _stk * 0.12;
       if (!_keepStk) v2StateSet(_v2holder, _v2key, _keepN);
-      BattleState.logs.push('<span style="color:var(--text-muted, #b7b8b3)">【剑意斩】兑付 ' + _stk + ' 层剑意，剑意暴涨！</span>');
+      BattleState.logs.push('<span style="color:var(--text-muted, #b7b8b3)">【剑意斩】兑付 ' + _stk + ' 层叠层增伤，叠层增伤暴涨！</span>');
     } else if (_v2pos === '绝式' && _stk >= 3) {
       _v2amp = _stk * 0.12; _v2pierce = 0.40; _v2forceCrit = true;
       if (!_keepStk) v2StateSet(_v2holder, _v2key, _keepN);
-      BattleState.logs.push('<span style="color:var(--text-muted, #b7b8b3)">【万剑归宗】兑付 ' + _stk + ' 层剑意，必暴穿防！</span>');
+      BattleState.logs.push('<span style="color:var(--text-muted, #b7b8b3)">【万剑归宗】兑付 ' + _stk + ' 层叠层增伤，必暴穿防！</span>');
     }
   }
   /* ---- 第 3 步新增：效果项在伤害侧的读取 ---- */
@@ -14453,7 +14453,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
           var _tkMax = (typeof TRACK_MAX_DISTANCE !== 'undefined' && TRACK_MAX_DISTANCE) ? TRACK_MAX_DISTANCE : 1;
           _drFoldAmp += Math.min(a.trackAmpCap || 0.30, ((attacker.trackDistance || 0) / _tkMax) * a.trackAmpK);
         }
-        /* v13 新增：每层主状态（剑意等）额外增伤（剑髓凝意：剑意越满越利） */
+        /* v13 新增：每层主状态（叠层增伤等）额外增伤（剑髓凝意：叠层增伤越满越利） */
         if (a.stkAmpK) {
           var _stkName = a.stkState || '暴击';
           var _stkVal = (typeof v2StateVal === 'function') ? v2StateVal(attacker, _stkName) : (attacker.swordIntent || 0);
@@ -15264,7 +15264,7 @@ function xzRecalcSpd(f) {
 
 /* 暴击率（唯一口径）：基础 critRate + 临时暴击 + 常驻暴击 + 机制/本命加成 − 守方抗暴。
    'opt' = { isSkill, skill }：
-     · isSkill —— 剑意 / 通明剑心 / 机制 crit 那几条**只对玄技生效**（calcDamage 里逐条
+     · isSkill —— 叠层增伤 / 通明剑心 / 机制 crit 那几条**只对玄技生效**（calcDamage 里逐条
        'if (isSkill && ...)'）。面板不知道玩家下一手出什么 ⇒ 默认按玄技算（给上限值）。
      · skill   —— 招式自带的「暴击提升」在 'skill.effects' 上，是最优先的那一路。
    'defender' 给出时扣掉守方的「灵台空明 −30%」与「抗暴:X%」。
@@ -16252,7 +16252,7 @@ function applyV75Effects(attacker, target, skill) {
               BattleState.logs.push(bHolder.name + ' 身形骤快，行动条前拉 <b>' + _tkPts + '</b>');
             }
           } else if (_bsub === 'immuneCtrl') {
-            /* 免控：化解下一次控制。消费点 processHandBuffs 8375（immuneControl 递减）。
+            /* 净化：化解下一次控制。消费点 processHandBuffs 8375（immuneControl 递减）。
                ⚠ 控制类机制 v449 已整体下架（只有减速这类数值型），所以这一支现在的
                  作用是"预置一层保险"，不假装挡了不存在的东西。 */
             bHolder.immuneControl = Math.max(Number(bHolder.immuneControl) || 0, Math.max(1, Math.round(e.flat || 1)));
@@ -16319,11 +16319,11 @@ function applyV75Effects(attacker, target, skill) {
             BattleState.logs.push(bHolder.name + ' 割舍 <b>' + _bcCost + '</b> 点气血，'
               + (_isPerm ? '整场' : xzDurText(dur)) + '内伤害大增');
           } else if (_bsub === 'swordStack') {
-            /* 剑意：每手额外蓄养剑意层。
+            /* 叠层增伤：每手额外蓄养叠层增伤层。
                消费点：processHandBuffs 的 ningshenRounds / yichaoRounds / domainRounds 三支
                （8448~8460）—— 它们是**同一个机制的不同触发条件**，统一由这一支设旗标。 */
             bHolder.ningshenRounds = Math.max(bHolder.ningshenRounds || 0, _isPerm ? XZ_TRANS_DUR : dur);
-            BattleState.logs.push(bHolder.name + ' 剑意蓄养（' + (_isPerm ? '整场' : xzDurText(dur)) + '内每次命中额外蓄养一层）');
+            BattleState.logs.push(bHolder.name + ' 叠层增伤蓄养（' + (_isPerm ? '整场' : xzDurText(dur)) + '内每次命中额外蓄养一层）');
           } else {
             /* ★ v270：增伤是「常驻顶替临时」最典型的一对（武器 +10% 常驻、
                招式 +30%/3手）—— 常驻改走 _xzPerm.dmg，临时照旧写 v75Buff*。 */
@@ -17156,7 +17156,7 @@ function executeAttack(attacker, target, skill) {
           + tarName + ' 本应承受 <b>' + Math.max(0, Math.round(Number(actualDmg) || 0))
           + '</b> 点伤害（气血上限 ' + Math.round(Number(target.maxHp) || 0)
           + '），剑心护体仅存一线，气血剩 <b>' + Math.round(Number(target.hp) || 0)
-          + '</b>，剑意重新凝聚！</span>');
+          + '</b>，叠层增伤重新凝聚！</span>');
       }
       if (target.hp <= 0 && target.alive && target.passive && target.passive.effects.indexOf('返照') !== -1 && !target._lastStandUsed) {
         target._lastStandUsed = true;                                                                                        // 返照：每场一次留一线
@@ -17419,7 +17419,7 @@ function executeAttackMultiple(attacker, targets, skill) {
           + tarName + ' 本应承受 <b>' + Math.max(0, Math.round(Number(actualDmg) || 0))
           + '</b> 点伤害（气血上限 ' + Math.round(Number(target.maxHp) || 0)
           + '），剑心护体仅存一线，气血剩 <b>' + Math.round(Number(target.hp) || 0)
-          + '</b>，剑意重新凝聚！</span>');
+          + '</b>，叠层增伤重新凝聚！</span>');
       }
       if (target.hp <= 0 && target.alive && target.passive && target.passive.effects.indexOf('返照') !== -1 && !target._lastStandUsed) {
         target._lastStandUsed = true;                                                                                        // 返照：每场一次留一线
@@ -18265,9 +18265,9 @@ function applySkillMultiEffects(attacker, target, skill, dmg) {
        用户口径：「改成机制名，但是一定不能重复」。
        ⇒ ~~机制唯一实现留在「施放侧」的 'XZ_BUFF_MECH' → '_buffMech('挂层','onhit')'。~~
        ★ v450：那条路连同 'XZ_BUFF_MECH' 整段删除了（招式名不许再当效果键）。
-         现在剑意蓄养的**唯一实现**在 'applyV75Effects' 的 '_bsub === 'swordStack''
-         那一支（机制名 '剑意'），落 'ningshenRounds'。
-       这里保留的是它挂上之后**真正要在命中时做的事**（剑意蓄养），见下面的 ''凝意'' 分支。 */
+         现在叠层增伤蓄养的**唯一实现**在 'applyV75Effects' 的 '_bsub === 'swordStack''
+         那一支（机制名 '叠层增伤'），落 'ningshenRounds'。
+       这里保留的是它挂上之后**真正要在命中时做的事**（叠层增伤蓄养），见下面的 ''凝意'' 分支。 */
     } else if (eff === '燎原引') {
       // 引爆目标身上的【灼烧】：每层 3% 最大气血，引爆后清零（仅对带灼烧的目标生效）
       var _burn = (typeof v2StateVal === 'function') ? v2StateVal(target, '灼烧') : 0;
@@ -18281,10 +18281,10 @@ function applySkillMultiEffects(attacker, target, skill, dmg) {
        用户铁律：「只有机制名，没有招式名」。'凝意' 是效果项名，且这个分支**从来没执行过**：
        'eff' 来自 'effs'，'effs' 只装 'skill.effects' + 'XZ_TERM_HIT' 里属于 passive 的效果项；
        '凝意' 两处都没有 ⇒ 该分支永远是死代码（看起来实现了，实际零调用）。
-       剑意蓄养的真实现只有一处：~~'executeBuffSkill' → '_buffMech('挂层','onhit')'~~
+       叠层增伤蓄养的真实现只有一处：~~'executeBuffSkill' → '_buffMech('挂层','onhit')'~~
        ★ v450：'_buffMech' 已整段删除，现为 'applyV75Effects' 的 '_bsub === 'swordStack''
-       （机制名 '剑意'）。玄诀表里的 '凝意' 也已从 effects 摘除。
-       ⚠ 删的是**效果项名分支**，不是剑意机制本身 —— 'swordIntent' 仍由 '剑意' 机制蓄养。 */
+       （机制名 '叠层增伤'）。玄诀表里的 '凝意' 也已从 effects 摘除。
+       ⚠ 删的是**效果项名分支**，不是叠层增伤机制本身 —— 'swordIntent' 仍由 '叠层增伤' 机制蓄养。 */
     } else if (eff === '撕裂' && skill.style === '刀') {
       target.tearRounds = 2;
       BattleState.logs.push('<span style="color:#f87171">【撕裂】' + esc(target.name) + ' 伤口崩开，出手即流血！</span>');
@@ -18384,7 +18384,7 @@ function applySkillMultiEffects(attacker, target, skill, dmg) {
   if (attacker._zhanTianFired) {
       attacker.swordIntent = Math.max(0, (attacker.swordIntent || 0) - 3);
       attacker._zhanTianFired = false;
-      BattleState.logs.push('<span style="color:var(--text-muted, #b7b8b3)">【斩天】剑意倾泻而出！</span>');
+      BattleState.logs.push('<span style="color:var(--text-muted, #b7b8b3)">【斩天】叠层增伤倾泻而出！</span>');
   }
 
   if (effs.indexOf('欲火') !== -1) {
@@ -19111,8 +19111,8 @@ var XZ_SHARED_FNS = {
   /* ★ v108：势种体系对外出口 —— **必须走这里，不许消费方自己直读 'f.v2stk'**。
      为什么登记（两条真事故）：
        ① 05 的界面要显示「身上挂了几层」，旧写法各写各的读法，
-          而「剑意」在引擎里存的是 'f.swordIntent'、其余存 'f.v2stk[key]'
-          ⇒ 自己叠了剑意，增益栏里一个都看不到（见 18389 行注释）。
+          而「叠层增伤」在引擎里存的是 'f.swordIntent'、其余存 'f.v2stk[key]'
+          ⇒ 自己叠了叠层增伤，增益栏里一个都看不到（见 18389 行注释）。
        ② 离线自检（verify_v2_states.mjs）要按**各字段真实的消费路径**分别量：
           'crit' 走 calcDamage、'track/slow' 走 v2Add 的行动条联动、
           'dot' 走 processTurnStartDots、'full' 走 v2Add 的质变分支。
@@ -22169,7 +22169,7 @@ var XZJJ = (function () {
   /* ★ v60 势种门槛（兑付式的「需X」）—— 与主战斗 AI 同一口径：
      self 势种看自己；foe 势种看**要打的那个人**（还没点人时看场上血最少的存活敌人）。
      返回 null = 放得出；返回对象 = 放不出，附上差多少层，用来给玩家一句明确提示。
-     ⚠ 旧写法（只认需剑意）在极简演武里**根本没有这道闸** —— 绝式随手就能放，
+     ⚠ 旧写法（只认需叠层增伤）在极简演武里**根本没有这道闸** —— 绝式随手就能放，
        于是「需灼烧 ≥3」这种机制在唯一的战斗界面里形同不存在（用户点名「隐藏机制」）。 */
   function needBlockOf(f, sk, target) {
     if (!f || !sk || !sk.v2need) return null;
@@ -23961,7 +23961,7 @@ var XZJJ = (function () {
            定义见 12274 起）。改公式只改那一份，面板自动跟上。
 
          ⚠ 三个刻意的取舍，都写在数值后面让人看得见，而不是藏起来：
-           ① 暴击率按「出玄技」算（剑意/通明那几条只对玄技生效）—— 面板给上限值。
+           ① 暴击率按「出玄技」算（叠层增伤/通明那几条只对玄技生效）—— 面板给上限值。
            ② 穿防值只含**常驻**那部分（建卡破甲 + 机制 + 锋锐真意）；
               「本招破甲」要等真的出这一招才有，面板给不了 ⇒ 标注「未含本招」。
            ③ 减伤值只含**身上挂着的**（临时 + 常驻）；格挡/岩固/势种那些
@@ -26326,7 +26326,7 @@ function build() {
      分三档，配色三档：
        good    增益（攻↑/防↑/护盾/反震/金身…）   青
        bad     减益（灼烧/剧毒/沉默/眩晕/封脉…）   红
-       neutral 中性（护盾量、剑意/流血这类状态层）  灰
+       neutral 中性（护盾量、叠层增伤/流血这类状态层）  灰
      ⚠ 玄诀与大道是**常驻**的（不带回合数），所以显示成不带数字的名签 ——
        带上数字会被误读成「还有 N 回合」。 */
   var JJB_BUFF_DEFS = [
@@ -26547,10 +26547,10 @@ function build() {
           }
         }
       } catch (eVd) {}
-      /* ★ v64 势种层数（剑意 / 岩固 / 灼烧…）：**必须走 v2StateVal**。
-         旧写法只扫 'f.v2stk'，而「剑意」在引擎里存的是 'f.swordIntent'
-         （见 v2StateVal/v2StateSet 的分支）⇒ **自己叠了剑意，自己的增益栏里一个都看不到**。
-         用户原话：「叠了剑意给自己也看不到啊，自己的增益里根本看不到」。
+      /* ★ v64 势种层数（叠层增伤 / 岩固 / 灼烧…）：**必须走 v2StateVal**。
+         旧写法只扫 'f.v2stk'，而「叠层增伤」在引擎里存的是 'f.swordIntent'
+         （见 v2StateVal/v2StateSet 的分支）⇒ **自己叠了叠层增伤，自己的增益栏里一个都看不到**。
+         用户原话：「叠了叠层增伤给自己也看不到啊，自己的增益里根本看不到」。
          现在按 V2_STATES 全表逐条问引擎，谁有几层就显示几层 —— 口径单一，不会再漏一种势种。 */
       try {
         for (var _sk in V2_STATES) {
@@ -26976,7 +26976,7 @@ function build() {
     if (/提速|加速|速|疾|迅|风驰/.test(t)) return 'spdUp';
     if (/攻|伤害|威|力/.test(t)) return 'atk';
 
-    /* ── 4. 势种 / 剑意等按类别近似 ── */
+    /* ── 4. 势种 / 叠层增伤等按类别近似 ── */
     if (/剑|意/.test(t)) return 'atk';
     if (/岩|固|土/.test(t)) return 'def';
     if (/风|雷|电/.test(t)) return 'spdUp';

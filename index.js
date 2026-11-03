@@ -26,7 +26,7 @@ import * as core from './src/core.js';
    ⚠ 每次改 04 重抽后**必须**手动+1，否则玩家的 ST 会一直吃 jsdelivr 的 12 小时缓存，
      还在跑旧内核，而且看起来「更新没生效」却查不出原因。
      一键更新脚本（工具/发布.sh）会自动做这件事，不用手改。 */
-const VERSION = '1.3.62';
+const VERSION = '1.3.64';
 
 /* ══════════ 对外门面 ══════════
    不是把 core 的 42 个函数原样倒出去 —— 那样调用方根本不知道该用哪个。
@@ -105,7 +105,7 @@ const XZBattle = {
   mechSumField: core.mechSumField,
   /** 汇总一个人的全部机制（一次遍历拿全）。 */
   mechBuffs: core.mechBuffsOf,
-  /** 剑意上限。 */
+  /** 叠层增伤上限。 */
   swordIntentCap: core.swordIntentCap,
   /** 轨迹推进（±delta，自动钳进 0..1000）。 */
   trackAdd: core.xzTrackAdd,

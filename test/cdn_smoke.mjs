@@ -212,7 +212,9 @@ if (!URLS.length) {
      实测同一时刻 cdn / fastly / gcore 还在发 v1.0.0（少导出 25 张常量表），
      只有 testingcf 是 v1.1.0。结果是「import 成功、日志正常、所有数值静默失效」。
      @main 每次解析都跟着分支走，各节点缓存进度不同步 ⇒ 必然再出一次。 */
-  const tags = URLS.map((u) => (/@(v[\d.]+)\//.exec(u) || [])[1]);
+  /* ★ 2026-11-04：ref 现在也可以是 **commit sha**（同一个 tag 重打 = jsdelivr 永久缓存里的旧内容）。
+     只认 `@vX.Y.Z` 会把正确写法判成「既没有 tag 也不是 @main」—— 假红。 */
+  const tags = URLS.map((u) => (/@(v[\d.]+|[0-9a-f]{7,40})\//.exec(u) || [])[1]);
   const mainOnes = URLS.filter((u) => /@main\b/.test(u));
   if (mainOnes.length) {
     bad('有 ' + mainOnes.length + ' 个地址用 @main —— 各节点缓存不同步，玩家会拿到旧版且零报错');
@@ -220,10 +222,10 @@ if (!URLS.length) {
     /* 全部地址必须用**同一个** tag。不一致意味着玩家可能拉到两个版本。 */
     const uniq = [...new Set(tags)];
     uniq.length === 1
-      ? ok('全部 ' + URLS.length + ' 个地址锁同一个 tag（@' + uniq[0] + '），不是 @main')
+      ? ok('全部 ' + URLS.length + ' 个地址锁同一个 ref（@' + uniq[0] + '），不是 @main')
       : bad('镜像之间的 tag 不一致：' + uniq.join(' / '));
   } else {
-    bad('地址里既没有 tag 也不是 @main：' + URLS.filter((u) => !/@v[\d.]+\//.test(u)).join(' , '));
+    bad('地址里既没有 tag/sha 也不是 @main：' + URLS.filter((u) => !/@(?:v[\d.]+|[0-9a-f]{7,40})\//.test(u)).join(' , '));
   }
 
   /* 路径必须真的指向仓库里的 战斗引擎/核心脚本/index.js —— 写错就是线上 404。

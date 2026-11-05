@@ -28840,17 +28840,35 @@ function build() {
     if (visH > 0 && visH < vh) vh = visH;
     return { vw: vw, vh: vh, ox: ox, oy: oy };
   }
-  /* ★★★ v441：球的可点尺寸。原来是 46×46，手机上**手指点不到**。
-     为什么 46 不够（用户 2026-10-28：「悬浮球是有的，就是手机点不到」）：
-       · 视觉 46px 在人眼看来是「一个球」，但手指的**有效触点**只有指尖那 7~9mm，
-         落在 46px 圆内还需要命中圆心附近 —— 玩家瞄着球边缘按，就落空；
-       · 球贴在右下，正好压在手机浏览器地址栏/手势条那一带（iOS 底部 34px 安全区），
-         goodix 的点击要么被浏览器吃掉，要么被判成「返回手势」；
-       · 它还在酒馆消息的 iframe 里，iframe 自身若比球小，球有一半是**画在 iframe 外**——
-         看得见（overflow 可见）但**收不到事件**（事件不会越过 iframe 边界）。
-     做法：视觉维持 46，外面套一圈 56 的**透明热区**（button 本体 56、::before 画 46 的球）。
-     56 是 Material/iOS 两边共同的最低可点尺寸；透明热区不改变长相，只扩大命中范围。 */
-  var XZ_FLOAT_HIT = 56;
+  /* ★★★ v544（作者 2026-11-05）：56 → 50，球本体从圆形改成方形 ★★★
+     原话：「战悬浮球也是改成一个剑和一个盾交叉，然后改成正方形」「大小缩小一点」。
+     ⚠ 48 是硬底线，**别再往下缩**：46 那次（v441 之前）作者原话
+       「悬浮球是有的，就是手机点不到」，而且点空时**一点反馈都没有**，
+       看起来就是"球是死的"。50 比 56 小一档（看得出缩小），仍站在 48 之上。
+     ⚠ 改这个值必须同时改 29069 那段 cssText 里的 width/height ——
+       两边不一致会让 `xzFloatPlace` 的 `offsetWidth || XZ_FLOAT_HIT` 兜底值和真实 DOM 差 6px。
+     ⚠ `XZ_FLOAT_BALL`（46）是当年"56 透明热区 + 46 视觉球"方案的残留，
+       现行实现是本体直接 50，没有 ::before —— 别照着这个常量去改视觉效果。 */
+  var XZ_FLOAT_HIT = 50;
+  /* 方形球的圆角。纯直角（0）在深色界面上像贴片；13 在 50 的边上还剩八成直线段，
+     一眼是方的，又不割手。与管理器那颗人物球同值（两球要看着是一套的）。 */
+  var XZ_FLOAT_RADIUS = 13;
+  /* 图标：内联 SVG 的「剑 + 盾交叉」。
+     · 不用 emoji：各系统字形/基线/配色都不同，iOS 会把它渲染成彩色贴图，
+       压在深色球上像贴了张不干胶，安卓还可能缺字形印成方框。
+     · 不用纯 CSS 拼：50px 的球里图标只剩 25px，CSS 拼出来的剑格和盾沿会糊成一团。
+     ⚠ `stroke="currentColor"` 是刻意的：`xzFloatPaintWake()` 的"亮/半亮/暗"三档
+       改的是 `el.style.color`，图标会跟着一起亮暗，不用再单独给 SVG 上色。
+       ⇒ 千万别在 SVG 里写死颜色，否则那个"读到标签才亮"的反馈就只剩边框在变。
+     构图：盾正放（顶平、两侧直、底收尖，半透明填充），剑从左下斜穿到右上，
+       剑柄在左下、剑尖从盾右上角探出 —— 两件兵器在盾心交叉。 */
+  var XZ_BALL_ICON = '<svg viewBox="0 0 24 24" width="25" height="25" fill="none"'
+    + ' stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M7.6 7.6h8.8v5.4c0 3.2-2.25 5.45-4.4 6.6-2.15-1.15-4.4-3.4-4.4-6.6z"'
+    + ' fill="rgba(255,233,184,.14)" stroke-width="1.4"/>'
+    + '<path d="M4.4 19.6 19.6 4.4" stroke-width="1.8"/>'
+    + '<path d="M4.76 15.9 8.1 19.24" stroke-width="1.6"/>'
+    + '</svg>';
   var XZ_FLOAT_BALL = 46;
   function xzFloatSize() { return XZ_FLOAT_HIT; }
   function xzFloatPlace(w, el, r, b) {
@@ -29059,23 +29077,21 @@ function build() {
              尊重玩家的位置，不强行搬走（否则「我明明拖好了，更新完又跑回去了」）。 */
         var _r = (_saved && typeof _saved.right === 'number') ? _saved.right : 14;
         var _b = (_saved && typeof _saved.bottom === 'number') ? _saved.bottom : 180;
-        /* ★★★ v441：46 → 56。用户 2026-10-28：「悬浮球是有的，就是手机点不到」。
-           46px 低于 Material/iOS 共同的最低可点尺寸（48 / 44），而手指的有效触点
-           只有指尖那 7~9mm、还必须落在圆心附近 —— 玩家瞄着球边缘按就落空，而且
-           **一点反馈都没有**（没报错、球也没动），看起来就是「球是死的」。
-           56px = 标准 FAB 尺寸，圆看起来更明显、命中率高得多，视觉上也不突兀。
-           ⚠ 尺寸改了必须同步 xzFloatSize()（XZ_FLOAT_HIT 也是 56），
-             否则 xzFloatPlace 的 offsetWidth 兜底值与真实 DOM 不一致，首次定位会偏 10px。 */
+        /* ★ v544：尺寸改读常量（原来写死 56），形状改方形、内容改 SVG 图标。
+           ⚠ 这里的 width/height 必须和 `XZ_FLOAT_HIT` 一致，否则首次定位会偏。 */
         el.style.cssText = 'position:fixed;left:0;top:0;right:auto;bottom:auto;z-index:2147483647;'
-          + 'width:56px;height:56px;padding:0;box-sizing:border-box;border-radius:50%;'
+          + 'width:' + XZ_FLOAT_HIT + 'px;height:' + XZ_FLOAT_HIT + 'px;padding:0;box-sizing:border-box;border-radius:' + XZ_FLOAT_RADIUS + 'px;'
           + 'display:flex;align-items:center;justify-content:center;'
           + 'cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;'
           + 'user-select:none;-webkit-user-select:none;'
-          + 'font:700 19px/1 "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif;'
+          /* font 一行留着无害（球里已经没有文字了，v544 换成 SVG），
+             但**不能删 color**：SVG 用 currentColor 读的就是它。 */
           + 'color:#e8c98f;background:linear-gradient(180deg,rgba(126,78,42,.92) 0%,rgba(14,27,32,.96) 100%);'
           + 'border:1px solid rgba(242,194,111,.72);'
           + 'box-shadow:0 0 16px rgba(201,168,106,.30),0 10px 30px rgba(0,4,8,.75);';
-        el.textContent = '战';
+        /* ★ v544：原来是 `el.textContent = '战'` —— 一个汉字当图标，现在换成剑盾 SVG。 */
+        el.innerHTML = XZ_BALL_ICON;
+        el.setAttribute('data-ico', 'v544');
         el.title = '战前编队（可拖动；长按看战斗检测诊断）';
         /* ★ v441：点击动作统一走 '_xzOnTap'，由 xzFloatBind 里的 touchend/pointerup 触发。
            这里保留 'click' 只作桌面兜底，并且**必须去重** —— 否则手机上会双开面板
@@ -29116,6 +29132,19 @@ function build() {
         try {
           el.style.width = XZ_FLOAT_HIT + 'px';
           el.style.height = XZ_FLOAT_HIT + 'px';
+          /* ★★★ v544：**已存在的球也要换形状与图标** ★★★
+             这就是上面那段病历说的同一个坑：热更新不会重建 DOM，
+             `if (!el)` 那段对玩家手机上那颗球一行都不跑。
+             只改尺寸不补 border-radius 的话，会得到一颗「50px 的圆」——
+             用户要的方形完全没生效，而且看起来像"改了个寂寞"。
+             ⚠ innerHTML 用 data-ico 记版本，别无条件写：那会每秒重建一次 SVG 节点。
+             ⚠ `el.style.font` 保留（无害），但形状必须在这里显式覆盖 —— 
+               cssText 只在建球那次跑，老球的 border-radius 还是旧的 50%。 */
+          el.style.borderRadius = XZ_FLOAT_RADIUS + 'px';
+          if (el.getAttribute('data-ico') !== 'v544') {
+            el.innerHTML = XZ_BALL_ICON;
+            el.setAttribute('data-ico', 'v544');
+          }
           el.style.font = '700 19px/1 "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif';
           el.style.userSelect = 'none';
           el._xzOnTap = function () { openTeamPick(); };

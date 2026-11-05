@@ -1345,10 +1345,10 @@ function rootParamKeys(params) {
 function rootNum(x) { return (typeof x === 'number' && isFinite(x)) ? x : 0; }
 
 /* ═══ 势种层数的唯一出口（04:3862 v2StateVal / 04:3867 v2StateSet）═══
-   为什么必须走出口：引擎对「剑意」走 f.swordIntent（上限 swordIntentCap），
+   为什么必须走出口：引擎对「叠层增伤」走 f.swordIntent（上限 swordIntentCap），
    其余势种才走 f.v2stk（上限 10）—— 见 04:3861 注释。
    此前 stateAdd/statePay 直接写 f.v2stk，**绕过了这条分流** ⇒
-   57 条「挂层·剑意」全部落进引擎从不读取的槽（本批最隐蔽的一个「写了但没生效」）。
+   57 条「挂层·叠层增伤」全部落进引擎从不读取的槽（本批最隐蔽的一个「写了但没生效」）。
    内嵌进 04：用引擎函数（函数声明 hoisting ⇒ 天然可用，与 xzHeal / xzShieldSet 同理）。
    独立跑（harness）：用下面的同签名内置实现，保证根层仍可脱离 04 测试。 */
 var _v2StateVal = (typeof v2StateVal === 'function')
@@ -1438,8 +1438,8 @@ var ROOT_OPS = {
     f[fd] = true;
   },
   /* 修饰：势种层数·挂（+） —— 参数：势种、层数
-     ★ 走引擎势种出口 _v2StateVal/_v2StateSet（含「剑意 → f.swordIntent」分流），
-       不再直写 f.v2stk —— 否则剑意会落进引擎从不读取的槽。 */
+     ★ 走引擎势种出口 _v2StateVal/_v2StateSet（含「叠层增伤 → f.swordIntent」分流），
+       不再直写 f.v2stk —— 否则叠层增伤会落进引擎从不读取的槽。 */
   stateAdd: function (f, v, entry, p) {
     if (!f) return;
     var st = p.势种, n = p.层数;

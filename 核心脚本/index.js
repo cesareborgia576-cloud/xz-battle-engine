@@ -361,7 +361,9 @@ var PORTRAIT_URLS = {
   '马小桃': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/small/马小桃.jpg',
   /* v445 第二批 8 人：只有原图，没有 small/ 缩略图（实测 404），取各自首图。 */
   '唐舞桐': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/唐舞桐/_1792939724703.png',
-  '朱竹清': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/朱竹清/_1792939781034.png',
+  /* ★ v549（作者 2026-11-06）：「朱竹清原来的立绘全部删除」—— douluo-qipao 那 5 张整体下架。
+     战斗界面这一处是 05 之外的第二份拷贝，不同步删就会出现「状态栏是新的、战斗中还是旧图」。
+     新的两张立绘由 05 的 XZ_ILLU_STAND 提供。 */
   '萧萧': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/萧萧/_1792939714259.png',
   '魔皇': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/魔皇/_1792939693255.png',
   '许小言': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/许小言/_1792939677308.png',

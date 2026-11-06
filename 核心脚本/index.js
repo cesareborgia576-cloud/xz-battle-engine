@@ -325,7 +325,7 @@ var PORTRAIT_URLS = {
   '沈清颜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/XL_shenqingyan_20261030.jpg',
   '凌星遥': '',
   '言清漪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/image-hosting@main/blog/Ab3qJJDgRKZTAAAAAElFTkSuQmCC.png',
-  '阿依莎': 'https://a.imgckr.com/2026/10/14/XDkl5.png',
+  /* [v550] 阿依莎出厂图作者判定弃用已下架（阿依莎改走 05 的 XZ_ILLU_STAND 立绘_1）。 */
 
   /* ★★★ v406：斗罗 DLC 旗袍立绘（8 个角色）。源图 832×1216 / 1.5MB 太大，
      直接当立绘会让面板加载卡死 ⇒ 压成 512 宽 JPEG（约 90KB），放在仓库 small/ 下。

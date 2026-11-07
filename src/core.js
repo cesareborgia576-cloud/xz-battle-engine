@@ -3,7 +3,7 @@
    ⚠ 本文件由 `工具/_extract_battle.mjs` 从「脚本/04-核心脚本.js」**原样抽取**生成。
      不要手改这里！改了下次跑抽取就被覆盖。要改请改 04，再重新抽取。
 
-   抽了哪些：44 个纯函数 + 27 个顶层常量
+   抽了哪些：44 个纯函数 + 32 个顶层常量
              （0 处 BattleState / DOM / localStorage）。
    为什么是这些：从 32 个数值层入口做「调用即依赖」的传递闭包得来，
      **函数与常量双闭包** —— 只做函数闭包会漏掉 REALM_COEFFS 这类顶层表，
@@ -26,7 +26,7 @@ function setTransStore(fn) {
   __xzTransStoreImpl = typeof fn === 'function' ? fn : function () { return { stamp: 0, source: '', byName: {} }; };
 }
 
-/* ══════════ 常量表（27 个，04 原序） ══════════ */
+/* ══════════ 常量表（32 个，04 原序） ══════════ */
 
 var TRACK_MAX_DISTANCE = 1000;
 
@@ -407,7 +407,7 @@ var V2_STATES = {
   //   流派核心机制一律归流派玄诀，不留在状态表里当摆设，也不挂在玄技上。
 };
 
-var BLOOD_EFFECT_KEYS = [
+var SPIRIT_ROOT_EFFECT_KEYS = [
     /* ⚠ 顺序即优先级：**更具体的词必须排在更宽泛的词前面**（实测踩过的坑）。
        排错的后果是「残血减伤」被 '减伤' 抢先命中、错记成 dr。 */
     { re: /(残血.{0,3}减伤|血越低|垂危.{0,3}减伤|残血.{0,3}免伤)/,      key: 'lowHpDr',         cap: 0.30, txt: '血量越低减伤越高（满血为 0）' },
@@ -435,7 +435,7 @@ var BLOOD_EFFECT_KEYS = [
     { re: /(每回合.{0,3}回蓝|回复.{0,3}灵力|每回合.{0,3}灵力|纳灵|回蓝|恢复灵力)/, key: 'mpRegen', cap: 0.08, txt: '每回合额外回复灵力上限的' },
     /* ★★★ v323：'提速' —— 之前完全没有这条规则，「提速:18」一个字都不认。
        与招式里的 '提速' 同口径（《招式字段》第 19 行）：**写点数 = 速度点数**，
-       'unit:'flat'' ⇒ buildBloodBuffs 不除 100，直接落成点数；
+       'unit:'flat'' ⇒ buildSpiritRootBuffs 不除 100，直接落成点数；
        封顶 60 点（tempEvadeBoost / v75HasteFlat 同量级，'提速:18' 是常见档）。
        位置必须在 ~~抢先手~~ 之前 —— ~~抢先手~~ 的正则含 '先手|抢行动'，
        而「提速」不会被它命中，但「抢先」会；顺序上先具体后宽泛是本表铁律。
@@ -461,7 +461,7 @@ var BLOOD_EFFECT_KEYS = [
     { re: /(增伤|伤害提高|造成伤害增加|输出提高)/,                        key: 'amp',             cap: 0.25, txt: '造成的伤害提高' },
     { re: /(减伤|承伤|伤害降低|受到伤害减少|所受伤害)/,                    key: 'dr',              cap: 0.30, txt: '受到的伤害降低' },
     /* ★★★ v300：'回血' —— 四源统一格式里**唯一真正漏读**的机制名 ★★★
-       v296 定「玄技/玄诀/兵器/血脉 同一个格式：机制:数值[:手数]｜描写」，
+       v296 定「玄技/玄诀/兵器/灵根 同一个格式：机制:数值[:手数]｜描写」，
        上面这张表却是按**中文关键词**认的：'增伤' '减伤' '穿防' '暴击' '回蓝'
        '闪避' ~~'抢先手'~~ '气血上限' '灵力上限' '吸血' 十个名字刚好同时是关键词，
        所以写成 '增伤:18' 也能认出来 —— 只有 '回血' 不在任何一条正则里。
@@ -473,6 +473,8 @@ var BLOOD_EFFECT_KEYS = [
        cap 口径见《数值表》§效果封顶「每手回血」那一行（10%）。 */
     { re: /(每手.{0,3}回气血|每回合.{0,3}回气血|回血)/,                   key: 'regen',           cap: 0.10, txt: '每手回复气血上限的' }
   ];
+
+var XZ_STACK_DEFAULT_PARTS = ['dmg', 'buff', 'debuff'];
 
 var XZ_ATOM_TYPES = {
   /* ═══════════════════════════════════════════════════════════════════
@@ -844,6 +846,39 @@ var XZ_ATOM_RETIRED = {
   '迟缓': '减速'
 };
 
+var XZ_COND_TYPES = {
+  /* ── ① 自身血量 ── */
+  '低血增伤': { who: 'self', stat: 'hp', dir: 'low',  label: '自身血量越低，本击越重' },
+  '高血增伤': { who: 'self', stat: 'hp', dir: 'high', label: '自身血量越高，本击越重' },
+  '低血减伤': { who: 'self', stat: 'hp', dir: 'low',  label: '自身血量越低，挨打越轻', to: 'dr' },
+  '高血减伤': { who: 'self', stat: 'hp', dir: 'high', label: '自身血量越高，挨打越轻', to: 'dr' },
+  /* ── ② 目标血量 ── */
+  '目标残血': { who: 'foe', stat: 'hp', dir: 'low',  label: '目标血越少，本击越重' },
+  '目标满血': { who: 'foe', stat: 'hp', dir: 'high', label: '目标血越多，本击越重' },
+  /* ── ④ 敌方数量（③ 友军见下方，名字更长但那也是 4 字内）──
+     ★★★ v449：「敌多增伤」→「敌众增伤」。**只改机制名，势种一个字没动** ★★★
+     用户原话：「敌多增伤就继续存在，不要搞招式名，那是绝对禁止的」。
+     撞名的是**机制名**，不是势种：
+       · 'V2_STATES['敌多增伤']'（枪路主势种、满层质变「军威」、20+ 门枪路玄技的
+         'st:'敌多增伤'' 在用它）—— **原样保留，一个字符都不许改**；
+       · 而这条条件机制名是 v448 才加的，全项目除了它自己没有任何数据在写它。
+     ⇒ 谁的历史包袱轻，谁让路。这也守住了「不许搞招式名」的底线：
+       '敌众增伤' 是**机制名**（敌人越多、本击越重），不是任何一门招式的名字。
+     ⚠ 4 字约束仍在（'XZ_ATOM_LINE_RE' 是 '[一-龥]{1,4}'）：'敌众增伤' = 4 字，合规。
+     ⚠ 反过来也**不许**把它改成「军威」「敌多回血」这种读着像招式/势种的名 ——
+       那正是用户说的「绝对禁止」。 */
+  '敌众增伤': { who: 'foe', stat: 'count', dir: 'high', label: '敌人越多，本击越重' },
+  '敌少增伤': { who: 'foe', stat: 'count', dir: 'low',  label: '敌人越少，本击越重' },
+  '友多增伤': { who: 'ally', stat: 'count', dir: 'high', label: '友军越多，本击越重' },
+  '友少增伤': { who: 'ally', stat: 'count', dir: 'low',  label: '友军越少，本击越重' },
+  /* ── ⑤ 自身速度 ── */
+  '快攻增伤': { who: 'self', stat: 'spd', dir: 'high', label: '自身速度越快，本击越重' },
+  '慢攻增伤': { who: 'self', stat: 'spd', dir: 'low',  label: '自身速度越慢，本击越重' },
+  /* ── ⑧ 对方速度 ── */
+  '敌快增伤': { who: 'foe', stat: 'spd', dir: 'high', label: '对手速度越快，本击越重' },
+  '敌慢增伤': { who: 'foe', stat: 'spd', dir: 'low',  label: '对手速度越慢，本击越重' }
+};
+
 var XZ_ATOM_LINE_RE = /^\s*([一-龥]{1,4})\s*[:：]\s*/;
 
 var XZ_ATTR_CAP_BY_BIG = {
@@ -852,6 +887,19 @@ var XZ_ATTR_CAP_BY_BIG = {
 
 var XZ_ATTR_TOTAL_CAP_BY_BIG = {
   '练气': 18, '筑基': 22, '金丹': 26, '元婴': 30, '化神': 34, '炼虚': 38
+};
+
+var XZ_AUTO_UNSUPPORTED = {
+  '抗暴': '固定 90（《数值表》§被动封顶）',
+  '破盾': '固定 50（《数值表》§被动封顶）',
+  '免死': '固定 1（表示"留一口气"，不是数值）',
+  /* ★ v402：'眩晕' 那一行**删掉**了。它 v401 已从 XZ_ATOM_TYPES 下架，
+     留在这张表里等于告诉调用方"眩晕是支持的机制，只是不支持 auto" ——
+     于是 '眩晕:auto' 会被判成「机制在、auto 不行」，而不是「根本没这个机制」。
+     两张表对同一个名字给出两种态度，是这类静默失效的老形状。 */
+  /* ★ v449：同一条理由，'定身' / '禁锢' / '抢先手' 三行也删了 ——
+     三者已从 XZ_ATOM_TYPES 下架，再留在"不支持 auto"的名单里，
+     '定身:auto' 就会读成「机制在、只是别写 auto」，玩家照着改写法，白改。 */
 };
 
 var XZ_HIT_BONUS = { '凡阶': 0, '黄阶': 1, '玄阶': 2, '地阶': 4, '天阶': 6, '神阶': 8 };
@@ -889,6 +937,14 @@ var XZ_KIND_LABEL = {
   '条件增益': '条件增益',
   '条件减益': '条件减益'
 };
+
+var XZ_BEH_LABEL = {
+  damage: '伤害', heal: '回复', shield: '护盾', drain: '吸取',
+  dot: '持续伤害', control: '控制', buff: '增益', debuff: '减益',
+  summon: '召唤', cond: '条件', splash: '溅射', stack: '叠层'
+};
+
+var XZ_SLOT_NAMES = ['主击', '增益', '身法', '被动', '效果', '攻击', '防御', '辅助'];
 
 var XZ_PERM_KEYS = ['dmg', 'dmgDown', 'dr', 'vuln', 'evade',
   'hastePct', 'hasteFlat', 'slowPct', 'slowFlat', 'crit', 'critDmg', 'regen',
@@ -1160,7 +1216,7 @@ function v2StateSet(f, key, v) {
   f.v2stk[key] = Math.max(0, Math.min(10, v));
 }
 
-function parseBloodEffect(text) {
+function parseSpiritRootEffect(text) {
   var out = [];
   try {
     var t = String(text || '').trim();
@@ -1170,13 +1226,13 @@ function parseBloodEffect(text) {
     var seen = {};
     for (var pi = 0; pi < parts.length; pi++) {
       var seg = parts[pi];
-      /* ★ v296：血脉也走「机制串｜描写」——'｜' 之后是设定与来历，一个字都不许进正则
-         （「血脉一燃便不知痛」里的数字会被就近取成数值，那不是玩家写的强度）。 */
+      /* ★ v296：灵根也走「机制串｜描写」——'｜' 之后是设定与来历，一个字都不许进正则
+         （「灵根一燃便不知痛」里的数字会被就近取成数值，那不是玩家写的强度）。 */
       var _bb = seg.search(/[｜|]/);
       if (_bb >= 0) seg = seg.slice(0, _bb).trim();
       if (!seg) continue;
-      for (var ki = 0; ki < BLOOD_EFFECT_KEYS.length; ki++) {
-        var rule = BLOOD_EFFECT_KEYS[ki];
+      for (var ki = 0; ki < SPIRIT_ROOT_EFFECT_KEYS.length; ki++) {
+        var rule = SPIRIT_ROOT_EFFECT_KEYS[ki];
         if (!rule || !rule.re.test(seg)) continue;
         /* 就近取百分数：本句里第一个数字（带不带 % 都认）。没有数字就用封顶值的 1/3 起跳，
            免得玩家写「霸体」这种定性描述时效果凭空消失。 */
@@ -1233,33 +1289,33 @@ function mechBuffsOf(f) {
        ③ 留着它的代价不是性能，是**误导**：任何人读到这里都会以为「大道特性还在结算」。
      ⚠ 若日后要复活大道：重新设计来源（'f.daoBuffs' 怎么填），别把这三大行照抄回来 ——
        抄回来也只是让一个恒空的 for 循环重新存在。 */
-  /* ★ v94 修：血脉 '效果' 的 15 个机制键（dr/amp/pierce/crit/critDmg/lifesteal/
+  /* ★ v94 修：灵根 '效果' 的 15 个机制键（dr/amp/pierce/crit/critDmg/lifesteal/
      onHurtHeal/lowHpDr/mpRegen/deathImmuneHeal/trackOnStart/ignoreShieldPct/evade…）
-     由 parseBloodEffect 解析、buildBloodBuffs 装进 'f.bloodBuffs'，
-     而这个函数**只读了 f.atoms 与 f.daoBuffs，压根没读 bloodBuffs**
+     由 parseSpiritRootEffect 解析、buildSpiritRootBuffs 装进 'f.spiritRootBuffs'，
+     而这个函数**只读了 f.atoms 与 f.daoBuffs，压根没读 spiritRootBuffs**
      ⇒ 12 个键解析出来、面板还显示、引擎从不消费，
-     而世界书《血脉规则》第四节**明文承诺它们进公式**（玩家填了却没反应，且零报错）。
+     而世界书《灵根规则》第四节**明文承诺它们进公式**（玩家填了却没反应，且零报错）。
      根因就是上方那段注释自称「由 mechBuffsOf() 与机制名、玄诀机制名、大道特性走同一条通道」
-     —— 大道特性那条真接了，血脉这条漏了。
-     修法：把 bloodBuffs 并进来。'_fromBlood' 标记保留，供「只认机制名」的地方过滤。 */
+     —— 大道特性那条真接了，灵根这条漏了。
+     修法：把 spiritRootBuffs 并进来。'_fromSpiritRoot' 标记保留，供「只认机制名」的地方过滤。 */
   try {
-    if (f.bloodBuffs && f.bloodBuffs.length) {
-      for (var bi = 0; bi < f.bloodBuffs.length; bi++) {
-        var bb = f.bloodBuffs[bi];
+    if (f.spiritRootBuffs && f.spiritRootBuffs.length) {
+      for (var bi = 0; bi < f.spiritRootBuffs.length; bi++) {
+        var bb = f.spiritRootBuffs[bi];
         if (!bb || !bb.buff || typeof bb.buff !== 'object') continue;
         var bcb = {};
         for (var bbk in bb.buff) bcb[bbk] = bb.buff[bbk];
-        bcb.name = bb.name || '血脉·效果';
+        bcb.name = bb.name || '灵根·效果';
         out.push(bcb);
       }
     }
   } catch (eBB) {}
   /* ★ v281：武器 '效果' 的翻译结果（artifactBuffs）也并入这条通道。
-     世界书《数值表》§效果封顶：「血脉 / 玄诀 / 武器 **共用一份**表，不要再给它们各写一套」。
-     血脉这条早在 v94 就接进来了（上面那段），**武器这条一直没接** ——
+     世界书《数值表》§效果封顶：「灵根 / 玄诀 / 武器 **共用一份**表，不要再给它们各写一套」。
+     灵根这条早在 v94 就接进来了（上面那段），**武器这条一直没接** ——
      武器 '效果' 写「穿防 20%」只解析进 artifactParsed，没有任何消费点读它。
-     接法与血脉完全一致：同一个 parseBloodEffect → 同一个 buildBloodBuffs → 同一个 mechBuffsOf，
-     所以「碎甲，穿防 20%」里的 20% 与血脉写「穿防 20%」走的是**同一份实现**，不存在两套。 */
+     接法与灵根完全一致：同一个 parseSpiritRootEffect → 同一个 buildSpiritRootBuffs → 同一个 mechBuffsOf，
+     所以「碎甲，穿防 20%」里的 20% 与灵根写「穿防 20%」走的是**同一份实现**，不存在两套。 */
   try {
     if (f.artifactBuffs && f.artifactBuffs.length) {
       for (var abi = 0; abi < f.artifactBuffs.length; abi++) {
@@ -1276,10 +1332,10 @@ function mechBuffsOf(f) {
     }
   } catch (eAB) {}
   /* ★★★ v284：玄诀 '效果' 的翻译结果（heartBuffs）也并入这条通道 ★★★
-     世界书《数值表》§效果封顶：「血脉 / 玄诀 / 武器 **共用一份**表」。
-     血脉 v94 接了、武器 v281 接了，**玄诀这一档一直没接** ——
+     世界书《数值表》§效果封顶：「灵根 / 玄诀 / 武器 **共用一份**表」。
+     灵根 v94 接了、武器 v281 接了，**玄诀这一档一直没接** ——
      它只走 7 条 'indexOf' 白名单，写「减伤 15%，穿防 20%」这种规范话术一条都不认。
-     接法与上面两段逐字同构（同一个 buildBloodBuffs 产物、同样的克隆、同样的 name 标签），
+     接法与上面两段逐字同构（同一个 buildSpiritRootBuffs 产物、同样的克隆、同样的 name 标签），
      所以 mechVal / mechSumField / calcDamage 全都自动吃到，不存在第二份结算实现。 */
   try {
     if (f.heartBuffs && f.heartBuffs.length) {
@@ -1853,14 +1909,14 @@ function xzEvadeValueOf(u) {
       var keys = Object.keys(XZ_LEVEL_COEFF);
       for (var i = 0; i < keys.length; i++) { if (rn.indexOf(keys[i]) >= 0) { rIdx = i; break; } }
     } catch (eR) {}
-    /* 效果项类闪避（血脉 / 大道 / 临时）：百分比 × 20 折成点数（d20 满分 20） */
+    /* 效果项类闪避（灵根 / 大道 / 临时）：百分比 × 20 折成点数（d20 满分 20） */
     var pts = 0;
     try { pts += (Number(u && u.tempEvadeBoost) || 0) * 20; } catch (e1) {}
-    /* ★ v270：常驻闪避（武器/玄诀/血脉被动）—— 以前它写在 tempEvadeBoost 上，
+    /* ★ v270：常驻闪避（武器/玄诀/灵根被动）—— 以前它写在 tempEvadeBoost 上，
        手数 9999 永不递减，还会把招式临时闪避顶成永久。现在独立进 _xzPerm。 */
     try { pts += xzPermOf(u).evade * 20; } catch (ePerm) {}
     try {
-      (u.bloodBuffs || []).forEach(function (bb) {
+      (u.spiritRootBuffs || []).forEach(function (bb) {
         if (bb && bb.buff) pts += (Number(bb.buff.evade) || 0) * 20;
       });
     } catch (e2) {}
@@ -2016,7 +2072,7 @@ function xzCritRateOf(f, defender, opt) {
   try {
     if ((Number(f.tempCritRounds) || 0) > 0) r += Number(f.tempCritBoost) || 0.25;
     r += xzPermOf(f).crit;
-    /* 「暴击提升」三个落点：招式 effects / 玄诀·血脉 passive / 武器 artifact。
+    /* 「暴击提升」三个落点：招式 effects / 玄诀·灵根 passive / 武器 artifact。
        ★ 全覆盖探针 2026-10-14：旧口径只读 skill.effects，挂玄诀/武器的那条整条死亡。
          现在三处并检，0.45 只加一次（与 calcDamage 的 if/else-if 结构同义）。 */
     var _hit = false;
@@ -2048,12 +2104,12 @@ function xzDrOf(f, ctx) {
   if (!f) return 0;
   var v = 0;
   try {
-    /* ★★★ v484：**必须读常驻三源**（血脉 / 玄诀 / 武器）★★★
+    /* ★★★ v484：**必须读常驻三源**（灵根 / 玄诀 / 武器）★★★
        用户 2026-10-31：「没挂上，因为里面减伤值什么的没变化，都是 0」
                 「战报里说 0，然后面板里减伤值等也确实没变化」。
 
-       真身：血脉写「减伤:28」，parseBloodEffect 认出来了、buildBloodBuffs 装进
-       `f.bloodBuffs` 了、`mechBuffsOf` 也汇总了 —— **每一次都对**。
+       真身：灵根写「减伤:28」，parseSpiritRootEffect 认出来了、buildSpiritRootBuffs 装进
+       `f.spiritRootBuffs` 了、`mechBuffsOf` 也汇总了 —— **每一次都对**。
        但本函数只读 'v75DrPct'（招式临时）与 '_xzPerm.dr'（主动增益），
        两个都不收被动三源 ⇒ 面板恒 0%。
 
@@ -2134,7 +2190,7 @@ export {
   xzEffLineOf,
   v2StateVal,
   v2StateSet,
-  parseBloodEffect,
+  parseSpiritRootEffect,
   atomHas,
   mechBuffsOf,
   mechSumField,
@@ -2178,14 +2234,19 @@ export {
   REALM_TIER_KEYS,
   XINFA_TABLE,
   V2_STATES,
-  BLOOD_EFFECT_KEYS,
+  SPIRIT_ROOT_EFFECT_KEYS,
+  XZ_STACK_DEFAULT_PARTS,
   XZ_ATOM_TYPES,
   XZ_ATOM_RETIRED,
+  XZ_COND_TYPES,
   XZ_ATOM_LINE_RE,
   XZ_ATTR_CAP_BY_BIG,
   XZ_ATTR_TOTAL_CAP_BY_BIG,
+  XZ_AUTO_UNSUPPORTED,
   XZ_HIT_BONUS,
   XZ_SUB_LABEL,
   XZ_KIND_LABEL,
+  XZ_BEH_LABEL,
+  XZ_SLOT_NAMES,
   XZ_PERM_KEYS,
 };

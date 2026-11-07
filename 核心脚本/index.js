@@ -921,8 +921,10 @@ var REALM_ORDER = [
 
 /* ★ v45：**玄元属性品阶已彻底废除**（用户原话：「属性就是属性啊，就一个属性，没有什么副不副主不主单不单」）。
    玄幻里玄元属性只有七种元素：火/水/木/土/风/雷/冰 —— 没有「更纯的火」这种维度。
-   旧的 ROOT_COEFFS 与「双主属性/副属性/单属性/杂属性/凡体 + 天/双/三/四灵根/伪灵根」全部作废。
-   所有加成都走中性 1.00（rootRank = 1.00），不再有任何品阶差异。 */
+   旧的 ROOT_COEFFS 与「双主属性/副属性/单属性/杂属性/凡体」全部作废。
+   所有加成都走中性 1.00（rootRank = 1.00），不再有任何品阶差异。
+   ★ v551：灵根六档（伪/四/三/双/天/圣灵根）是**独立字段**，与玄元属性的品阶无关；
+   它们有自己的一条数值通道（SPIRIT_ROOT_*），不在此列。 */
 var QUALITY_COEFFS = { '凡阶': 1, '黄阶': 1, '玄阶': 2, '地阶': 3, '天阶': 4, '神阶': 5, '黄': 1, '玄': 2, '地': 3, '天': 4, '神': 5 };
 
 function getQualityRank(qStr) {
@@ -995,7 +997,7 @@ function xzSkillMpOf(quality, target) {
    用户 2026-10-30：「伤害过低，练气有一千多血，但是，一次伤害就这么四五十血，根本不合理。」
 
    ── 为什么是"整表上调"而不是改公式 ────────────────────────────────────
-     实测（体质5 + 凡血30，全境后期小档）：
+     实测（体质5 + 伪灵根30，全境后期小档）：
        境界   气血   定档   属性   合计   手数
        练气   800     17      5     22   36.4   ← 比设计目标长 9 倍
        练气  1160     22     18     40   29.0   ← 用户看到的"四五十"就是这 40
@@ -2279,7 +2281,7 @@ var NON_WEAPON = { '无': 1 };                      // 徒手（只用于「需�
 
 var TIANJIAO_TIERS = ['非天骄', '普通天骄', '大天骄', '天选之子'];
 var SUPPRESS_TABLE = { 1: 0.10, 2: 0.20, 3: 0.35 };   // 只减伤：攻击者天骄等级低于目标时按差值扣伤害
-var BLOOD_RANK_UI = { '无': 0, '凡血': 1, '灵血': 2, '王血': 3, '圣血': 4, '帝血': 5, '神血': 6 };  // 血脉品阶 -> 先天档（帝血 / 神血 为顶二档；用户口径：神血 > 帝血）
+var SPIRIT_ROOT_RANK_UI = { '无': 0, '伪灵根': 1, '四灵根': 2, '三灵根': 3, '双灵根': 4, '天灵根': 5, '圣灵根': 6 };  // 灵根品阶 -> 先天档（天灵根 / 圣灵根 为顶二档；用户口径：圣灵根 > 天灵根）
 var Q_RANK_CLASS = { '凡阶': 1, '黄阶': 1, '玄阶': 2, '地阶': 3, '天阶': 4, '神阶': 5 };
 
 // ===== v70 战斗重做：玄技降伤 · 单回合承伤闸门（抗秒铁律） =====
@@ -2291,7 +2293,7 @@ var Q_RANK_CLASS = { '凡阶': 1, '黄阶': 1, '玄阶': 2, '地阶': 3, '天阶
        ⚠ 实际结算是不是 1.0 也算不出来 —— 因为它压根不参与，写多少都一样。这才是必须删的理由：
          '1.08' 摆在常量区，下一个人会以为「玄技默认多打 8%」，然后照着它去调别的数。
      · HP_REALM_EXP：血池的 'rm^2.05' 指数。v312 起血池统一走世界书那条
-       '(大境界基数 + 体质×4 + 血脉定额) × 8'（见 6130 行），这条指数**不再参与血池**。
+       '(大境界基数 + 体质×4 + 灵根定额) × 8'（见 6130 行），这条指数**不再参与血池**。
        「指数脱节会长成什么样」那段论证**仍然有效并保留在 6130 一带的注释里**，
        不靠这个变量活着；ATK/DEF 两个 2.05 仍在用（6189 / 6173 行），所以那两个不能动。
    ⇒ 三个都是「留着骗下一个人」的伪装，删。 */
@@ -2303,8 +2305,8 @@ var Q_RANK_CLASS = { '凡阶': 1, '黄阶': 1, '玄阶': 2, '地阶': 3, '天阶
 // 境界保底（凡人 4 / 练气练气 8 / 中境 10~12 / 高境 13~14），配置按「玄技数 + 武器品质
 // + 玄诀品质 + 玄技数 + 总效果项数」加成 —— 都是战场态势里可见的数据，可让玩家"算得清"。
 /* ★ v45：**同境界同水平 1v1 出场手数**的硬下限（用户口径）。
-   用户原话：「我被同阶秒了，这是不可能的，我是神血，而且我说过，同境界同水平的情况下，
-             1v1至少总共要15手，何况我是神血。境界越高，同水平情况下总计出手数越久，赶紧给我调。」
+   用户原话：「我被同阶秒了，这是不可能的，我是圣灵根，而且我说过，同境界同水平的情况下，
+             1v1至少总共要15手，何况我是圣灵根。境界越高，同水平情况下总计出手数越久，赶紧给我调。」
 
    口径拆解：
      · 「总计出手数」= **双方手数之和**（我方 + 敌方）。
@@ -2470,7 +2472,7 @@ var REGEN_RATE = 0.008;          // 每回合周天回气：双方各回 0.8% �
    凡人 36 手 → 炼虚 1234 手，完全失控）。
    ATK / DEF 两个指数现取 2.05，与血池同速增长，**手数与境界解耦**。
    ⚠ v375 更正：这段原文写「ATK / DEF / **HP** 三个一律 2.05」，那是 v54 时的状态。
-     从 v312 起血池改走世界书那条 '(大境界基数 + 体质×4 + 血脉定额) × 8'（见 6130 一带），
+     从 v312 起血池改走世界书那条 '(大境界基数 + 体质×4 + 灵根定额) × 8'（见 6130 一带），
      'HP_REALM_EXP' 已删，**剩两个 2.05 在跑**（6189 攻 / 6173 防）。
      「三指数对齐」这个论证本身仍然成立 —— 它就是血池必须跟着基数表走、而不是按 rm^2.05 涨的理由。 */
 var ATK_REALM_EXP = 2.05;        // 攻击的境界指数（★ v54：与 HP 对齐）
@@ -2491,7 +2493,7 @@ var ARTIFACT_RANK_CAP = 2;
      凝神/真元狂暴/封脉/印记/削锋/焚净/涤冰/润木/澄水/净世/先机/碎甲/返元/周天回灵/
      护体灵盾/气血回复/清除负面/灵力汲取/暴击提升/自带破甲/提升攻击…），一律作废。
    ⇒ 只保留《数值表》「三源可用范围」里那一批 34 个机制名中的武器可用子集。
-   ⚠ 这些名字**同时**是 BLOOD_EFFECT_KEYS 的关键词，走 ② 'parseBloodEffect' 那条路，
+   ⚠ 这些名字**同时**是 SPIRIT_ROOT_EFFECT_KEYS 的关键词，走 ② 'parseSpiritRootEffect' 那条路，
      不需要再在下面 indexOf 段里单列分支（那份分支已整段删除）。
    ⚠ '提升攻击' 已删：它落到 atkBonus → atkVal，而 atkVal **不进伤害公式**
      （calcDamage 里只被 thornAtkPct 回震读），等于空效果项。要加输出就写 '增伤'。 */
@@ -2550,27 +2552,27 @@ var DIVINE = {
 };
 var ATB_INIT_JITTER = 250;       // 开局行动条随机偏移：消除「同速先手必胜」
 
-// 天骄推导：**只看血脉**（用户 2026-10-21：「天骄也只能通过血脉了，没有后天这一说了」）
-function tianjiaoOf(rootQuality, bloodRank) {
+// 天骄推导：**只看灵根**（用户 2026-10-21：「天骄也只能通过灵根了，没有后天这一说了」）
+function tianjiaoOf(rootQuality, spiritRootRank) {
   /* ★★★ v296：这里原来还有一条「人造路线」—— 玄技/玄诀/武器三样全 ≥ 地阶 = 普通天骄、
      全 ≥ 天阶 = 大天骄，两条路取高，并记一个 'from'（先天/人造）。
      用户定：这条路取消。理由不只是设定洁癖 —— 那条路让「砸装备」可以直接买天骄档，
      而天骄档是**减伤乘区**（压制 −10%/−20%/−35%），等于花钱买了一条战斗数值通道。
      'from' 字段一并删掉（'天骄来历' 变量也删了，没有「先天/人造」这个区分了）。
 
-     ★★★ v311（用户 2026-10-22）：「神级血脉就是天选之子，往下就是大天骄，再往下
-     就是普通天骄，但所有 npc 禁止有神级血脉。」
-     ⇒ 六档血脉与四档天骄现在**一一对死了**（原来是 帝/神 都算大天骄、天选之子没人能靠血脉拿到）：
-          神血 → 天选之子        帝血 → 大天骄
-          圣血 → 普通天骄        王血及以下 → 非天骄
-     「NPC 不许有神血」不在这里拦 —— 引擎这一层只做映射，拦在数据侧：
+     ★★★ v311（用户 2026-10-22）：「神级灵根就是天选之子，往下就是大天骄，再往下
+     就是普通天骄，但所有 npc 禁止有神级灵根。」
+     ⇒ 六档灵根与四档天骄现在**一一对死了**（原来是 帝/神 都算大天骄、天选之子没人能靠灵根拿到）：
+          圣灵根 → 天选之子        天灵根 → 大天骄
+          双灵根 → 普通天骄        三灵根及以下 → 非天骄
+     「NPC 不许有圣灵根」不在这里拦 —— 引擎这一层只做映射，拦在数据侧：
      世界书《天骄体系》明写、'_v311_tianjiao.mjs' 扫全部人设条目。若在这里拦成「NPC 一律降一档」，
      玩家操作的灵宠/同伴就会跟着被降，那是把一条**设定规约**写成了**数值 bug**。 */
-  var bestBlood = BLOOD_RANK_UI[bloodRank] || 0;
+  var bestSpiritRoot = SPIRIT_ROOT_RANK_UI[spiritRootRank] || 0;
   var tier = 0;
-  if (bestBlood >= 6) tier = 3;        // 神血 → 天选之子
-  else if (bestBlood >= 5) tier = 2;   // 帝血 → 大天骄
-  else if (bestBlood >= 4) tier = 1;   // 圣血 → 普通天骄
+  if (bestSpiritRoot >= 6) tier = 3;        // 圣灵根 → 天选之子
+  else if (bestSpiritRoot >= 5) tier = 2;   // 天灵根 → 大天骄
+  else if (bestSpiritRoot >= 4) tier = 1;   // 双灵根 → 普通天骄
   /* ★ v272：'条目天骄' 字段 v222 已删 —— 天选之子不再由「条目封号」这一支产生，
      只由设定里点名的具名角色首次登场时直接写 '天骄' 字段。 */
   return { tier: tier, name: TIANJIAO_TIERS[tier] };
@@ -2584,8 +2586,8 @@ function tianjiaoOf(rootQuality, bloodRank) {
 function tianjiaoInfoOf(charObj) {
   if (!charObj || typeof charObj !== 'object') return { tier: 0, name: TIANJIAO_TIERS[0] };
   xzNormTermKeys(charObj);
-  /* ★ v296：不再传「三件品阶」—— 装备路线已取消，只看血脉。 */
-  return tianjiaoOf('', (charObj.血脉 && charObj.血脉.品阶) || '无');
+  /* ★ v296：不再传「三件品阶」—— 装备路线已取消，只看灵根。 */
+  return tianjiaoOf('', (charObj.灵根 && charObj.灵根.品阶) || '无');
 }
 var PROF_LEVELS = [
   { min: 80, name: '圆满', bonus: 0.10 },
@@ -2672,7 +2674,7 @@ function daoProfOf(statData, style) { return { value: 0, name: '生疏', bonus: 
 function daoOfSkillName(name) {
   try { var t = (typeof SKILL_TABLE !== 'undefined' && SKILL_TABLE[name]) ? SKILL_TABLE[name] : null; return t ? daoNameOf(t.流派) : ''; } catch (e) { return ''; }
 }
-// 血脉不再有「面板百分比加成」模型（血脉增益由 v43 血脉块按 品阶×纯度 结算），故无 omenBonus。
+// 灵根不再有「面板百分比加成」模型（灵根增益由 v43 灵根块按 品阶×纯度 结算），故无 omenBonus。
 // 出战灵宠：同一时间只取第一只 出战=true 的
 
 // v40：七属性专属伤害表现（视觉层，挂载在命中时）——「金」已删
@@ -2923,10 +2925,10 @@ function xzScrollRestore() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ★★★ v283：'xzNormTermKeys' 的别名表**整段删除** ★★★
+   ★★★ v551：'xzNormTermKeys' 的别名表**只剩一条** ★★★
    ───────────────────────────────────────────────────────────────────────────
    它原来是 v43 的「玄幻术语改名」兼容层，把更早的名字搬到当时的名字上：
-       灵根 → 玄元属性 ✔（这一条是对的，保留）
+       灵根 → 玄元属性 ✘（v551 起必须删 —— 见下）
        装备功法 → 装备玄技 ✘
        装备心法 → 装备玄诀 ✘
        装备法宝 → 装备武器 ✔（保留）
@@ -2934,19 +2936,59 @@ function xzScrollRestore() {
        老存档被读进来时，内存里凭空多出 '装备玄技' / '装备玄诀'，
        于此后任何一处读它都能命中，「旧字段还在用」的假象就是这么来的。
        用户口径：「不要兼容旧存档了，改的暴力点」。
-   ⇒ 只留 '灵根 → 玄元属性' 与 '法宝 → 装备武器' 这两条**现行字段**的归一。
-      废除的字段一个都不许在这里被造出来。
-   ═══════════════════════════════════════════════════════════════════════════ */
+
+   ★★★ v551（用户 2026-11-07）：「把血脉改成灵根吧，刚好完美对应」★★★
+     旧的第一条 `['玄元属性', '灵根']` 现在**会把新字段吃掉**：
+     灵根已改成一个对象 `{名称,品阶,纯度,效果}`，而玄元属性是字符串（火/冰/雷…）。
+     只要老存档或某处遗留一个 `灵根` 键，这条兼容就会把**对象**盖到
+     玄元属性上 —— 属性系别当场消失，且不报错。这不是兼容，是数据污染。
+     ⇒ 整条删掉。灵根就是灵根，不再往玄元属性上搬。
+
+   ★★★ v551 第二节：`血脉 → 灵根`（**唯一跨名字搬家的那一条**，作者 2026-11-07 拍板）★★★
+     上面删掉 `灵根 → 玄元属性` 与这里新加的 `血脉 → 灵根` 看着像同一件事，方向正好相反：
+       · 删掉的那条把**对象**往**字符串**字段上搬 ⇒ 必然毁数据；
+       · 这条把**对象**搬到**同形状的对象**字段上（姓名/品阶/纯度/效果 四项全对得上）
+         ⇒ 唯一要做的是把品阶那六个旧值翻成新值，其余原样。
+     为什么不搬就会静默掉档（作者问过，选了"加旧档迁移"）：
+       老存档里是 `主角信息.血脉 = {名称:'紫晶帝血', 品阶:'帝血', 纯度:96, 效果:'…'}`，
+       新 schema 只认 `灵根`。MVU 用 `z.object` 补全 ⇒ 平白长出一个**默认灵根**
+       （山野散根 / 伪灵根 / 纯度 10），老那份 `血脉` 变成没人读的野字段。
+       玩家看到的是：气血上限少一截、天骄档掉两级，而**没有任何报错**。
+     ⚠ 只在 `灵根` 为空时才搬 —— 新档、已搬过的档一律不覆盖（幂等）。
+     ⚠ 六个旧品阶必须逐字命中才算数：万一老档里品阶是别的写法（模型自由发挥过），
+       就保留原串不硬翻，宁可让新档读到「认不出的品阶」（引擎会当 0 定额），
+       也不要把「神血」这种顶档错译成伪灵根。 */
+var XZ_ROOT_RANK_RENAME = {
+  '凡血': '伪灵根', '灵血': '四灵根', '王血': '三灵根',
+  '圣血': '双灵根', '帝血': '天灵根', '神血': '圣灵根'
+};
+function xzRootRankRename(v) {
+  var s = String(v === undefined || v === null ? '' : v).trim();
+  return XZ_ROOT_RANK_RENAME[s] || s;
+}
 function xzNormTermKeys(o) {
   if (!o || typeof o !== 'object') return o;
   var A = [
-    ['玄元属性', '灵根'],
     ['装备武器', '装备法宝'],
     ['装备武器', '法宝']
   ];
   for (var i = 0; i < A.length; i++) {
     try { if (o[A[i][0]] === undefined && o[A[i][1]] !== undefined) o[A[i][0]] = o[A[i][1]]; } catch (e) {}
   }
+  /* v551：`血脉` 对象 → `灵根`（同形状，只翻品阶）。见上方第二节。 */
+  try {
+    var _oldRoot = o.血脉, _newRoot = o.灵根;
+    var _newEmpty = !_newRoot || typeof _newRoot !== 'object'
+      || (String(_newRoot.品阶 || '') === '' && String(_newRoot.名称 || '') === '');
+    if (_oldRoot && typeof _oldRoot === 'object' && _newEmpty) {
+      o.灵根 = {
+        名称: String(_oldRoot.名称 || '山野散根'),
+        品阶: xzRootRankRename(_oldRoot.品阶) || '伪灵根',
+        纯度: Math.max(0, Math.min(100, Number(_oldRoot.纯度 || 0))),
+        效果: String(_oldRoot.效果 || '')
+      };
+    }
+  } catch (eB) {}
   return o;
 }
 
@@ -2961,7 +3003,7 @@ function tianjiaoBadge(f) {
   var c = tianjiaoColor(f.tianjiao);
   /* ★ v101：压制真正进公式了，所以徽章必须说清它「意味着什么」——
      以前是纯显示，悬停只报个来历；现在它是减伤档位，得让人知道低档打它要吃亏。 */
-  /* ★ v296：不再拼「先天/人造」—— 天骄来历已删，档位只由血脉品阶决定。 */
+  /* ★ v296：不再拼「先天/人造」—— 天骄来历已删，档位只由灵根品阶决定。 */
   var tip = f.tianjiaoName
     + '｜低档天骄打你会减伤：差一级 −10% / 差两级 −20% / 差三级 −35%';
   return '<span class="' + P + '-badge" style="background:rgba(255,255,255,0.10);color:' + c + ';border:1px solid ' + c + ';" title="' + esc(tip) + '">' + esc(f.tianjiaoName) + '</span>';
@@ -3614,7 +3656,7 @@ var SKILL_LOADS = [
 
    ⇒ 引擎侧统一在**读入口**补键：'xzEffLineOf(键, 值)' 把值还原成
      '机制:数值[:手数]｜描写' 再交给 '_v75ParseEffect'。
-     **有键才补，没键原样** —— 血脉／兵器／道具的 '效果' 是**一个字符串**
+     **有键才补，没键原样** —— 灵根／兵器／道具的 '效果' 是**一个字符串**
      （没有键可借，见 21-变量结构.js 的 text("")），'_v75ParseEffect' 直接吃，
      不许在这里插一手，否则「减伤:15｜寒潭底下的旧伤」会被补成「减伤:减伤:15｜…」。
 
@@ -4999,7 +5041,7 @@ function xzSkillRole(type, pos) {
   if (/起手式|连击式|范围式|终结式|绝式|本命杀招/.test(p)) return '进攻';
   return '进攻';
 }
-var BLOOD_EFFECT_KEYS = [
+var SPIRIT_ROOT_EFFECT_KEYS = [
     /* ⚠ 顺序即优先级：**更具体的词必须排在更宽泛的词前面**（实测踩过的坑）。
        排错的后果是「残血减伤」被 '减伤' 抢先命中、错记成 dr。 */
     { re: /(残血.{0,3}减伤|血越低|垂危.{0,3}减伤|残血.{0,3}免伤)/,      key: 'lowHpDr',         cap: 0.30, txt: '血量越低减伤越高（满血为 0）' },
@@ -5027,7 +5069,7 @@ var BLOOD_EFFECT_KEYS = [
     { re: /(每回合.{0,3}回蓝|回复.{0,3}灵力|每回合.{0,3}灵力|纳灵|回蓝|恢复灵力)/, key: 'mpRegen', cap: 0.08, txt: '每回合额外回复灵力上限的' },
     /* ★★★ v323：'提速' —— 之前完全没有这条规则，「提速:18」一个字都不认。
        与招式里的 '提速' 同口径（《招式字段》第 19 行）：**写点数 = 速度点数**，
-       'unit:'flat'' ⇒ buildBloodBuffs 不除 100，直接落成点数；
+       'unit:'flat'' ⇒ buildSpiritRootBuffs 不除 100，直接落成点数；
        封顶 60 点（tempEvadeBoost / v75HasteFlat 同量级，'提速:18' 是常见档）。
        位置必须在 ~~抢先手~~ 之前 —— ~~抢先手~~ 的正则含 '先手|抢行动'，
        而「提速」不会被它命中，但「抢先」会；顺序上先具体后宽泛是本表铁律。
@@ -5053,7 +5095,7 @@ var BLOOD_EFFECT_KEYS = [
     { re: /(增伤|伤害提高|造成伤害增加|输出提高)/,                        key: 'amp',             cap: 0.25, txt: '造成的伤害提高' },
     { re: /(减伤|承伤|伤害降低|受到伤害减少|所受伤害)/,                    key: 'dr',              cap: 0.30, txt: '受到的伤害降低' },
     /* ★★★ v300：'回血' —— 四源统一格式里**唯一真正漏读**的机制名 ★★★
-       v296 定「玄技/玄诀/兵器/血脉 同一个格式：机制:数值[:手数]｜描写」，
+       v296 定「玄技/玄诀/兵器/灵根 同一个格式：机制:数值[:手数]｜描写」，
        上面这张表却是按**中文关键词**认的：'增伤' '减伤' '穿防' '暴击' '回蓝'
        '闪避' ~~'抢先手'~~ '气血上限' '灵力上限' '吸血' 十个名字刚好同时是关键词，
        所以写成 '增伤:18' 也能认出来 —— 只有 '回血' 不在任何一条正则里。
@@ -5080,14 +5122,14 @@ var HEART_WHITELIST_TERMS = [
   '提升速度', '提升暴击率', '自带破甲'
 ];
 
-/* ═══ ★ v75 血脉「效果」：自由文本 → 真数值 ════════════════════════════════════
-   —— 把 '血脉.效果' 那段中文翻译成引擎机制键，让它在 calcDamage 里真结算。
+/* ═══ ★ v75 灵根「效果」：自由文本 → 真数值 ════════════════════════════════════
+   —— 把 '灵根.效果' 那段中文翻译成引擎机制键，让它在 calcDamage 里真结算。
    认法（全部只给自己、全是增益，无任何敌方侧字段）：
      · 先按标点/顿号切成短句，每句独立认一遍，
        所以「受到伤害降低 15%，命中回复 8% 气血」能拆成两条分别生效；
      · 句里找机制键的关键词，再就近找那个百分数（'15%' / '15 ％' / '+15' 都认）；
      · 写了就按单项封顶取值，写了就一定生效 —— **玩家填什么就生效什么**。 */
-function parseBloodEffect(text) {
+function parseSpiritRootEffect(text) {
   var out = [];
   try {
     var t = String(text || '').trim();
@@ -5097,13 +5139,13 @@ function parseBloodEffect(text) {
     var seen = {};
     for (var pi = 0; pi < parts.length; pi++) {
       var seg = parts[pi];
-      /* ★ v296：血脉也走「机制串｜描写」——'｜' 之后是设定与来历，一个字都不许进正则
-         （「血脉一燃便不知痛」里的数字会被就近取成数值，那不是玩家写的强度）。 */
+      /* ★ v296：灵根也走「机制串｜描写」——'｜' 之后是设定与来历，一个字都不许进正则
+         （「灵根一燃便不知痛」里的数字会被就近取成数值，那不是玩家写的强度）。 */
       var _bb = seg.search(/[｜|]/);
       if (_bb >= 0) seg = seg.slice(0, _bb).trim();
       if (!seg) continue;
-      for (var ki = 0; ki < BLOOD_EFFECT_KEYS.length; ki++) {
-        var rule = BLOOD_EFFECT_KEYS[ki];
+      for (var ki = 0; ki < SPIRIT_ROOT_EFFECT_KEYS.length; ki++) {
+        var rule = SPIRIT_ROOT_EFFECT_KEYS[ki];
         if (!rule || !rule.re.test(seg)) continue;
         /* 就近取百分数：本句里第一个数字（带不带 % 都认）。没有数字就用封顶值的 1/3 起跳，
            免得玩家写「霸体」这种定性描述时效果凭空消失。 */
@@ -5148,33 +5190,33 @@ function parseBloodEffect(text) {
    键语义由消费点各自解释（dr 是 0~1 比例、deathImmuneHeal 是回血比例、
    trackOnStart 是拉条量、ignoreShieldPct 是破盾比例），这里只保证
    「值确实到了引擎认识的键上」。
-   ★ v284：第二个参数 'label' 是**来源标签**（血脉 / 武器 / 玄诀）。
-     原来这里硬写 'name: '血脉·效果''，于是武器的 buff 也叫「血脉·效果」，
-     现在玄诀也接进来后，三种来源在日志与面板里全部显示成血脉 —— 分不清是谁给的。
-     默认值保持「血脉·效果」不变（老调用点行为零变化）。 */
-function buildBloodBuffs(effects, label) {
+   ★ v284：第二个参数 'label' 是**来源标签**（灵根 / 武器 / 玄诀）。
+     原来这里硬写 'name: '灵根·效果''，于是武器的 buff 也叫「灵根·效果」，
+     现在玄诀也接进来后，三种来源在日志与面板里全部显示成灵根 —— 分不清是谁给的。
+     默认值保持「灵根·效果」不变（老调用点行为零变化）。 */
+function buildSpiritRootBuffs(effects, label) {
   var out = [];
-  var _lb = label || '血脉·效果';
-  /* ★★★ v484：'_fromBlood' 只在**真的是血脉**时才打 ★★★
+  var _lb = label || '灵根·效果';
+  /* ★★★ v484：'_fromSpiritRoot' 只在**真的是灵根**时才打 ★★★
      用户 2026-10-31：「玄诀，武器的效果，一个没挂上」——
      查这个问题时发现：heartBuffs / artifactBuffs 里的每一条都带着
-     `_fromBlood: true`（因为三者共用这一个装配器），于是任何按该标记
-     "只挑血脉" 的读者都会把玄诀/武器当成血脉。
-     现在按 label 判：只有 label 缺省（= 血脉那句默认名）才打标记。
+     `_fromSpiritRoot: true`（因为三者共用这一个装配器），于是任何按该标记
+     "只挑灵根" 的读者都会把玄诀/武器当成灵根。
+     现在按 label 判：只有 label 缺省（= 灵根那句默认名）才打标记。
      ⚠ 目前全仓没有读者用这个标记做过滤（v282 已删掉那批），所以它是**潜在**雷；
-       但"潜在"正是本项目最贵那类 bug 的温床 —— 谁哪天按它统计血脉条数，
+       但"潜在"正是本项目最贵那类 bug 的温床 —— 谁哪天按它统计灵根条数，
        就会拿到一个混了玄诀与武器的数。 */
-  var _isBlood = !label || String(label).indexOf('血脉') === 0;
+  var _isSpiritRoot = !label || String(label).indexOf('灵根') === 0;
   try {
     (effects || []).forEach(function (be) {
       if (!be || !be.key) return;
       var buff = {};
       /* trackOnStart 的单位是**拉条点数**（既有 60/90/120），不是百分比 ⇒ 按 ×300 折算。
-         ★ v323：'unit:'flat''（提速）在 parseBloodEffect 里就没除 100，这里**原样搬**，
+         ★ v323：'unit:'flat''（提速）在 parseSpiritRootEffect 里就没除 100，这里**原样搬**，
          再除一次就变成 0.18 点了。 */
       buff[be.key] = (be.unit === 'track') ? Math.round(be.数值 * 300) : be.数值;
       var one = { name: _lb, buff: buff };
-      if (_isBlood) one._fromBlood = true;
+      if (_isSpiritRoot) one._fromSpiritRoot = true;
       out.push(one);
     });
   } catch (eBb) { return []; }
@@ -5194,14 +5236,14 @@ function skillHasRangeAtom(atoms) { return false; }/* ★ v282 空壳：范围�
    本函数现在只汇总**三个**来源，它们都还在正常使用：
 
      ① 'f.daoBuffs'       大道特性（v71 后恒空，有意保留字段）
-     ② 'f.bloodBuffs'     血脉 '效果'（v94 接入）
+     ② 'f.spiritRootBuffs'     灵根 '效果'（v94 接入）
      ③ 'f.artifactBuffs'  武器 '效果'（v281 接入）
 
-   ⚠ 保留这个函数而**不是**连它一起删，是因为血脉与武器 '效果' 的 11 个键
+   ⚠ 保留这个函数而**不是**连它一起删，是因为灵根与武器 '效果' 的 11 个键
      （lifesteal / pierce / mpRegen / trackOnStart / hpMaxK / mpMaxK /
        ignoreShieldPct / deathImmuneHeal / onHurtHeal / lowHpDr / critDmg…）
-     **没有第二个消费口** —— 删了它，玩家在血脉与武器上填的效果会静默归零。
-   这不违背用户口径：被清掉的是「机制名」，血脉/武器/大道是另外三样东西。
+     **没有第二个消费口** —— 删了它，玩家在灵根与武器上填的效果会静默归零。
+   这不违背用户口径：被清掉的是「机制名」，灵根/武器/大道是另外三样东西。
    ────────────────────────────────────────────────────────────────────── */
 function mechBuffsOf(f) {
   var out = [];
@@ -5217,33 +5259,33 @@ function mechBuffsOf(f) {
        ③ 留着它的代价不是性能，是**误导**：任何人读到这里都会以为「大道特性还在结算」。
      ⚠ 若日后要复活大道：重新设计来源（'f.daoBuffs' 怎么填），别把这三大行照抄回来 ——
        抄回来也只是让一个恒空的 for 循环重新存在。 */
-  /* ★ v94 修：血脉 '效果' 的 15 个机制键（dr/amp/pierce/crit/critDmg/lifesteal/
+  /* ★ v94 修：灵根 '效果' 的 15 个机制键（dr/amp/pierce/crit/critDmg/lifesteal/
      onHurtHeal/lowHpDr/mpRegen/deathImmuneHeal/trackOnStart/ignoreShieldPct/evade…）
-     由 parseBloodEffect 解析、buildBloodBuffs 装进 'f.bloodBuffs'，
-     而这个函数**只读了 f.atoms 与 f.daoBuffs，压根没读 bloodBuffs**
+     由 parseSpiritRootEffect 解析、buildSpiritRootBuffs 装进 'f.spiritRootBuffs'，
+     而这个函数**只读了 f.atoms 与 f.daoBuffs，压根没读 spiritRootBuffs**
      ⇒ 12 个键解析出来、面板还显示、引擎从不消费，
-     而世界书《血脉规则》第四节**明文承诺它们进公式**（玩家填了却没反应，且零报错）。
+     而世界书《灵根规则》第四节**明文承诺它们进公式**（玩家填了却没反应，且零报错）。
      根因就是上方那段注释自称「由 mechBuffsOf() 与机制名、玄诀机制名、大道特性走同一条通道」
-     —— 大道特性那条真接了，血脉这条漏了。
-     修法：把 bloodBuffs 并进来。'_fromBlood' 标记保留，供「只认机制名」的地方过滤。 */
+     —— 大道特性那条真接了，灵根这条漏了。
+     修法：把 spiritRootBuffs 并进来。'_fromSpiritRoot' 标记保留，供「只认机制名」的地方过滤。 */
   try {
-    if (f.bloodBuffs && f.bloodBuffs.length) {
-      for (var bi = 0; bi < f.bloodBuffs.length; bi++) {
-        var bb = f.bloodBuffs[bi];
+    if (f.spiritRootBuffs && f.spiritRootBuffs.length) {
+      for (var bi = 0; bi < f.spiritRootBuffs.length; bi++) {
+        var bb = f.spiritRootBuffs[bi];
         if (!bb || !bb.buff || typeof bb.buff !== 'object') continue;
         var bcb = {};
         for (var bbk in bb.buff) bcb[bbk] = bb.buff[bbk];
-        bcb.name = bb.name || '血脉·效果';
+        bcb.name = bb.name || '灵根·效果';
         out.push(bcb);
       }
     }
   } catch (eBB) {}
   /* ★ v281：武器 '效果' 的翻译结果（artifactBuffs）也并入这条通道。
-     世界书《数值表》§效果封顶：「血脉 / 玄诀 / 武器 **共用一份**表，不要再给它们各写一套」。
-     血脉这条早在 v94 就接进来了（上面那段），**武器这条一直没接** ——
+     世界书《数值表》§效果封顶：「灵根 / 玄诀 / 武器 **共用一份**表，不要再给它们各写一套」。
+     灵根这条早在 v94 就接进来了（上面那段），**武器这条一直没接** ——
      武器 '效果' 写「穿防 20%」只解析进 artifactParsed，没有任何消费点读它。
-     接法与血脉完全一致：同一个 parseBloodEffect → 同一个 buildBloodBuffs → 同一个 mechBuffsOf，
-     所以「碎甲，穿防 20%」里的 20% 与血脉写「穿防 20%」走的是**同一份实现**，不存在两套。 */
+     接法与灵根完全一致：同一个 parseSpiritRootEffect → 同一个 buildSpiritRootBuffs → 同一个 mechBuffsOf，
+     所以「碎甲，穿防 20%」里的 20% 与灵根写「穿防 20%」走的是**同一份实现**，不存在两套。 */
   try {
     if (f.artifactBuffs && f.artifactBuffs.length) {
       for (var abi = 0; abi < f.artifactBuffs.length; abi++) {
@@ -5260,10 +5302,10 @@ function mechBuffsOf(f) {
     }
   } catch (eAB) {}
   /* ★★★ v284：玄诀 '效果' 的翻译结果（heartBuffs）也并入这条通道 ★★★
-     世界书《数值表》§效果封顶：「血脉 / 玄诀 / 武器 **共用一份**表」。
-     血脉 v94 接了、武器 v281 接了，**玄诀这一档一直没接** ——
+     世界书《数值表》§效果封顶：「灵根 / 玄诀 / 武器 **共用一份**表」。
+     灵根 v94 接了、武器 v281 接了，**玄诀这一档一直没接** ——
      它只走 7 条 'indexOf' 白名单，写「减伤 15%，穿防 20%」这种规范话术一条都不认。
-     接法与上面两段逐字同构（同一个 buildBloodBuffs 产物、同样的克隆、同样的 name 标签），
+     接法与上面两段逐字同构（同一个 buildSpiritRootBuffs 产物、同样的克隆、同样的 name 标签），
      所以 mechVal / mechSumField / calcDamage 全都自动吃到，不存在第二份结算实现。 */
   try {
     if (f.heartBuffs && f.heartBuffs.length) {
@@ -5383,10 +5425,10 @@ function _xzAllFighters() {
     return a.concat(e);
   } catch (eAF) { return []; }
 }
-/* ★★★ v282：机制下架后本函数只剩「每回合回灵」这一件**血脉效果**的事 ★★★
+/* ★★★ v282：机制下架后本函数只剩「每回合回灵」这一件**灵根效果**的事 ★★★
    原来它还负责 'f.atoms' 层数递减与 'chargeStack' 累气 —— 那两样属于机制名，已随机制名删除。
-   'mpRegen' 是血脉 '效果' 的键（《血脉规则》承诺「每回合回复灵力上限的 X%」），
-   **必须有这个消费口**，否则血脉的 回蓝 那一项会静默归零。 */
+   'mpRegen' 是灵根 '效果' 的键（《灵根规则》承诺「每回合回复灵力上限的 X%」），
+   **必须有这个消费口**，否则灵根的 回蓝 那一项会静默归零。 */
 function atomTick(f) {
   if (!f) return;
   try {
@@ -5748,13 +5790,13 @@ function xzStackTick(f) {
 
 
 /* ★★★ v282：applyAtomsOnHit 已随机制下架删除 ★★★
-   本函数只剩**血脉 / 武器 / 大道** 那一半（机制名的命中侧效果全部移除）。
+   本函数只剩**灵根 / 武器 / 大道** 那一半（机制名的命中侧效果全部移除）。
    留下的三件事都有明确出处，删了会让玩家填的效果静默归零：
-     · onHurtHeal / onHurtStack  血脉「受击回复 / 受击叠层」
-     · thornReflect               血脉·反震（挨打回震对方）
-     · lifesteal                  血脉·吸血（命中回补气血）
-   改名为 applyBloodOnHit，名字如实反映它现在管什么。 */
-function applyBloodOnHit(attacker, target, skill, dmg) {
+     · onHurtHeal / onHurtStack  灵根「受击回复 / 受击叠层」
+     · thornReflect               灵根·反震（挨打回震对方）
+     · lifesteal                  灵根·吸血（命中回补气血）
+   改名为 applySpiritRootOnHit，名字如实反映它现在管什么。 */
+function applySpiritRootOnHit(attacker, target, skill, dmg) {
   try {
     if (!attacker || !target) return;
     /* 判据：这一手确实打出去了（dmg>=0 且未被标记闪避）。
@@ -5772,7 +5814,7 @@ function applyBloodOnHit(attacker, target, skill, dmg) {
     var _ls = mechSumField(attacker, 'lifesteal');
     if (_ls > 0) {
       /* 取大者：伤害比例 与 自身气血上限的 40% 里取较大值 ——
-         否则低伤害招式吸血只有个位数，肉眼看不出「血脉生效了」。 */
+         否则低伤害招式吸血只有个位数，肉眼看不出「灵根生效了」。 */
       var _heal = Math.max(Math.round((dmg || 0) * _ls), Math.round((attacker.maxHp || 0) * _ls * 0.4));
       if (_heal > 0) {
         xzHeal(attacker, _heal);
@@ -5780,12 +5822,12 @@ function applyBloodOnHit(attacker, target, skill, dmg) {
         BattleState.logs.push('<span style="color:#68c5b2">【回春】' + esc(attacker.name) + ' 命中回补 <b>+' + _heal + '</b> 气血！</span>');
       }
     }
-    // 击杀奖励（血脉/武器的 killHeal / killMp / killTrack / killFullMp）
+    // 击杀奖励（灵根/武器的 killHeal / killMp / killTrack / killFullMp）
     if ((target.hp || 0) <= 0 && !target._atomKillClaimed) { target._atomKillClaimed = true; applyKillBuffs(attacker); }
   } catch (eBO) {}
 }
-/* ★★★ v282：原 'applyAtomKill' 的机制名部分已删，只留血脉 / 武器 / 大道的击杀收益 ★★★
-   键的出处：BLOOD_EFFECT_KEYS 无击杀键，这些来自 大道特性 与 武器 '效果' 的自由文本。
+/* ★★★ v282：原 'applyAtomKill' 的机制名部分已删，只留灵根 / 武器 / 大道的击杀收益 ★★★
+   键的出处：SPIRIT_ROOT_EFFECT_KEYS 无击杀键，这些来自 大道特性 与 武器 '效果' 的自由文本。
    删掉它等于「击杀回血 / 击杀回灵」整族静默失效，故保留并改名。 */
 function applyKillBuffs(attacker) {
   if (!attacker) return;
@@ -6180,7 +6222,7 @@ function normalizeSkillItem(s, unit) {
      没有战斗对象可查境界。那些路径下 auto 原样留着，由真正建卡时那一次还原兜住。
      这正是「唯一真源在建卡那一刻」的意思 —— 其它路径只是路过。 */
 function _normalizeSkillItemCore(s, unit) {
-  /* ★ v94：字段改名兼容 —— 玄技/玄诀的 '功能' 统一改名为 '效果'（与装备武器、血脉齐名）。
+  /* ★ v94：字段改名兼容 —— 玄技/玄诀的 '功能' 统一改名为 '效果'（与装备武器、灵根齐名）。
      老存档里写的还是旧字段名，这里**就地搬一次**，之后全工程只认 '效果'。
      就地搬的好处：老存档在第一次建卡时被自动升级，不必让玩家重开档；
      而且不会出现「一半代码读新名、一半读旧名」的半截状态 ——
@@ -6206,7 +6248,7 @@ function _normalizeSkillItemCore(s, unit) {
      ⚠⚠ 下面这里**绝对不能再去读 COEFF_CAP**：那个常量 v47 已删除（见文件上方「COEFF_CAP 已删除」），
         而这一行当年没跟着删 —— 后果是 'normalizeSkillItem' 每次都抛
         'COEFF_CAP is not defined' ⇒ 'parseEquippedSkills' 抛 ⇒ 'buildFighterFromData' 整体抛
-        ⇒ 演武只能退回兜底建卡（裸数值、**零技能**、玄技/玄诀/武器/大道/血脉/神通六源全丢）。
+        ⇒ 演武只能退回兜底建卡（裸数值、**零技能**、玄技/玄诀/武器/大道/灵根/神通六源全丢）。
         症状就是玩家那句「大家都没有技能」。凡删常量，必须同时清掉所有读点。 */
   var coeff = 1.0;
 
@@ -6436,7 +6478,11 @@ function parsePanelsFromText(text) {
     var rootParts = partsOf(rootLine);
     var rootJoined = rootParts.join('｜') || clean(rootLine);
     /* v45：**玄元属性不再有品阶** —— 只取七元素（火水木土风雷冰）。旧正文里的品阶字（双主属性/副属性/
-       单属性/杂属性/凡体，及修仙时代的天/双/三/四灵根、伪灵根）一律**当噪声丢弃**，不再解析。 */
+       单属性/杂属性/凡体）一律**当噪声丢弃**，不再解析。
+       ★ v551：灵根六档（伪/四/三/双/天/圣灵根）**不是玄元属性的品阶**，而是另立的一个字段；
+       它们照旧不进玄元属性，但各自在「灵根」那一行里被 parseSpiritRootEffect 读。
+       原来这里写的是「天/双/三/四灵根、伪灵根一律当噪声丢弃」—— v551 之后那句话会误导人
+       以为灵根是废弃概念，故只留玄元属性自己的旧品阶字。 */
     var eAttr = (rootJoined.match(/[木水火土风雷冰]/) || [])[0] || (rootJoined.indexOf('金') !== -1 ? '冰' : '火');
 
     // 四维：【6、4、6、2】
@@ -6512,30 +6558,33 @@ function parsePanelsFromText(text) {
       })() , 描述: '', 效果: parseBracketTerms(artLine).filter(function (t) { return t !== ap[0]; }) };
     }
 
-    // 血脉：【名称】｜【品阶】｜【纯度 100】｜【效果 …】（变量未落成时也能据此亮出天骄档）
-    var bloodLine = fieldLine(['血脉', '血统', '血脉品阶']);
-    var bloodParts = partsOf(bloodLine);
-    var bloodObj = null;
-    if (bloodParts.length && bloodParts[0] && bloodParts[0] !== '无') {
-      var bloodRankTxt = (bloodLine.match(/(凡血|灵血|王血|圣血|神血|帝血)/) || ['无'])[0];
-      bloodObj = { 名称: bloodParts[0], 品阶: bloodRankTxt, 纯度: -1, 效果: '', 说明: '' };
-      /* ★ v98【用户实测：翻译面板显示「血脉·山野遗血：（未写效果）」】
+    // 灵根：【名称】｜【品阶】｜【纯度 100】｜【效果 …】（变量未落成时也能据此亮出天骄档）
+    /* ★ v551：标签顺序 = 从长到短。「灵根品阶」必须排在「灵根」前面 ——
+       fieldLine 是逐标签试 `^标签\s*[:：]`，短标签先试就会把「灵根品阶：天灵根」
+       整行当成「灵根」这一行的内容吃掉，后面那条永远轮不到。 */
+    var spiritRootLine = fieldLine(['灵根品阶', '灵根', '血统']);
+    var spiritRootParts = partsOf(spiritRootLine);
+    var spiritRootObj = null;
+    if (spiritRootParts.length && spiritRootParts[0] && spiritRootParts[0] !== '无') {
+      var spiritRootRankTxt = (spiritRootLine.match(/(伪灵根|四灵根|三灵根|双灵根|圣灵根|天灵根)/) || ['无'])[0];
+      spiritRootObj = { 名称: spiritRootParts[0], 品阶: spiritRootRankTxt, 纯度: -1, 效果: '', 说明: '' };
+      /* ★ v98【用户实测：翻译面板显示「灵根·山野遗血：（未写效果）」】
          两个真缺陷，都在这一处：
-         ① **【效果 …】从来没被解析**（只取了名称与品阶）⇒ 面板派生的血脉对象
+         ① **【效果 …】从来没被解析**（只取了名称与品阶）⇒ 面板派生的灵根对象
             永远没有 '效果' 字段。下游凡是「逐字段合并变量 + 面板」的场合
             （翻译面板 xzTransCollect），面板这一侧就成了一份**残缺副本**。
          ② '纯度' 被**硬写成 0**。旧写法在变量侧有值时无所谓，可一旦它参与
             「面板非空就覆盖变量」的合并，就会把变量里真写的 100 覆盖成 0 ——
-            纯度 0 = 血脉一分不兑现（三样数字加成全归零），且**全程不报错**。
+            纯度 0 = 灵根一分不兑现（三样数字加成全归零），且**全程不报错**。
          修法：纯度**只在面板真写了数字时才取**，取不到就留 -1（明确的「未解析」哨兵，
          合并时空值不覆盖）；效果按 '【效果 …】' 原样取全文。 */
-      var _bm = String(bloodLine || '').match(/纯度\s*[:：]?\s*(\d{1,3})/);
+      var _bm = String(spiritRootLine || '').match(/纯度\s*[:：]?\s*(\d{1,3})/);
       if (_bm) {
         var _bp = parseInt(_bm[1], 10);
-        if (!isNaN(_bp)) bloodObj.纯度 = Math.max(0, Math.min(100, _bp));
+        if (!isNaN(_bp)) spiritRootObj.纯度 = Math.max(0, Math.min(100, _bp));
       }
-      var _be = String(bloodLine || '').match(/【\s*效果\s*[:：]?\s*([^】]+)】/);
-      if (_be && _be[1]) bloodObj.效果 = clean(_be[1]);
+      var _be = String(spiritRootLine || '').match(/【\s*效果\s*[:：]?\s*([^】]+)】/);
+      if (_be && _be[1]) spiritRootObj.效果 = clean(_be[1]);
     }
 
     // 面板里没写流派的，按手里的法器推断（有兵器则为对应兵器路，徒手则为体术）
@@ -6607,7 +6656,7 @@ function parsePanelsFromText(text) {
         玄诀: (heart && heart.玄技名) ? (function () { var o = {}; o[heart.玄技名] = heart; return o; })() : {}
       },
       装备武器: artifact,
-      血脉: bloodObj,
+      灵根: spiritRootObj,
       真元: (dvObj && typeof dvObj === 'object') ? dvObj : {},
       _fromPanel: true
     };
@@ -6631,8 +6680,10 @@ function parseBracketTerms(seg) {
     var v = m[1].trim();
     if (!v || skip[v]) continue;
     if (/^\d+(\.\d+)?$/.test(v)) continue;
-    /* v45：品阶字已废除，旧档正文里还可能出现，一律跳过（否则会被当成"名字"收进效果项）。 */
-    if (/^(双主属性|副属性|单属性|杂属性|凡体|无属性|天灵根|双灵根|三灵根|四灵根|伪灵根)$/.test(v)) continue;
+    /* v45：品阶字已废除，旧档正文里还可能出现，一律跳过（否则会被当成"名字"收进效果项）。
+       ★ v551：补上 圣灵根 —— 六档里它是顶档，原来那版（伪/四/三/双/天）漏了它，
+       于是「圣灵根」会被当成一个效果项收进去（真红：DLC 牧尘/清衍静就该是这一档）。 */
+    if (/^(双主属性|副属性|单属性|杂属性|凡体|无属性|伪灵根|四灵根|三灵根|双灵根|天灵根|圣灵根)$/.test(v)) continue;
     out.push(v);
   }
   return out;
@@ -6906,8 +6957,8 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
   }
 
   /* ══════════ ★★★ v284：玄诀 '效果' 的翻译器（四源里最后一环）══════════
-     世界书《数值表》§效果封顶：「血脉 / 玄诀 / 武器 **共用一份**表，不要再给它们各写一套」。
-     血脉 v94 接了、武器 v281 接了，**玄诀一直没接** —— 它只走下面 6003 起那 7 条
+     世界书《数值表》§效果封顶：「灵根 / 玄诀 / 武器 **共用一份**表，不要再给它们各写一套」。
+     灵根 v94 接了、武器 v281 接了，**玄诀一直没接** —— 它只走下面 6003 起那 7 条
      'indexOf' 白名单（提升攻击/提升防御/提升速度/提升暴击率/提升最大生命值/
      提升最大灵力值/自带破甲），白名单外的写法一条都不认。
 
@@ -6917,11 +6968,11 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
        而同一个人把同样的话写在**武器**上 ⇒ artifactBuffs=[{pierce:0.2}]，正常生效。
      也就是说「同一个语义、同一份世界书、两种命运」，差别只在哪个字段上。
 
-     接法与武器、血脉**完全同构**（这是重点：不造第四套）：
+     接法与武器、灵根**完全同构**（这是重点：不造第四套）：
        'xzSkillEffFieldOf(heartRec)' 取 '效果' 唯一字段
-         → 'parseBloodEffect' 翻成机制键
-         → 'buildBloodBuffs' 装成 buff 列表
-         → 落 'heartBuffs'，由 'mechBuffsOf' 与 bloodBuffs / artifactBuffs 并列消费。
+         → 'parseSpiritRootEffect' 翻成机制键
+         → 'buildSpiritRootBuffs' 装成 buff 列表
+         → 落 'heartBuffs'，由 'mechBuffsOf' 与 spiritRootBuffs / artifactBuffs 并列消费。
      于是 mechVal / mechSumField / calcDamage 全部**自动吃到**，一行结算代码都不用新写。
 
      ⚠ 双算闸：白名单那 7 条与翻译器有 1 处重叠（'提升暴击率'，工具/_v284_diag_overlap.cjs 实测）。
@@ -6949,8 +7000,8 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
       _heartResidualText = _heartResidualText.split(nm).join('，');
     });
     /* 只剩标点 / 空白 ⇒ 没有残余可翻，不必调用（避免空转） */
-    if (typeof parseBloodEffect === 'function' && /[\u4e00-\u9fa5A-Za-z0-9]/.test(_heartResidualText)) {
-      heartParsed = parseBloodEffect(_heartResidualText) || [];
+    if (typeof parseSpiritRootEffect === 'function' && /[\u4e00-\u9fa5A-Za-z0-9]/.test(_heartResidualText)) {
+      heartParsed = parseSpiritRootEffect(_heartResidualText) || [];
     }
   } catch (eHp) { heartParsed = []; }
 
@@ -6979,7 +7030,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
      事故：这里一直读 'rawArtifact.效果项'（另有 'rawArtifact.特效' 兜底），
      而**没有任何写入方写这两个字段** —— 07 的 artifactOf 只写 '武器名/品质/效果/描述'，
      变量表 /主角信息/装备武器 里也只有 '效果' 这一项，'效果项' 根本不是字段
-     （世界书《招式字段》：「玄技／玄诀／装备武器／血脉四源一律叫 '效果'」）。
+     （世界书《招式字段》：「玄技／玄诀／装备武器／灵根四源一律叫 '效果'」）。
      ⇒ 'artifactEffects' 恒为**空数组** ⇒ 下面那 13 个效果项消费者（提升攻击/钢筋铁骨/重负/
      孤注/回灵…）**一次都没跑过**，武器在战斗里只剩品质档那点数值。
      这正是「一个语义两个字段」的典型：校验读的和落库写的不是同一个。
@@ -6991,20 +7042,20 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
      原来它把 'COMMON_ATOM' 里认得的效果项名 'atomSet(f, t, 999)' 挂进战斗单位的机制层。
      机制名体系下架后没有 'COMMON_ATOM'、'f.atoms' 也不再被任何地方读取，
      这段只剩一个 'setTimeout' 空转。武器效果的真源是下面的 'artifactParsed'
-     （'parseBloodEffect' + 'mechBuffsOf' 通道），与这里无关。 */
+     （'parseSpiritRootEffect' + 'mechBuffsOf' 通道），与这里无关。 */
   /* ══════════ ★ v281：武器 '效果' 的翻译器（补齐三源里唯一缺的一环）══════════
-     世界书《数值表》§效果封顶写着「血脉 / 玄诀 / 武器 **共用一份**表…不要再给它们各写一套」，
+     世界书《数值表》§效果封顶写着「灵根 / 玄诀 / 武器 **共用一份**表…不要再给它们各写一套」，
      并给了写法示例：「碎甲，穿防 20%」「淬锋，增伤 15%」。
-     血脉那一路早就接上了翻译器（'parseBloodEffect' + 'BLOOD_EFFECT_KEYS'），
+     灵根那一路早就接上了翻译器（'parseSpiritRootEffect' + 'SPIRIT_ROOT_EFFECT_KEYS'），
      **武器这一路没接** —— 它只走 'parseEffectsList' 的白名单整串比对：
        · 'parseEffectsList' 只按 '[...]' 方括号切，写「碎甲，穿防 20%」整串变成**一个**效果项；
        · 再拿这一个整串去 'ARTIFACT_TERMS.indexOf()' 找 —— 永远找不到 ⇒ 整串丢弃。
      ⇒ 玩家（和 AI）照世界书写的武器效果**一条都不生效**（实测 'effects=[]'，伤害 Δ=0）。
      修法：先用同一套切句规则拆开，每一段两路认，认得的都收：
        ① 段里含白名单效果项名（碎甲/淬锋/铁壁…）→ 收该效果项名（走它自己的机制实现）
-       ② 段里是「机制 + 数值」的中文（穿防 20%/增伤 15%/减伤 15%）→ 交给 'parseBloodEffect'
-          翻成机制键，落进 'artifactParsed'，与血脉同一条结算路。
-     认不出的段不报错、不丢：原样留在效果原文里给模型看（与血脉口径一致）。 */
+       ② 段里是「机制 + 数值」的中文（穿防 20%/增伤 15%/减伤 15%）→ 交给 'parseSpiritRootEffect'
+          翻成机制键，落进 'artifactParsed'，与灵根同一条结算路。
+     认不出的段不报错、不丢：原样留在效果原文里给模型看（与灵根口径一致）。 */
   var _artEffRawText = _artifactEffectRaw();
   var artifactParsed = [];
   var artifactEffects = artifactName !== '无'
@@ -7020,7 +7071,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
            整句不在白名单 ⇒ 被下面 'artifactTermAllowed' 过滤掉 ⇒ **武器效果全丢**。
            实测（工具/_v283_diag_weapon_pierce.mjs）：
              · 效果「剑身自带破甲」⇒ artifact.effects=[]、heartPierce=0、artifactBuffs=[]
-             · 效果「穿防 20%」    ⇒ artifactBuffs=[{pierce:0.2}]（这条路走 ② parseBloodEffect，正常）
+             · 效果「穿防 20%」    ⇒ artifactBuffs=[{pierce:0.2}]（这条路走 ② parseSpiritRootEffect，正常）
            即：凡是白名单效果项**裸写在句子里**的（世界书《数值表》推荐写法之一），一条都不生效。
            修法：候选集只留 'ARTIFACT_TERMS'。白名单项才是"能收的词"，
            '_out' 里已有的东西不该反过来当候选 —— 那不是"最长匹配"，那是自我指涉。 */
@@ -7034,10 +7085,10 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
             if (t && s.indexOf(t) !== -1 && t.length > hit.length) hit = t;
           });
           if (hit && _out.indexOf(hit) < 0) _out.push(hit);
-          /* ② 段是「机制 + 数值」⇒ 交给与血脉同一个翻译器 */
-          if (typeof parseBloodEffect === 'function') {
+          /* ② 段是「机制 + 数值」⇒ 交给与灵根同一个翻译器 */
+          if (typeof parseSpiritRootEffect === 'function') {
             try {
-              var _ps = parseBloodEffect(s) || [];
+              var _ps = parseSpiritRootEffect(s) || [];
               _ps.forEach(function (pe) { artifactParsed.push(pe); });
             } catch (eAp) {}
           }
@@ -7053,8 +7104,8 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
 
 
   var hpBonus = 0, mpBonus = 0, defBonus = 0, atkBonus = 0, spdBonus = 0, critBonus = 0, pierceBonus = 0;
-  /* ══════════ v75 血脉：三样加成 + 效果（权威＝世界书《血脉规则》）══════════
-     ★ 用户口径（本轮定稿）：血脉 = 三样加成 + 一个 '效果'，
+  /* ══════════ v75 灵根：三样加成 + 效果（权威＝世界书《灵根规则》）══════════
+     ★ 用户口径（本轮定稿）：灵根 = 三样加成 + 一个 '效果'，
        但 **'效果' 现在是真数值、真结算** —— 不再是「模型自己看着办」的纯文本。
          ① 气血上限 —— 定额加成：'定额[品阶] × 纯度%'
          ② 灵力上限 —— 定额同 ①，再 ×0.6
@@ -7070,48 +7121,48 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
        不改承伤闸门；免死不白给，必须在 '效果' 里自己写出来。
      ────────────────────────────────────────────────────────────────
      ④ 的落地路径：**不写任何新结算代码**。
-       parseBloodEffect() 把一段文本翻译成引擎**已在消费**的机制键
+       parseSpiritRootEffect() 把一段文本翻译成引擎**已在消费**的机制键
        （dr / amp / pierce / crit / lifesteal / onHurtHeal / mpRegen / deathImmuneHeal …），
-       装配时打进 'bloodBuffs'，由 mechBuffsOf() 与机制名、玄诀机制名、大道特性
+       装配时打进 'spiritRootBuffs'，由 mechBuffsOf() 与机制名、玄诀机制名、大道特性
        **走同一条通道**读出 ⇒ calcDamage / applyAtomsOnHit / atomTick 全都自动吃到。
-       ⚠ 铁律：只准引用下面的 BLOOD_EFFECT_KEYS 里已登记的键。
+       ⚠ 铁律：只准引用下面的 SPIRIT_ROOT_EFFECT_KEYS 里已登记的键。
          新增机制键必须先在引擎里接上消费点（工具/audit_mechanism_keys.mjs 会查），
          否则就是「填了没反应」的死键 —— 这是本机制最大的坑，务必守住。 */
 
-  /* 品阶定额（满纯度 100）：气血；灵力 = 气血 × 0.6 —— 与世界书《血脉规则》表一字不差。 */
-  var BLOOD_HP_FLAT = { '无': 0, '凡血': 30, '灵血': 70, '王血': 120, '圣血': 190, '帝血': 260, '神血': 350 };
-  /* 血脉品阶序号（0~6）—— 只供 UI 展示与天骄档推导，不参与任何战斗结算。 */
-  var BLOOD_RANK_TIER = { '无': 0, '凡血': 1, '灵血': 2, '王血': 3, '圣血': 4, '帝血': 5, '神血': 6 };
+  /* 品阶定额（满纯度 100）：气血；灵力 = 气血 × 0.6 —— 与世界书《灵根规则》表一字不差。 */
+  var SPIRIT_ROOT_HP_FLAT = { '无': 0, '伪灵根': 30, '四灵根': 70, '三灵根': 120, '双灵根': 190, '天灵根': 260, '圣灵根': 350 };
+  /* 灵根品阶序号（0~6）—— 只供 UI 展示与天骄档推导，不参与任何战斗结算。 */
+  var SPIRIT_ROOT_RANK_TIER = { '无': 0, '伪灵根': 1, '四灵根': 2, '三灵根': 3, '双灵根': 4, '天灵根': 5, '圣灵根': 6 };
 
 
-  var bloodName = '无', bloodRank = '无', bloodPurity = 0, bloodHpFlat = 0, bloodMpFlat = 0;
-  var bloodEffectRaw = '';
-  var bloodEffects = [];          /* 认出来的效果条目 [{数值, 说明, key}]，供面板/战报/校验读 */
-  var bloodBuffs = [];            /* 装配器：注册进 f.bloodBuffs，由 mechBuffsOf 统一读出 */
+  var spiritRootName = '无', spiritRootRank = '无', spiritRootPurity = 0, spiritRootHpFlat = 0, spiritRootMpFlat = 0;
+  var spiritRootEffectRaw = '';
+  var spiritRootEffects = [];          /* 认出来的效果条目 [{数值, 说明, key}]，供面板/战报/校验读 */
+  var spiritRootBuffs = [];            /* 装配器：注册进 f.spiritRootBuffs，由 mechBuffsOf 统一读出 */
   try {
-    var _bz = (rawCharObj && rawCharObj.血脉) || (typeof pData !== 'undefined' && pData && pData.血脉) || (charObj && charObj.血脉) || null;
+    var _bz = (rawCharObj && rawCharObj.灵根) || (typeof pData !== 'undefined' && pData && pData.灵根) || (charObj && charObj.灵根) || null;
     if (_bz && typeof _bz === 'object') {
-      bloodRank = String(_bz.品阶 || '无');
-      bloodName = String(_bz.名称 || bloodRank || '无');
-      bloodPurity = Math.max(0, Math.min(100, Number(_bz.纯度 || 0)));
-      bloodEffectRaw = String(_bz.效果 || '').trim();
+      spiritRootRank = String(_bz.品阶 || '无');
+      spiritRootName = String(_bz.名称 || spiritRootRank || '无');
+      spiritRootPurity = Math.max(0, Math.min(100, Number(_bz.纯度 || 0)));
+      spiritRootEffectRaw = String(_bz.效果 || '').trim();
       /* ★ v75：从这段自由文本里认关键词 + 百分比 —— 认得出的直接加进公式。 */
-      bloodEffects = parseBloodEffect(bloodEffectRaw);
+      spiritRootEffects = parseSpiritRootEffect(spiritRootEffectRaw);
     }
   } catch (eBld) {}
-  /* ★ 有血脉才谈得上效果：纯度 0 ⇒ 前三样与效果一并一分不兑现（写都写了，血还没开）。 */
-  var bloodActive = (bloodRank !== '无' && bloodPurity > 0);
-  bloodHpFlat = bloodActive ? ((BLOOD_HP_FLAT[bloodRank] || 0) * (bloodPurity / 100)) : 0;
-  bloodMpFlat = bloodHpFlat * 0.6;
-  bloodBuffs = bloodActive ? buildBloodBuffs(bloodEffects) : [];
-  /* 血脉名 + 效果签进常驻列表：详情面板与卡片 buff 栏都从这里取（不带回合数）。 */
-  var bloodPassives = bloodActive
-    ? ['血脉·' + bloodName + '（' + bloodRank + ' ' + bloodPurity + '%）'] : [];
-  bloodEffects.forEach(function (be) {
-    bloodPassives.push('血脉·' + be.txt);
+  /* ★ 有灵根才谈得上效果：纯度 0 ⇒ 前三样与效果一并一分不兑现（写都写了，血还没开）。 */
+  var spiritRootActive = (spiritRootRank !== '无' && spiritRootPurity > 0);
+  spiritRootHpFlat = spiritRootActive ? ((SPIRIT_ROOT_HP_FLAT[spiritRootRank] || 0) * (spiritRootPurity / 100)) : 0;
+  spiritRootMpFlat = spiritRootHpFlat * 0.6;
+  spiritRootBuffs = spiritRootActive ? buildSpiritRootBuffs(spiritRootEffects) : [];
+  /* 灵根名 + 效果签进常驻列表：详情面板与卡片 buff 栏都从这里取（不带回合数）。 */
+  var spiritRootPassives = spiritRootActive
+    ? ['灵根·' + spiritRootName + '（' + spiritRootRank + ' ' + spiritRootPurity + '%）'] : [];
+  spiritRootEffects.forEach(function (be) {
+    spiritRootPassives.push('灵根·' + be.txt);
   });
   /* ★ 效果原文本身也留在常驻列表里：认不出的那半句仍要给模型看（叙事自由）。 */
-  if (bloodEffectRaw) bloodPassives.push('血脉·效果：' + bloodEffectRaw);  var allPassives = heartEffects.concat(artifactEffects).concat(bloodPassives);
+  if (spiritRootEffectRaw) spiritRootPassives.push('灵根·效果：' + spiritRootEffectRaw);  var allPassives = heartEffects.concat(artifactEffects).concat(spiritRootPassives);
 
 
 
@@ -7123,7 +7174,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
        'ARTIFACT_TERMS' 现在是 16 个机制名，'artifactEffects' 只可能装机制名，
        而那段检查的 13 个意象名（钢筋铁骨/灵台空明/迅影/血怒/重负…）一个都进不来
        ⇒ 那 13 个 'if' 永远为假，是纯死代码。武器效果的真源是 'artifactParsed'
-       → 'buildBloodBuffs' → 'mechBuffsOf'（与血脉、玄诀共用一条路），不在这里。 */
+       → 'buildSpiritRootBuffs' → 'mechBuffsOf'（与灵根、玄诀共用一条路），不在这里。 */
   heartEffects.forEach(function(eff) {
     if (eff.indexOf('提升最大生命值') !== -1) hpBonus += 0.10 * (heartRank || 1);
     if (eff.indexOf('提升最大灵力值') !== -1) mpBonus += 0.10 * (heartRank || 1);
@@ -7156,13 +7207,13 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
 
   /* ══════════════ v94：气血 / 灵力**一律读变量**，脚本不再自己算 ══════════════
      正文 AI 已经按《骰子战斗系统》第一阶段算好并落进变量：
-       '气血上限 =（大境界基数 + 体质×4 + 血脉生命加成）× 8'
-       '灵力上限 =（大境界基数×3 + 智力×3 + 血脉蓝量加成）× 4'
+       '气血上限 =（大境界基数 + 体质×4 + 灵根生命加成）× 8'
+       '灵力上限 =（大境界基数×3 + 智力×3 + 灵根蓝量加成）× 4'
      （基数表见《境界体系》第二节；练气 50 / 练气 95 / 筑基 165 … 炼虚 5500）
      而旧公式 '(300 + 体质×80) × 境界系数^2.05' 算出来是 940 —— 跟正文那套差 11 倍。
      玩家在正文里读到「这一剑削去他三成气血」，浮层却显示「-89 / 940」，
      一眼就能看出是两套东西。**以变量为准，脚本一个上限加成都不许再叠**
-     （血脉定额 / 装备 / 玄诀 / 炼体 的加成，正文那一遍已经加进上限里了，
+     （灵根定额 / 装备 / 玄诀 / 炼体 的加成，正文那一遍已经加进上限里了，
        在这里再叠一次就是双重计算）。
      变量没有值（老存档 / 首次开局尚未初始化）才落回旧公式兜底，并在战报里点名。
 
@@ -7183,7 +7234,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
 
   /* ★★★ v312：血池两条公式统一（用户 2026-10-21 授权「统一到世界书那条」）★★★
      之前这里写的是 '(300 + 体质×80) × 境界系数^2.05 × 8' —— 那是一条**谁也没见过**的式子：
-     · 世界书《境界体系》写的是 '(大境界基数 + 体质×4 + 血脉定额) × 8'
+     · 世界书《境界体系》写的是 '(大境界基数 + 体质×4 + 灵根定额) × 8'
      · 引擎兜底写的是上面那条
      两者在练气差 8.1 倍、在炼虚差 **37.2 倍**（血池按 rm^2.05 涨，而基数表按 rm^1.0 涨）。
      AI 按世界书算出的伤害用在兜底血池上 ⇒ 境界越高越打不动 ⇒ 炼虚一场要一千多刀。
@@ -7197,9 +7248,9 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
        把攻防的指数也当史料一起删掉，那一删整个数值就塌了。 */
   var _xzBaseHp = (typeof XZ_HP_BASE !== 'undefined' && XZ_HP_BASE[xzBigRealmOf(realm)])
     ? XZ_HP_BASE[xzBigRealmOf(realm)] : 50;
-  /* 血脉定额**不在这里加** —— 上面 6035 行已有 'maxHp += bloodHpFlat'（纯定额、不乘总倍率），
-     那是《数值表》「血脉品阶定额」的原始写法，这里再算一遍就是双重计数。
-     ⚠ 记一笔：'×8' 只乘「基数 + 体质×4」，血脉定额是**加法纯额**，不进总倍率。 */
+  /* 灵根定额**不在这里加** —— 上面 6035 行已有 'maxHp += spiritRootHpFlat'（纯定额、不乘总倍率），
+     那是《数值表》「灵根品阶定额」的原始写法，这里再算一遍就是双重计数。
+     ⚠ 记一笔：'×8' 只乘「基数 + 体质×4」，灵根定额是**加法纯额**，不进总倍率。 */
 
   var maxHp = _hpFromVar
     ? Math.round(_hpCapVar)
@@ -7222,23 +7273,23 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
         });
       });
     } catch (eSkAtMax) {}
-    /* ★ v75 血脉：定额只加「气血 / 灵力」两样上限（放在炼体百分比之后，口径与世界书一致）。
-       ★★ v312 修正：血脉定额必须**进括号、跟着 ×8 一起放大**。
-       前身代码是 'maxHp + bloodHpFlat'（先乘 8 再加定额），而世界书《境界体系》第 7 行写的是
-       '(基数 + 体质×4 + 血脉定额) × 8' —— 定额在括号里。差别是**8 倍**：
-       凡血 30 点，按世界书该算 240，按旧代码只算 30。
+    /* ★ v75 灵根：定额只加「气血 / 灵力」两样上限（放在炼体百分比之后，口径与世界书一致）。
+       ★★ v312 修正：灵根定额必须**进括号、跟着 ×8 一起放大**。
+       前身代码是 'maxHp + spiritRootHpFlat'（先乘 8 再加定额），而世界书《境界体系》第 7 行写的是
+       '(基数 + 体质×4 + 灵根定额) × 8' —— 定额在括号里。差别是**8 倍**：
+       伪灵根 30 点，按世界书该算 240，按旧代码只算 30。
        用户这轮的原话就是「血量本来就只看世界书」，所以以世界书为准。
        做法：把定额按 HP_TOTAL_MULT 放大后再加，等价于「进括号」。 */
-    if (bloodHpFlat > 0 && !_hpFromVar) maxHp = Math.round(maxHp + bloodHpFlat * HP_TOTAL_MULT);
-    if (bloodMpFlat > 0 && !_mpFromVar) maxMp = Math.round(maxMp + bloodMpFlat * MP_TOTAL_MULT);
-    /* ★ v75 血脉「效果」里认出来的上限类效果（气血上限/灵力上限）属建卡期属性，
+    if (spiritRootHpFlat > 0 && !_hpFromVar) maxHp = Math.round(maxHp + spiritRootHpFlat * HP_TOTAL_MULT);
+    if (spiritRootMpFlat > 0 && !_mpFromVar) maxMp = Math.round(maxMp + spiritRootMpFlat * MP_TOTAL_MULT);
+    /* ★ v75 灵根「效果」里认出来的上限类效果（气血上限/灵力上限）属建卡期属性，
        不走 calcDamage，必须在这里兑现 —— 否则面板写着「气血上限+20%」实际没变。 */
-    /* ★★★ v389：上限百分比必须**三源合并**，不能只认血脉 ★★★
+    /* ★★★ v389：上限百分比必须**三源合并**，不能只认灵根 ★★★
        现场（2026-10-24 全面检修，工具/_v389_cap_three_sources.mjs A/B 量出来的）：
-         只有血脉写 '气血上限:30'   ⇒ maxHp 13888 → **18054**（生效）
+         只有灵根写 '气血上限:30'   ⇒ maxHp 13888 → **18054**（生效）
          只有玄诀写 '气血上限:30'   ⇒ maxHp 13888 → 13888（**差额 0，一分不涨**）
          只有武器写 '气血上限:30'   ⇒ maxHp 13888 → 13888（**差额 0**）
-       而 07 的 'capPctOfDraft'（开局落盘那条路）明写着「三源合并：血脉 + 全部玄诀 + 武器，
+       而 07 的 'capPctOfDraft'（开局落盘那条路）明写着「三源合并：灵根 + 全部玄诀 + 武器，
        相加后封顶 30%」——**同一个字段，两条算路，一条认三源、一条只认一源**。
        这就是本项目头号事故形状「同一件事两处实现只改一处」的又一次复发。
 
@@ -7256,7 +7307,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
          hpMaxK / mpMaxK 是这张表里仅剩的两个漏网之鱼。 */
     (function () {
       var _hpKSum = 0, _mpKSum = 0;
-      [bloodEffects, artifactParsed, heartParsed].forEach(function (list) {
+      [spiritRootEffects, artifactParsed, heartParsed].forEach(function (list) {
         (list || []).forEach(function (be) {
           if (!be) return;
           if (be.key === 'hpMaxK') _hpKSum += Number(be.数值) || 0;
@@ -7270,14 +7321,14 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
     })();
   }
   var defVal = Math.round((15 + con * DEF_BASE_COEF) * Math.pow(realmMult, DEF_REALM_EXP) * (1 + defBonus));
-  /* ★★★ v323：'提速:X'（血脉/玄诀/武器）—— 常驻速度点数，必须在算 baseSpd **之前**求出来。
-     三源写 '提速:18' 以前一条都不认（BLOOD_EFFECT_KEYS 里没这条规则）。
+  /* ★★★ v323：'提速:X'（灵根/玄诀/武器）—— 常驻速度点数，必须在算 baseSpd **之前**求出来。
+     三源写 '提速:18' 以前一条都不认（SPIRIT_ROOT_EFFECT_KEYS 里没这条规则）。
      口径按《招式字段》第 19 行：**点数**，不是百分比（'提速:3' = 快 3 点速）。
      ⚠ 不调 'xzRecalcSpd'：它要求 'f.baseSpd'，此刻 fighter 对象还没造出来。
        直接并入 baseSpd 公式，与 'spdBonus' 同一条式子。 */
   var _hasteFlatSum = 0;
   try {
-    [bloodEffects, artifactParsed, heartParsed].forEach(function (list) {
+    [spiritRootEffects, artifactParsed, heartParsed].forEach(function (list) {
       (list || []).forEach(function (be) {
         if (be && be.key === 'hasteFlat') _hasteFlatSum += Number(be.数值) || 0;
       });
@@ -7289,7 +7340,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
 
   /* ★ v45：品阶废除 —— 不再有「先天属性档次」带来的暴击加成，暴击只由玄技/玄诀/武器给。 */
   /* ★ v119b（用户实测：「我暴击率是 0，怎么算出来的？」）——**根因在这里**：
-     旧写法只有 （来自武器/效果项/血脉），**没有基础值** ⇒ 没堆暴击的角色
+     旧写法只有 （来自武器/效果项/灵根），**没有基础值** ⇒ 没堆暴击的角色
       ⇒  恒假 ⇒ **暴击永远不会发生**，而查看面板还老实显示 0%。
      这不是显示问题，是机制对绝大多数角色**整体失效**（又一处「摆设」）。
      ⇒ 补 5% 基础暴击；仍封顶 75%。
@@ -7297,13 +7348,13 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
        （calcDamage 里没有任何骰子结果可读）⇒ 引擎只能做概率判定。要不要把暴击改成
        「由正文骰子结果直接指定」，得在翻译块里带一个字段，属于接口级改动，另议。 */
   var critRate = Math.min(0.75, 0.05 + critBonus);
-  /* ★★★ v323：'抗暴:X' 写在血脉/玄诀/武器上 —— 与被动 '灵台空明' 同一条路。
-     之前白名单里有 '抗暴'，BLOOD_EFFECT_KEYS 里却没有对应规则 ⇒ 写了零生效。
+  /* ★★★ v323：'抗暴:X' 写在灵根/玄诀/武器上 —— 与被动 '灵台空明' 同一条路。
+     之前白名单里有 '抗暴'，SPIRIT_ROOT_EFFECT_KEYS 里却没有对应规则 ⇒ 写了零生效。
      落点选 'v94AntiCrit'：'xzCritRateOf(f, defender)' 就在读它（守方侧扣暴击率），
      所以「面板」和「引擎」自动同一份，不用再接第二个消费口。 */
   var _antiCritSum = 0;
   try {
-    [bloodEffects, artifactParsed, heartParsed].forEach(function (list) {
+    [spiritRootEffects, artifactParsed, heartParsed].forEach(function (list) {
       (list || []).forEach(function (be) {
         if (be && be.key === 'antiCrit') _antiCritSum += Number(be.数值) || 0;
       });
@@ -7359,9 +7410,9 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
   var noWeapon = !!NON_WEAPON[weaponType];
   var tjInfo = { tier: 0, name: TIANJIAO_TIERS[0], from: '' };
   var tjCharObj = rawCharObj || charObj;
-  // 变量里没有血脉、但正文 <人物面板> 写了 → 用面板补足，天骄档照样能亮（不改动变量对象）
-  if (!isPlayer && panelObj && panelObj.血脉 && !(tjCharObj && tjCharObj.血脉)) {
-    tjCharObj = Object.assign({}, tjCharObj || {}, { 血脉: panelObj.血脉 });
+  // 变量里没有灵根、但正文 <人物面板> 写了 → 用面板补足，天骄档照样能亮（不改动变量对象）
+  if (!isPlayer && panelObj && panelObj.灵根 && !(tjCharObj && tjCharObj.灵根)) {
+    tjCharObj = Object.assign({}, tjCharObj || {}, { 灵根: panelObj.灵根 });
   }
   try { tjInfo = tianjiaoInfoOf(tjCharObj); } catch (eTJ) {}
   var factionName = String((rawCharObj && rawCharObj.势力) || '');
@@ -7483,7 +7534,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
          的典型形状，比留一个没人读的字段危险得多。 */
     isPet: false,
     petKey: null,
-    /* ★ 先天气运已下线（现为血脉，增益由 v43 血脉块按 品阶×纯度 结算，无面板百分比模型），
+    /* ★ 先天气运已下线（现为灵根，增益由 v43 灵根块按 品阶×纯度 结算，无面板百分比模型），
        故 omenBonus 恒为零对象，仅保留字段以兼容下游读取。 */
     omenBonus: { A: 0, D: 0, H: 0, C: 0, S: 0, names: [] },
     heartProf: heartProf,
@@ -7533,25 +7584,25 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
     heartPierce: pierceBonus,
     artifactDmgAmp: artifactDmgAmp,
     artifactAmpPool: artifactAmpPool,
-    /* ★ v72 血脉：只暴露「品阶档 / 名称 / 纯度 / 效果」给 UI 与战报读。
-       bloodImmortal / bloodCrossAmp / bloodMitigate 已随 v44/v45 越级机制一并下架。 */
-    bloodEffect: bloodEffectRaw,      /* ★ v75：效果原文（面板显示用） */
-    /* ★ v235：血脉是否真的兑现（品阶非无 且 纯度 > 0）——
+    /* ★ v72 灵根：只暴露「品阶档 / 名称 / 纯度 / 效果」给 UI 与战报读。
+       spiritRootImmortal / spiritRootCrossAmp / spiritRootMitigate 已随 v44/v45 越级机制一并下架。 */
+    spiritRootEffect: spiritRootEffectRaw,      /* ★ v75：效果原文（面板显示用） */
+    /* ★ v235：灵根是否真的兑现（品阶非无 且 纯度 > 0）——
        面板要能区分「认出来了但没生效」与「压根没认出来」。 */
-    bloodActive: bloodActive,
-    bloodEffectRaw: bloodEffectRaw,
-    bloodEffects: bloodEffects,       /* ★ v75：认出来的效果条目（数值面板/战报/校验读这个） */
-    bloodBuffs: bloodBuffs,           /* ★ v75：注册进统一机制通道，calcDamage 直接吃 */
-    bloodTier: (typeof BLOOD_RANK_UI !== 'undefined') ? (BLOOD_RANK_UI[bloodRank] || 0) : 0,
-    bloodRank: bloodRank,
-    血统品阶: bloodRank,
-    /* ★ v59：详情弹层要显示血脉名与纯度 —— 原来只有品阶挂了上去，名字/纯度无处可读 */
-    bloodName: bloodName,
-    bloodPurity: bloodPurity,
+    spiritRootActive: spiritRootActive,
+    spiritRootEffectRaw: spiritRootEffectRaw,
+    spiritRootEffects: spiritRootEffects,       /* ★ v75：认出来的效果条目（数值面板/战报/校验读这个） */
+    spiritRootBuffs: spiritRootBuffs,           /* ★ v75：注册进统一机制通道，calcDamage 直接吃 */
+    spiritRootTier: (typeof SPIRIT_ROOT_RANK_UI !== 'undefined') ? (SPIRIT_ROOT_RANK_UI[spiritRootRank] || 0) : 0,
+    spiritRootRank: spiritRootRank,
+    血统品阶: spiritRootRank,
+    /* ★ v59：详情弹层要显示灵根名与纯度 —— 原来只有品阶挂了上去，名字/纯度无处可读 */
+    spiritRootName: spiritRootName,
+    spiritRootPurity: spiritRootPurity,
     str: str, agi: agi, con: con, intVal: intVal,
     spd: baseSpd,
     baseSpd: baseSpd,
-    /* ★★★ v323：'抗暴:X'（血脉/玄诀/武器）。'xzCritRateOf(f, defender)' 已经在读它，
+    /* ★★★ v323：'抗暴:X'（灵根/玄诀/武器）。'xzCritRateOf(f, defender)' 已经在读它，
        所以填了就在判定里真扣守方暴击率，面板也同一份 —— 不新增第二个消费口。 */
     v94AntiCrit: _antiCritSum,
     trackDistance: 0,
@@ -7608,23 +7659,23 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
       raw: (function () { try { return String(_artifactEffectRaw() || ''); } catch (eAr) { return ''; } })()
     },
     /* ★ v281：武器 '效果' 里「机制 + 数值」那半（穿防 20% / 增伤 15% / 减伤 15%…）
-       经 parseBloodEffect 翻成机制键，再用与血脉**同一个** buildBloodBuffs 装成 buff 列表。
-       消费端在 mechBuffsOf（与 bloodBuffs 并列），所以 mechVal / mechSumField 全部自动吃到。 */
+       经 parseSpiritRootEffect 翻成机制键，再用与灵根**同一个** buildSpiritRootBuffs 装成 buff 列表。
+       消费端在 mechBuffsOf（与 spiritRootBuffs 并列），所以 mechVal / mechSumField 全部自动吃到。 */
     artifactBuffs: (function () {
       try {
         return (artifactName !== '无' && artifactParsed.length)
-          ? buildBloodBuffs(artifactParsed, '武器·效果') : [];
+          ? buildSpiritRootBuffs(artifactParsed, '武器·效果') : [];
       } catch (eAb) { return []; }
     })(),
     /* ★★★ v284：玄诀 '效果' 里「机制 + 数值」那半（穿防 20% / 增伤 15% / 减伤 15%…）。
-       与上面 artifactBuffs **完全同构**：同一个 parseBloodEffect → 同一个 buildBloodBuffs
+       与上面 artifactBuffs **完全同构**：同一个 parseSpiritRootEffect → 同一个 buildSpiritRootBuffs
        → 同一个 mechBuffsOf。四源共用一份实现，不造第四套。
        ⚠ 这个字段原来不存在 —— 玄诀是四源里唯一没有翻译器的一档。实测缺口：
          玄诀效果写「减伤 15%，穿防 20%」⇒ passive.effects 里只有**整串原文**、
          heartPierce=0、mechBuffsOf 一条不进；把同一句写在武器上却正常生效。 */
     heartBuffs: (function () {
       try {
-        return (heartName && heartParsed.length) ? buildBloodBuffs(heartParsed, '玄诀·效果') : [];
+        return (heartName && heartParsed.length) ? buildSpiritRootBuffs(heartParsed, '玄诀·效果') : [];
       } catch (eHb) { return []; }
     })(),
     alive: true,
@@ -7646,13 +7697,13 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
           var ad = (typeof atomOf === 'function') ? atomOf(an) : null;
           if (ad && ad.shieldNow) s += Number(ad.shieldNow) || 0;
         });
-        /* ★★★ v323：'护盾:X' 写在血脉/玄诀/武器上 = **开场就有的护盾**（气血上限的 X%）。
-           之前这三源写 '护盾' 一个字都不认（BLOOD_EFFECT_KEYS 里没这条规则），
+        /* ★★★ v323：'护盾:X' 写在灵根/玄诀/武器上 = **开场就有的护盾**（气血上限的 X%）。
+           之前这三源写 '护盾' 一个字都不认（SPIRIT_ROOT_EFFECT_KEYS 里没这条规则），
            而它又在武器方向白名单里 ⇒ 玩家照世界书写了，面板亮着，盾是 0。
            与 hpMaxK / mpMaxK 同一类：装配期属性，不在 calcDamage 里，必须在这里兑现。
            封顶 50%（与 xzShieldSet 的 SHIELD_CAP_RATIO 同额，技能侧也走那个出口）。 */
         var _shPct = 0;
-        [bloodEffects, artifactParsed, heartParsed].forEach(function (list) {
+        [spiritRootEffects, artifactParsed, heartParsed].forEach(function (list) {
           (list || []).forEach(function (be) {
             if (be && be.key === 'shieldMaxPct') _shPct += Number(be.数值) || 0;
           });
@@ -7799,7 +7850,7 @@ function buildPetFighter(pet, side, statData, ownerName) {
     trackDistance: 0,
     skills: skills,
     battleItems: [],
-    passive: { name: (pet.种族 || '妖兽') + '血脉', quality: qName, qualityRank: qRank, effects: effList, desc: '灵宠血脉' },
+    passive: { name: (pet.种族 || '妖兽') + '灵根', quality: qName, qualityRank: qRank, effects: effList, desc: '灵宠灵根' },
     artifact: { name: '无', quality: '黄阶', qualityRank: 0, effects: [] },
     alive: true,
     isDefending: false,
@@ -7842,7 +7893,7 @@ function writeTianjiaoOf(allies, enemies, statData) {
     (allies || []).concat(enemies || []).forEach(function (f) {
       if (!f || f.isPet) return;
       if (f.isPlayer) {
-        /* ★ v296：天骄来历已删（天骄只由血脉决定），这里不再写那半截。 */
+        /* ★ v296：天骄来历已删（天骄只由灵根决定），这里不再写那半截。 */
         if (z) { z.天骄 = f.tianjiaoName || '非天骄'; wrote++; }
         return;
       }
@@ -7952,7 +8003,7 @@ function prepareBattle(allyNames, enemyNames) {  var statData = getRawStatData()
   });
 
   /* ★ v87 战前效果翻译：装配完双方之后，把翻译出来的**常驻**效果
-     （血脉 / 装备 / 玄诀）一次性施加到各自单位上。招式效果不在这里 —— 它在
+     （灵根 / 装备 / 玄诀）一次性施加到各自单位上。招式效果不在这里 —— 它在
      calcDamage 里按「谁出哪一门招」实时并入（见 calcDamage 的 _xzTrAtoms）。
      ⚠ 全程**不调模型**（装配是同步流程，等不了 Promise）；没有翻译就什么也不做，
      退回 v86 的自然语言兜底，绝不因此开不了战。
@@ -9889,7 +9940,7 @@ function dispelTempBuffs(f) {
      等它自然过期 = 这张牌在这个时机毫无意义，而玩家根本看不出是引擎没做。
 
      ── 只清「临时」、不清常驻 ────────────────────────────────────────
-     '_xzPerm' 那条通道（玄诀/武器/血脉给的整场加成）是**被动**，不是"对面刚挂上去的"，
+     '_xzPerm' 那条通道（玄诀/武器/灵根给的整场加成）是**被动**，不是"对面刚挂上去的"，
      驱散它等于拆人家的建卡；本表历来只清带 rounds 的临时状态，这条口径不改。
 
      ── 提速清掉必须重算速度 ──────────────────────────────────────────
@@ -10811,7 +10862,7 @@ function showDivineFx(actor, skill, target) {
    时序制没有「回合」，只有「手」—— 跑得快的人一回合出好几手。
    所以一切持续效果的单位是「手」（接下来几手），递减挂在每次出手上。
 
-   【规范语法】外置 AI 战前把玄技/玄诀/装备/血脉的效果翻译成这个格式：
+   【规范语法】外置 AI 战前把玄技/玄诀/装备/灵根的效果翻译成这个格式：
      类型:数值[:手数]      多条用 ; ；或换行分隔
      数值带 % = 百分比；不带 = 绝对值（伤害/治疗/护盾/灼烧区分，修饰类一律百分数）
 
@@ -10835,7 +10886,7 @@ function showDivineFx(actor, skill, target) {
    因为**AI 只看得见世界书，玩家也只看得见正文**。引擎必须向它对齐，不能另立一套。
 
    语法：'类型:数值[:手数]'，多条用 '；' 或 ',' 分隔。数值带 '%' = 百分比，不带 = 绝对值。
-   **省略手数 = 整场有效**（血脉 / 武器 / 玄诀 的常驻被动）；写了手数 = 只持续 N 手。
+   **省略手数 = 整场有效**（灵根 / 武器 / 玄诀 的常驻被动）；写了手数 = 只持续 N 手。
 
    ★ 为什么没有「攻击」「防御」：
      本作的伤害是招式 '效果' 里**写死的绝对值**（v80 定档，战斗中一律不重算）。
@@ -11881,11 +11932,11 @@ function _v75ParseEffect(text) {
 
 /* ═══════════════════════════════════════════════════════════════════
    ★★ v87 战前效果翻译管线
-   （用户要求：战斗前调动 AI 把玄技/玄诀/装备/血脉的**全部效果**翻译成
+   （用户要求：战斗前调动 AI 把玄技/玄诀/装备/灵根的**全部效果**翻译成
      规范语法，再交给脚本计算；结果只存当次战斗内存，不落盘）
    ───────────────────────────────────────────────────────────────────
    v86 只做了**引擎侧**的规范语法解析器（XZ_ATOM_TYPES + _v75ParseEffect），
-   上游那段翻译压根没建：玄技靠自然语言硬猜、玄诀/装备/血脉三源根本没进
+   上游那段翻译压根没建：玄技靠自然语言硬猜、玄诀/装备/灵根三源根本没进
    这条通道。本管线补上中间那一段 —— 把四源原文交给对话模型，模型按词表
    翻成 '类型:数值[:手数]'，脚本只做确定性解析，最后汇入**同一个底层**
    （_v75ParseEffect → applyV75Effects / calcDamage）。
@@ -11899,7 +11950,7 @@ function _v75ParseEffect(text) {
      人名|招式名|伤害:2500,增伤:10:3
      人名|常驻|减伤:15:3,闪避:12:2
      </效果翻译>
-   「常驻」= 血脉 / 装备 / 玄诀 的被动汇总。
+   「常驻」= 灵根 / 装备 / 玄诀 的被动汇总。
    块内直接给 JSON 也认：
      {"人名":{"skills":{"招式名":["伤害:2500"]},"passive":["减伤:15:3"]}}
    ═══════════════════════════════════════════════════════════════════ */
@@ -11920,7 +11971,7 @@ function _v75ParseEffect(text) {
      手数   → 2
      境界   → 召唤者当前境界
      四维   → 召唤者四维 ×0.6（最低 3）
-     气血   → (境界基数 + 体质×4) × 8（**无血脉定额** —— 召唤物没有血脉）
+     气血   → (境界基数 + 体质×4) × 8（**无灵根定额** —— 召唤物没有灵根）
      技能名 → 按机制给默认名（伤害→扑击、回血→自愈…）
      技能数 → 最多 3 个（与品质档「效果条数」同口径），超出丢弃并记数
      技能 0 → **拒绝召唤**（召个不会打人的东西只会站着占位）
@@ -12162,7 +12213,7 @@ function xzAtomOk(a) {
    「翻译界面，所有加气血上限和蓝量上限的，都一律不翻译出来，
      也就是翻译之后直接故意选择性不翻译出来结果，只显示别的翻译结果。」
    为什么必须在这里丢、而不是面板上过滤：
-     · 上限类机制名进战斗只会被当成**临时 buff** 往上限上叠，与血脉的「永久上限加成」
+     · 上限类机制名进战斗只会被当成**临时 buff** 往上限上叠，与灵根的「永久上限加成」
        是两套口径，同一件事两个来源必然是错的（面板一个数、结算另一个数）。
      · 而且模型几乎每次都把「气血 +N」硬翻成上限类 —— 不丢，它就会一路污染。
    丢在解析层 = 面板 / 缓存 / store / 结算四条路都拿不到它，不是"看不见"，是"不存在"。 */
@@ -12317,7 +12368,7 @@ function xzCommitTrans(map, source) {
    做法：给每个人的**效果原文**算一个短哈希（指纹，FNV-1a 32 位 → base36），
         和翻出来的机制名一起存进缓存。
           · 指纹一致 → 原文一个字没动 → **直接复用，0 调用、0 等待**
-          · 指纹不一致 → 原文被改过（换了武器 / 血脉纯度涨了 / 招式重铸了）→ 标「已过期」，要重翻
+          · 指纹不一致 → 原文被改过（换了武器 / 灵根纯度涨了 / 招式重铸了）→ 标「已过期」，要重翻
 
    存在哪：'window.__XZ_TRANS_CACHE__'（内存）。跨战斗、跨楼有效，刷新页面才丢。
    为什么不落变量：缓存随时能从原文重算，不值得为它改 schema 三处
@@ -12483,7 +12534,7 @@ function xzSkillAtomsOf(name, skillName) {
   var kk = xzSkillKey(sk, skillName);
   return kk ? (sk[kk] || []) : [];
 }
-/* 某人的常驻机制名（血脉 / 装备 / 玄诀） */
+/* 某人的常驻机制名（灵根 / 装备 / 玄诀） */
 function xzPassiveAtomsOf(name) {
   var st = xzTransStore();
   var k = xzNameKey(st.byName, name);
@@ -12509,14 +12560,14 @@ function xzReadStatData() {
    事故原型（用户实测截图）：翻译面板里
      · 玄技/玄诀一条都没出现
      · 装备武器只吐了「剑身自带破甲」（纯描述），'效果' 里的数值不见了
-     · 血脉只有一整段自然语言，AI 拿不到「降低 6%」这个数
+     · 灵根只有一整段自然语言，AI 拿不到「降低 6%」这个数
    根因不是「少写了某几行」，而是**这里手写了一套直读，而引擎用的是另一套函数**：
      · 玄技/玄诀：引擎走 'learnedMapOf(obj, kind)'（含 '主角信息.' 回落一层）+
        老字段 '装备玄技/玄诀' 兜底；这里只读 'rec.已学本领[kind]' 一层 ⇒
        NPC 侧（charObj 外层还裹着 主角信息 时）恒空。
      · 装备武器：引擎认 '装备武器 || 武器'，并把 '效果' 当**唯一真身**
        （'效果项/特效' 是旧档兜底）；这里把 '描述' 也塞进原文，挤掉了真正的 '效果'。
-     · 血脉：引擎读 '血脉.效果' 后走 'parseBloodEffect' 出机制键；
+     · 灵根：引擎读 '灵根.效果' 后走 'parseSpiritRootEffect' 出机制键；
        这里原样丢自然语言，AI 只能猜。
    修法：**不许在这里另抄一份取法**，一律调引擎已有的取用函数。
    同理，NPC 还多一层来源：正文 '<人物面板>' 优先于变量 '人物列表'
@@ -12621,24 +12672,24 @@ function xzRecEffects(rec, name) {
         passiveEff.push(effTxt ? [effTxt] : []);   /* 外观不参与判定；空装备给空数组 */
       }
     }
-    /* ---- 血脉：'效果' 是机制原文，**同时把解析出的机制键/数值直接印出来**。
+    /* ---- 灵根：'效果' 是机制原文，**同时把解析出的机制键/数值直接印出来**。
        只丢自然语言的话，AI 读「皮实耐造、寻常寒暑与跌打不易落病根」这类
        修辞是读不出「受到伤害降低 6%」的；而这几个数引擎是真按机制键结算的。
-       ⚠ 血脉**可能整个对象不存在**（多数 NPC 没有血脉），此时不许吐「血脉·：（未写效果）」
-         —— 那行会让 AI 以为「此人有血脉但没效果」，凭空编一个。 */
-    var bz = rec.血脉 || null;
+       ⚠ 灵根**可能整个对象不存在**（多数 NPC 没有灵根），此时不许吐「灵根·：（未写效果）」
+         —— 那行会让 AI 以为「此人有灵根但没效果」，凭空编一个。 */
+    var bz = rec.灵根 || null;
     if (bz && typeof bz === 'object' && Object.keys(bz).length) {
       var bName = bz.名称 || '';
       var bTxt = (bz.效果 !== undefined && bz.效果 !== null && bz.效果 !== '') ? String(bz.效果) : '';
       if (bTxt || bName) {
         var bParsed = [];
         try {
-          if (bTxt && typeof parseBloodEffect === 'function') bParsed = parseBloodEffect(bTxt) || [];
+          if (bTxt && typeof parseSpiritRootEffect === 'function') bParsed = parseSpiritRootEffect(bTxt) || [];
         } catch (eB) {}
         /* ★ v245：原文只读区**只放原文**。
            （v242 我在这里加过「〔引擎识别：…〕」，把翻译结果塞进了原文区 —— 用户明确不许。
              引擎认出来什么，由战斗界面/查看界面去显示，原文区保持干净。） */
-        var bLine = '血脉·' + bName + '：' + (bTxt || '（未写效果）');
+        var bLine = '灵根·' + bName + '：' + (bTxt || '（未写效果）');
         passive.push(bLine);
         passiveEff.push(bTxt ? [bTxt] : []);   /* 没写效果 = 空数组 = 不需要翻译 */
       }
@@ -12695,10 +12746,10 @@ function xzTransCollect(statData, names) {
             var _merged = {};
             var _kk;
             for (_kk in rec) _merged[_kk] = rec[_kk];      /* 变量打底 */
-            /* ★★ v245（用户实测：「变量里血脉的效果就是有『受到伤害降低 6%』，
+            /* ★★ v245（用户实测：「变量里灵根的效果就是有『受到伤害降低 6%』，
                翻译界面原文只读区却没有」）：
                原来是「面板逐字段**覆盖**」⇒ 正文 <人物面板> 里那份**旧的/被截断的**
-               血脉效果把变量里的完整文本顶掉了 —— 于是原文区少了前半句，
+               灵根效果把变量里的完整文本顶掉了 —— 于是原文区少了前半句，
                而战斗界面读的是变量（所以那边有 6%）⇒ 两处显示不一致。
                ⇒ 改成**变量为准**：面板只补变量里**根本没有**的字段；
                   面板不参与覆盖已有值。面板新介绍的人物（变量里没有）仍照常补进来。 */
@@ -12707,15 +12758,15 @@ function xzTransCollect(statData, names) {
               if (Object.prototype.hasOwnProperty.call(_merged, _kk)
                   && _merged[_kk] !== undefined && _merged[_kk] !== null && _merged[_kk] !== '') continue;
               /* ⚠⚠ v97：**对象型字段必须再往下合并一层**，不许整块覆盖。
-                 实测症状：翻译面板显示「血脉·山野遗血：（未写效果）」，
+                 实测症状：翻译面板显示「灵根·山野遗血：（未写效果）」，
                  而变量里明明写着「受到伤害降低 6%…」。
-                 根因：正文 <人物面板> 的血脉只有「名称/品阶/纯度」三样，
-                 面板对象**非空** ⇒ 整块覆盖掉变量里那个带 '效果' 的完整血脉。
+                 根因：正文 <人物面板> 的灵根只有「名称/品阶/纯度」三样，
+                 面板对象**非空** ⇒ 整块覆盖掉变量里那个带 '效果' 的完整灵根。
                  「非空就覆盖」这个判据对标量（境界/属性）是对的，对对象就是灾难。 */
               var _pv = _po[_kk], _rv = _merged[_kk];
-              /* ⚠ v98：血脉的「纯度」是**哨兵值敏感**字段。面板解析器在没读到
+              /* ⚠ v98：灵根的「纯度」是**哨兵值敏感**字段。面板解析器在没读到
                  数字时留 -1（明确「未解析」）；旧版硬写 0。若无脑覆盖，
-                 面板的 0/-1 会把变量里真写的 100 顶掉 ⇒ 纯度 0 = 血脉一分不兑现，
+                 面板的 0/-1 会把变量里真写的 100 顶掉 ⇒ 纯度 0 = 灵根一分不兑现，
                  三样数字加成全归零，且**不报任何错**。这里只让「真数字」覆盖。 */
               if (_kk === '纯度' && (typeof _pv !== 'number' || _pv <= 0)) continue;
               if (_pv && typeof _pv === 'object' && !Array.isArray(_pv) &&
@@ -12816,7 +12867,7 @@ function xzTransPrompt(blocks) {
     '【输出格式 —— 必须严格照此写，否则脚本读不到】',
     '每行一条，固定三段，用竖线分隔：',
     '  `人名|招式名|机制名1,机制名2`',
-    '  `人名|常驻|机制名1,机制名2`   ← 不归属某一门招式的（血脉/装备/玄诀）写「常驻」',
+    '  `人名|常驻|机制名1,机制名2`   ← 不归属某一门招式的（灵根/装备/玄诀）写「常驻」',
     '完整示例（照这个样子输出）：',
     '  火岚|赤霄枪|伤害:32,灼烧:3:3',
     '  火岚|常驻|提速:3:3,减伤:6:3',
@@ -12886,10 +12937,10 @@ function xzTransPrompt(blocks) {
        （applyV75Effects 的 hpMax/mpMax）**忽略 dur、按整场累加**。
        于是模型照 prompt 写出「气血上限:20:3」，玩家以为 3 手，
        实际是整场 +20% —— 语义与玩家看到的字面不符，是"写了却不是我想要的那件事"。
-       《招式字段》第 29 行本来就定了：气血上限 / 灵力上限 **只能写在玄诀、兵器、血脉上**，
+       《招式字段》第 29 行本来就定了：气血上限 / 灵力上限 **只能写在玄诀、兵器、灵根上**，
        玄技里一个字都不许出现。⇒ 这里改成整场口径，并明确"玄技里不要写"。 */
     '· 「提高上限 / 气血上限 / 灵力上限」→ `气血上限:N` / `灵力上限:N`（**整场有效，不带手数**）。',
-    '  ⚠ 这两条只属于玄诀 / 兵器 / 血脉那一行（`人名|常驻|…`）；**招式里不要输出它们**。',
+    '  ⚠ 这两条只属于玄诀 / 兵器 / 灵根那一行（`人名|常驻|…`）；**招式里不要输出它们**。',
     '· 「受到伤害降低 N%」「更抗打」→ `减伤:N:手数`；「造成伤害提高 N%」→ `增伤:N:手数`。',
     '· 「每回合掉 N 血」→ `灼烧:N:手数`（中毒/流血/腐蚀同理）。',
     '',
@@ -12899,7 +12950,7 @@ function xzTransPrompt(blocks) {
     '输出格式（每行一条，竖线分隔，绝不写别的任何内容）：',
     '人名|招式名|机制名1,机制名2',
     '人名|常驻|机制名1,机制名2',
-    '（「常驻」= 血脉 / 装备 / 玄诀 三样的被动汇总；招式名用原文里的那门名字）',
+    '（「常驻」= 灵根 / 装备 / 玄诀 三样的被动汇总；招式名用原文里的那门名字）',
     '（一句话里有多条效果就分成多条机制名，用「,」连在同一行）',
     '',
     '--- 待翻译 ---',
@@ -13667,14 +13718,14 @@ function xzEvadeValueOf(u) {
       var keys = Object.keys(XZ_LEVEL_COEFF);
       for (var i = 0; i < keys.length; i++) { if (rn.indexOf(keys[i]) >= 0) { rIdx = i; break; } }
     } catch (eR) {}
-    /* 效果项类闪避（血脉 / 大道 / 临时）：百分比 × 20 折成点数（d20 满分 20） */
+    /* 效果项类闪避（灵根 / 大道 / 临时）：百分比 × 20 折成点数（d20 满分 20） */
     var pts = 0;
     try { pts += (Number(u && u.tempEvadeBoost) || 0) * 20; } catch (e1) {}
-    /* ★ v270：常驻闪避（武器/玄诀/血脉被动）—— 以前它写在 tempEvadeBoost 上，
+    /* ★ v270：常驻闪避（武器/玄诀/灵根被动）—— 以前它写在 tempEvadeBoost 上，
        手数 9999 永不递减，还会把招式临时闪避顶成永久。现在独立进 _xzPerm。 */
     try { pts += xzPermOf(u).evade * 20; } catch (ePerm) {}
     try {
-      (u.bloodBuffs || []).forEach(function (bb) {
+      (u.spiritRootBuffs || []).forEach(function (bb) {
         if (bb && bb.buff) pts += (Number(bb.buff.evade) || 0) * 20;
       });
     } catch (e2) {}
@@ -14200,7 +14251,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
 
      现在速度差只管**出手顺序**（行动条），闪避由两处各管一段、互不重叠：
        · 落档 d20：总值 = d20 + 品质加值 + 敏捷×0.5，落在落空档即被闪开
-       · 本层 dodgeRate：**只剩效果项类来源**（大道 / 血脉 / 主动释放的临时闪避）
+       · 本层 dodgeRate：**只剩效果项类来源**（大道 / 灵根 / 主动释放的临时闪避）
      保留效果项类是因为那些是玩家主动练出来的（镜水照影、神行百变、岚影术、闪避反斩…），
      全砍会让一整套既有效果项立刻变成死效果项。 */
   var _daoEvade = 0;
@@ -14210,18 +14261,18 @@ function calcDamage(attacker, defender, skill, isAoe) {
     });
     _daoEvade = Math.min(0.30, _daoEvade);
   } catch (eDv) {}
-  /* ★ v75 血脉闪避：机制名的 'evade' 语义是「施放后临时闪避」（tempEvadeBoost），
-     故上面刻意不读 mechSumField(defender,'evade')。血脉的闪避是**常驻**被动，
-     两者语义不同、不会重复计算，故这里单开一路 bloodEvade，与 _daoEvade 同权叠加。 */
-  var _bloodEvade = 0;
+  /* ★ v75 灵根闪避：机制名的 'evade' 语义是「施放后临时闪避」（tempEvadeBoost），
+     故上面刻意不读 mechSumField(defender,'evade')。灵根的闪避是**常驻**被动，
+     两者语义不同、不会重复计算，故这里单开一路 spiritRootEvade，与 _daoEvade 同权叠加。 */
+  var _spiritRootEvade = 0;
   try {
-    (defender.bloodBuffs || []).forEach(function (bb) {
-      if (bb && bb.buff && typeof bb.buff === 'object') _bloodEvade += Number(bb.buff.evade) || 0;
+    (defender.spiritRootBuffs || []).forEach(function (bb) {
+      if (bb && bb.buff && typeof bb.buff === 'object') _spiritRootEvade += Number(bb.buff.evade) || 0;
     });
-    _bloodEvade = Math.min(0.18, _bloodEvade);
+    _spiritRootEvade = Math.min(0.18, _spiritRootEvade);
   } catch (eBv) {}
   /* ★ v230：基础 2% 与「速度差/250」一并去掉 —— 敏捷只走落档这一条路。
-     剩下的全是**效果项类**来源：玩家练出来的（大道 / 血脉 / 主动释放的临时闪避）。 */
+     剩下的全是**效果项类**来源：玩家练出来的（大道 / 灵根 / 主动释放的临时闪避）。 */
   /* ★ v260：闪避已并入**闪避值**（xzEvadeValueOf），这里不再另掷一次独立闪避骰，
      否则就是两套机制并存（守方白赚一次额外闪避）。恒 0 保留调用点不变。 */
   var dodgeRate = 0;
@@ -14289,13 +14340,13 @@ function calcDamage(attacker, defender, skill, isAoe) {
   // v4 路线机制名：固定穿防 + 按目标状态层数穿防（按剧毒穿防／穿防暴击III／无视护盾穿防III…）
   /* ★★★ v531：这段**不再**包在 `if (isSkill)` 里 ★★★
      病历（真引擎实测，剑修·萧决 武器「穿防:20｜松纹剑脊，刃口泛青自带破甲」，
-           对手清空血脉/玄诀/武器，无任何减伤）：
+           对手清空灵根/玄诀/武器，无任何减伤）：
              普攻  [属性9          -> 54]   ← 一个破防字都没有
              招式  [属性9【破防 +20%】-> 11]  ← 有
      ⇒ 同一把剑，出招式穿防、普攻不穿防。玩家武器上那句「自带破甲」在普攻时是纯文字，
        而普攻/招式的比例因此从设计口径的 50% 掉到 41.7%（0.5 / 1.2）。
-     根因：`mechSumField(attacker,'pierce')` 读的是 **artifactBuffs / bloodBuffs / heartBuffs
-       这常驻三源**（武器、血脉、玄诀），它们跟"这招带不带穿防"毫无关系，
+     根因：`mechSumField(attacker,'pierce')` 读的是 **artifactBuffs / spiritRootBuffs / heartBuffs
+       这常驻三源**（武器、灵根、玄诀），它们跟"这招带不带穿防"毫无关系，
        却被 `isSkill` 一起挡住了。
      ⚠ 边界要分清，别合并：
        · 常驻三源的穿防 → 任何一次出手都生效（本节，含普攻）
@@ -14320,8 +14371,8 @@ function calcDamage(attacker, defender, skill, isAoe) {
         （三次出招 20→40→60，且永不回退），而**本击反而没吃到**（那一支在 calcDamage 之后才跑）。
      ⇒ 语义归位：
         · 招式（'skill.效果' / 翻译机制名）里的穿防 → 只作用于**这一击** → 并进 'skillPierce'
-        · 玄诀 / 武器 / 血脉里的穿防（常驻，dur=9999）→ 仍走 'heartPierce'（建卡期算好）
-     ⚠ 防双算：'mechSumField(attacker,'pierce')' 读的是 artifactBuffs / bloodBuffs / heartBuffs
+        · 玄诀 / 武器 / 灵根里的穿防（常驻，dur=9999）→ 仍走 'heartPierce'（建卡期算好）
+     ⚠ 防双算：'mechSumField(attacker,'pierce')' 读的是 artifactBuffs / spiritRootBuffs / heartBuffs
        （常驻三源），**不含** 'skill.效果'；'applyV75Effects' 那边非 perm 已经不写字段了
        （见 14300 一带）。所以这条是唯一来源，一加一次。
      ⚠ 只认 sub==='pierce'：'破甲' 走 'skill.effects.indexOf('破甲')' 那条老路（12774），
@@ -14375,7 +14426,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
      证据（~~'工具/_v283_diag_pierce.mjs'~~ **已不存在**；隔离四通道，真引擎量）：
        me.heartPierce = 0.40          ⇒ 伤害 78 → 78   **死**
        artifactBuffs.pierce = 0.40    ⇒ 伤害 78 → 101  活（走 mechSumField）
-       bloodBuffs.pierce = 0.40       ⇒ 伤害 78 → 101  活（同上）
+       spiritRootBuffs.pierce = 0.40       ⇒ 伤害 78 → 101  活（同上）
 
      根因：v94 换了伤害模型 —— 基数改成「招式写死的技能伤害 + 属性部分」，
      最终乘区是 'netDmg × critMult × v75BuffMult × v75DrMult × v75VulnMult × suppressMult'。
@@ -14392,7 +14443,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
 
      ⚠ 防重复（这一步必须想清楚，否则修成双加）：
        · 'mechSumField(attacker,'pierce')' 已经进了 'skillPierce' 和 '_atomPierceVuln'，
-         它读的是 artifactBuffs / bloodBuffs —— 与 heartPierce **不是同一来源**，不会撞。
+         它读的是 artifactBuffs / spiritRootBuffs —— 与 heartPierce **不是同一来源**，不会撞。
        · 'skillPierce' 里的 'fengRuiRounds'（锋锐真意 +0.20）、'_v2pierce'（绝式 40%）、
          'skill.effects.indexOf('破甲')' 也各走自己的来源，同样不与 heartPierce 重叠。
        ⇒ 只把 heartPierce 这个**独立来源**并进来，一加一次。
@@ -14634,7 +14685,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
        'allPassives.indexOf('越战越勇')'   ← 效果项名
        'eff === '焚身诀''                  ← 招式名
        'attacker.rageForm'（烈火形态）      ← 状态名，而它由【欲火】叠满触发
-     而本作的机制只有一套名字：'XZ_ATOM_TYPES' 的键 + 'BLOOD_EFFECT_KEYS' 的 key。
+     而本作的机制只有一套名字：'XZ_ATOM_TYPES' 的键 + 'SPIRIT_ROOT_EFFECT_KEYS' 的 key。
      效果项名是**给玩家看的中文标签**，招式名是**流派表里的一行**，两者都不该是 if 的判据。
 
      ⚠ 为什么整块删、而不是接线：
@@ -14852,12 +14903,12 @@ function calcDamage(attacker, defender, skill, isAoe) {
       /* ★★★ v484：'mechSumField(defender,'dr')' **已从这一行移走** ★★★
          它原来在这里被算一遍、塞进 _drSelfReduce，再由 xzDrOf 加一次；
          而 xzDrOf 现在自己读 mechSumField(f,'dr') ⇒ 留着就是**同一份减伤算两遍**
-         （血脉减伤 28% 会变成 56%，再被 0.75 封顶 ⇒ 玩家看到"面板 28%、实战 56%"）。
+         （灵根减伤 28% 会变成 56%，再被 0.75 封顶 ⇒ 玩家看到"面板 28%、实战 56%"）。
          ⇒ 口径归 xzDrOf 一处：'写了就固定生效'的减伤（dr 机制名 / 护体）由它统一读，
            这一行只保留**本次结算上下文**（预守 drNext / lowHpDr / stkDr / ignoreDr），
            由调用方作为 ctx 传给 xzDrOf。
          ⚠ 本段下面的 lowHpDr / stkDr / ignoreDr 三样也随之改写为「就地算完并入 _drSum」，
-           因为 ignoreDr 必须只作用于**守方自己的减伤总额**（含血脉/玄诀/武器那部分），
+           因为 ignoreDr 必须只作用于**守方自己的减伤总额**（含灵根/玄诀/武器那部分），
            若留在 xzDrOf 之外就削不到那 28%。 */
       /* ★ v34：减伤侧三个键（改造前全部没有读者）
            · 剑·剑罡御心  stkDr{state,per} → 按守方层数额外减伤（每场不消耗）
@@ -14874,13 +14925,13 @@ function calcDamage(attacker, defender, skill, isAoe) {
       } catch (eDr34) {}
       /* ★ v484：ignoreDr（霸王断江）改为**整额生效在 xzDrOf 里**（见那边的 ctx.ignoreDr），
          这里不再事先削减 _drSum —— 事先削的话只削到 lowHpDr/stkDr 这半，
-         守方血脉/玄诀/武器那部分照旧满额，玩家会看到「无视防御写了没用」。 */
+         守方灵根/玄诀/武器那部分照旧满额，玩家会看到「无视防御写了没用」。 */
       if (_drSum > 0) _drSelfReduce += Math.min(0.40, _drSum);   /* ★ v124：→减伤乘区（旧路被 Math.max(0,ampPool) 清零，从未生效） */
       /* ★ v448：条件减伤（低血减伤 / 高血减伤）也是**挨打时**才结算，所以在这里。
          ⚠ 与上面 '_drSum' 分开累加、各自封顶：
            '_drSum' 是「写了就固定生效」的减伤（lowHpDr / 护体 / stkDr），
            条件减伤是「随血量浮动」的。混在一起封顶会让浮动那部分被固定值挤掉。
-         ⚠ 注意：'写了就固定生效' 里的重点那一项（dr 机制名 / 血脉 / 玄诀 / 武器）
+         ⚠ 注意：'写了就固定生效' 里的重点那一项（dr 机制名 / 灵根 / 玄诀 / 武器）
            现在由 xzDrOf 自己读，不在这里 —— 否则同一份减伤算两遍（见上）。 */
       try {
         if (typeof xzCondAmpOf === 'function') {
@@ -15125,7 +15176,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
         node --check 查不出这种错（语法合法），必须靠行为级闸：自检第⑮组真跑 calcDamage。 */
   /* ★ v108：（减伤折伤）_drFoldAmp 是「自身减伤折算成增伤」的量，与增伤 buff 同乘区一并封顶。 */
   /* ★★★ v270：读「临时（手数活着才算）+ 常驻」两条通道的和，再封顶。
-     常驻来自武器/玄诀/血脉（_xzPerm），临时来自招式（v75 系列与 temp 系列）。
+     常驻来自武器/玄诀/灵根（_xzPerm），临时来自招式（v75 系列与 temp 系列）。
      以前两者共用字段，常驻的 9999 会把临时顶成永久 —— 见 xzPermOf 上方说明。 */
   /* ⚠ '_permA' 已在函数开头取（暴击那一段比这里早用），这里只留说明。
      '_permD' 于 v313 删除 —— 守方常驻项改由 xzDrOf / xzVulnOf / xzCritRateOf 在函数内部取。 */
@@ -15429,7 +15480,7 @@ function xzEffKeyOf(effKey, parsed) {
 /* ══════════════════════════════════════════════════════════════════
    ★★★ v270：常驻加成与临时加成**分通道**（用户第四次报「增益还是不递减」的真凶）
    ──────────────────────────────────────────────────────────────────
-   常驻（武器/玄诀/血脉翻出来的被动）用 'dur = XZ_TRANS_DUR(9999)' 挂在
+   常驻（武器/玄诀/灵根翻出来的被动）用 'dur = XZ_TRANS_DUR(9999)' 挂在
    **和临时增益同一组字段**上：
        常驻减伤 15%   → v75DrPct=0.15、v75DrRounds=9999
        招式减伤 30%/3手 → Math.max(0.15,0.30)=0.30，Math.max(9999,3)=9999
@@ -15545,7 +15596,7 @@ function xzCritRateOf(f, defender, opt) {
   try {
     if ((Number(f.tempCritRounds) || 0) > 0) r += Number(f.tempCritBoost) || 0.25;
     r += xzPermOf(f).crit;
-    /* 「暴击提升」三个落点：招式 effects / 玄诀·血脉 passive / 武器 artifact。
+    /* 「暴击提升」三个落点：招式 effects / 玄诀·灵根 passive / 武器 artifact。
        ★ 全覆盖探针 2026-10-14：旧口径只读 skill.effects，挂玄诀/武器的那条整条死亡。
          现在三处并检，0.45 只加一次（与 calcDamage 的 if/else-if 结构同义）。 */
     var _hit = false;
@@ -15580,9 +15631,9 @@ function xzDmgUpOf(f) {
   if (!f) return 0;
   var up = 0, down = 0;
   try {
-    /* ★★★ v484：补上常驻三源（血脉 / 玄诀 / 武器）的常驻增伤 ★★★
+    /* ★★★ v484：补上常驻三源（灵根 / 玄诀 / 武器）的常驻增伤 ★★★
        用户 2026-10-31：「玄诀，武器的效果，一个没挂上，buff里没显示」。
-       真身同 xzDrOf：'amp' 这条在 mechBuffsOf 里明明有（血脉写「增伤:22」就装成
+       真身同 xzDrOf：'amp' 这条在 mechBuffsOf 里明明有（灵根写「增伤:22」就装成
        {amp:0.22}），calcDamage 里也有一条 'mechSumField(attacker,'amp')' 折进 _drFoldAmp，
        **唯独这个函数不读它** ⇒ 面板「增伤值」恒 0。
        ⇒ 在这里一并计入，calcDamage 那边改读本函数，不各自算一份。 */
@@ -15606,12 +15657,12 @@ function xzDrOf(f, ctx) {
   if (!f) return 0;
   var v = 0;
   try {
-    /* ★★★ v484：**必须读常驻三源**（血脉 / 玄诀 / 武器）★★★
+    /* ★★★ v484：**必须读常驻三源**（灵根 / 玄诀 / 武器）★★★
        用户 2026-10-31：「没挂上，因为里面减伤值什么的没变化，都是 0」
                 「战报里说 0，然后面板里减伤值等也确实没变化」。
 
-       真身：血脉写「减伤:28」，parseBloodEffect 认出来了、buildBloodBuffs 装进
-       `f.bloodBuffs` 了、`mechBuffsOf` 也汇总了 —— **每一次都对**。
+       真身：灵根写「减伤:28」，parseSpiritRootEffect 认出来了、buildSpiritRootBuffs 装进
+       `f.spiritRootBuffs` 了、`mechBuffsOf` 也汇总了 —— **每一次都对**。
        但本函数只读 'v75DrPct'（招式临时）与 '_xzPerm.dr'（主动增益），
        两个都不收被动三源 ⇒ 面板恒 0%。
 
@@ -16314,7 +16365,7 @@ function applyV75Effects(attacker, target, skill) {
                  详见 6628 行 'heartPierce: pierceBonus' —— 那是整个战斗只算一次的东西。
 
                ── 现在的口径（与用户本意一致）──
-                 · '_isPerm'（玄诀 / 武器 / 血脉，dur = 9999）：进 heartPierce，整场有效
+                 · '_isPerm'（玄诀 / 武器 / 灵根，dur = 9999）：进 heartPierce，整场有效
                  · 招式（非 perm）：**本击有效**，在 'calcDamage' 里直接并进 'skillPierce'
                    （见 12857 一带 'skillPierce' / '_atomPierceVuln' 的合并点；**原来这里写的 '_v401SkillPierce' 全文件只有这一句注释提过，不是现役变量**），这里**一个字段都不写**
                  ⚠ 所以这一支非 perm 时只打战报，不落值 —— 别在这里补 'else' 分支，
@@ -16788,8 +16839,8 @@ function processHandBuffs(fighter) {
        翻译出「回血:5:3」后面板/播报都写着有，每手却一滴不回 ⇒ 纯摆设。这里每手结一次。
        ★ v270：常驻回血（_xzPerm.regen）每手也回，且永不耗尽（不占 v94RegenRounds）。
        ★★★ v300：**被动三源**的 '回血' 也走这里 ★★★
-       玄诀/兵器/血脉的 '效果' 写 '回血:6' 时，解析结果落在 f.heartBuffs /
-       f.artifactBuffs / f.bloodBuffs，由 mechBuffsOf 汇总 —— 那个通道里
+       玄诀/兵器/灵根的 '效果' 写 '回血:6' 时，解析结果落在 f.heartBuffs /
+       f.artifactBuffs / f.spiritRootBuffs，由 mechBuffsOf 汇总 —— 那个通道里
        'regen' 这个键**一个读者都没有**（只有 mpRegen 有 atomTick 读）。
        所以只补关键词还不够：词认出来了、buff 也装进去了，每手仍然一滴不回。
        ⇒ 这里把 mechSumField(fighter,'regen') 一并计进每手回血量。
@@ -16848,7 +16899,7 @@ function processHandBuffs(fighter) {
        与破盾/提速/减速同一节奏：**谁出手谁减一手**，到期清零。
        ⚠ 这个字段是 v401 新加的（'_pierceRounds' / '_piercePct'），
          原来招式穿防走 'heartPierce' 永久累加 —— 那条已经废弃，
-         现在只有 '_isPerm'（玄诀/兵器/血脉）才许写 'heartPierce'。 */
+         现在只有 '_isPerm'（玄诀/兵器/灵根）才许写 'heartPierce'。 */
     var _prR = (fighter._pierceRounds || 0);
     if (_prR > 0) {
       _prR -= 1;
@@ -17249,7 +17300,7 @@ function executeAttack(attacker, target, skill) {
       var _crossOne = (_aTier >= 0 && _dTier >= 0)
         ? (_dTier - _aTier === 1)
         : ((attacker.realmMult || 1) < (target.realmMult || 1));
-      /* ★ v72：血脉不再参与越级放行（v44 的 bloodCrossAmp 已下架），回到引擎自带的 15% 基准。 */
+      /* ★ v72：灵根不再参与越级放行（v44 的 spiritRootCrossAmp 已下架），回到引擎自带的 15% 基准。 */
       var _crossCapBase = 0.15;
       if (_crossOne && gateBudget > 0 && actualDmg > gateBudget) {
         var _over = actualDmg / Math.max(1, gateBudget);
@@ -17396,7 +17447,7 @@ function executeAttack(attacker, target, skill) {
        于是下面那两个分支的 'target.alive' 条件永远为假 ⇒ **锁血类技能全是死代码**。
        实测（v365，炼虚一招 2774 打满血 1160）：
          · 无免死            → hp 0，当场死
-         · 神血 免死:30（血脉 deathImmuneHeal）→ hp 348，活（这一条本来就在判死之前，所以能救）
+         · 圣灵根 免死:30（灵根 deathImmuneHeal）→ hp 348，活（这一条本来就在判死之前，所以能救）
          · 技能免死 lastStandReady → hp 0，死，且 lastStandReady 仍是 true（**从没触发过**）
        调用位置改到下面「救援块结束」之后，见那条 marked 注释。 */
     // ===== 2026-10-07 储备效果项实装：受击类 =====
@@ -18390,7 +18441,7 @@ function applySkillMultiEffects(attacker, target, skill, dmg) {
     xzTrackAdd(attacker, 60);
   }
   // ===== v4 路线机制名：受击／命中／击杀统一在这一个收口结算 =====
-  try { if (target) target.__lastDodged = false; if (typeof applyBloodOnHit === 'function') applyBloodOnHit(attacker, target, skill, dmg); } catch (eAtomH) {}
+  try { if (target) target.__lastDodged = false; if (typeof applySpiritRootOnHit === 'function') applySpiritRootOnHit(attacker, target, skill, dmg); } catch (eAtomH) {}
   // ===== ★ v34 大道·命中／释放侧：与机制名同层，走同一个收口 =====
   try { if (typeof applyDaoOnHit === 'function') applyDaoOnHit(attacker, target, skill, dmg, (arguments.length > 4 ? arguments[4] : null)); } catch (eDaoH) {}
 
@@ -19303,7 +19354,7 @@ function bridgeDeletePerson(name) {
    背景：每个 .js 是酒馆里的独立脚本条目、各自包在自己的 IIFE 里，**彼此看不见对方的
    顶层 var/function**。此前 05/07 想用 04 的函数只有两条路：写 'typeof f === 'function''
    守卫（取不到就静默降级），或去 window 上乱挂桥。结果是「取不到就悄悄不生效」——
-   用户看到的是「面板少一行数值」，日志上一个字都没有（血脉效果、招式位次都栽在这上面）。
+   用户看到的是「面板少一行数值」，日志上一个字都没有（灵根效果、招式位次都栽在这上面）。
 
    规则（从此作为项目纪律）：
      · 需要别的脚本用的函数，**必须**在这里登记；
@@ -19312,7 +19363,7 @@ function bridgeDeletePerson(name) {
      · '工具/lint.mjs' 会核对「消费方引用的名字」是否在本表里（见 lint 的 shared 段）。
    ══════════════════════════════════════════════════════════════════════════ */
 var XZ_SHARED_FNS = {
-  parseBloodEffect: parseBloodEffect,
+  parseSpiritRootEffect: parseSpiritRootEffect,
   xzPosOf: xzPosOf,
   /* ★★★ v355：效果集的「键 + 值 → 一行规范串」**必须登记** ★★★
      用户要求「整张卡看不到任何两个机制名」。存储里值只写半边（'15:2｜…'），
@@ -19344,7 +19395,7 @@ var XZ_SHARED_FNS = {
   xzBigRealmOf: xzBigRealmOf,
   /* ★ v296：'upgradeCostOf' / 'upgradeSkill' 已随重铸机制删除，不再登记
      （登记一个 undefined 只会把「静默取不到」换个地方发生）。 */
-  BLOOD_EFFECT_KEYS: (typeof BLOOD_EFFECT_KEYS !== 'undefined') ? BLOOD_EFFECT_KEYS : null,
+  SPIRIT_ROOT_EFFECT_KEYS: (typeof SPIRIT_ROOT_EFFECT_KEYS !== 'undefined') ? SPIRIT_ROOT_EFFECT_KEYS : null,
   XZ_ATOM_TYPES: (typeof XZ_ATOM_TYPES !== 'undefined') ? XZ_ATOM_TYPES : null,
   /* ★ v364：召唤物解析器 + 兜底表。**必须登记**：
      05 的招式详情/翻译面板要显示「召出来的是谁、补了哪些默认值」，
@@ -21382,7 +21433,7 @@ var XZJJ = (function () {
        ① 建卡 buildFighterFromData —— 与主战斗**同一个**装配器：
             四维/境界/玄元属性 → 攻防血速；装备玄技 → 招式（系数/效果项/机制名/位次）；
             装备玄诀 → passive.effects + 玄诀机制名；装备武器 → artifact.effects；
-            大道 → daoBuffs；血脉 → 面板（品阶×纯度，由 v43 血脉块结算）。
+            大道 → daoBuffs；灵根 → 面板（品阶×纯度，由 v43 灵根块结算）。
        ② 出手 calcDamage → applyDirectDamage → applySkillMultiEffects
             —— 与主战斗**同一条**结算链（机制名 / 大道 / 效果项 / 连环 / 反震 / 免死）。
        ③ 出手瞬间把 BattleState 的上下文（round/tickCount/allies/enemies/logs…）
@@ -21429,7 +21480,7 @@ var XZJJ = (function () {
      ★ v37：这里不再是「一堆裸数值」，而是**六份完整修士档案**。
        建卡交给真引擎（buildFighterFromData），本表只声明「这个人配了什么」：
          四维/境界/玄元属性 → 面板；玄技 → 招式；玄诀 → 常驻；武器 → 效果项；
-         大道 → 特性；血脉 → 先天禀赋。
+         大道 → 特性；灵根 → 先天禀赋。
        改这里的一行，就等于改这个人的战力构成 —— 六源全在这张表上，一眼可对账。
      ⚠ elem 是**玄元属性**（八系之一），不是流派：兵器路（剑/刀/枪/体）的招式属性写「无」，
        真引擎按 'attacker.element'（玄元属性）算克制，所以这里必须给七系之一。 */
@@ -21446,7 +21497,7 @@ var XZJJ = (function () {
 
   /* 一份档案 → 一台真战斗单位。
      ★ 关键：**所有单位都按 isPlayer=true 建卡**（不是作弊，是取完整分支）。
-       真引擎的装配器里，「大道特性 → daoBuffs」「血脉 → 面板」这两段写在
+       真引擎的装配器里，「大道特性 → daoBuffs」「灵根 → 面板」这两段写在
        'if (isPlayer)' 分支内（04:4960-4991）；按 NPC 分支建出来的单位**吃不到这两源**。
        演武每个单位都配了六源，所以要都走完整分支。
        造完把 isPlayer / name / side 复位成本局的真实口径 —— 真引擎只把它当装配参数用。 */
@@ -21581,7 +21632,7 @@ var XZJJ = (function () {
           };
         })(),
         大道: p.dao || {},
-        血脉: p.血脉 || {}
+        灵根: p.灵根 || {}
       },
       背包: {}
     };
@@ -21597,7 +21648,7 @@ var XZJJ = (function () {
     /* 本局字段（时序条 / 玄技轮转 / 展示用），真 fighter 上没有 */
     f.route = p.route || '';
     /* ★ v37：把「本局档案」挂在单位上 —— 小框的六源区块要靠它显示
-       四维 / 玄元属性 / 血脉（这三样是面板的**输入**，真 fighter 上只留了输出）。
+       四维 / 玄元属性 / 灵根（这三样是面板的**输入**，真 fighter 上只留了输出）。
        挂的是同一份引用，只读，不参与结算。 */
     f.profile = p;
     /* ★ v43：填「配置加成」字段（让 handsOf 算得清） */
@@ -21803,7 +21854,7 @@ var XZJJ = (function () {
         })(),
         artifact: (z.装备武器 && typeof z.装备武器 === 'object') ? z.装备武器 : null,
         dao: z.大道 || {},
-        血脉: z.血脉 || {},
+        灵根: z.灵根 || {},
         /* ★ v283：'装备神通' 已废除（v70 杀招层停用，parseDivineList 恒返回空），不再读它。 */
         ownSkills: learnedSkillsOf(z)
       };
@@ -21988,7 +22039,7 @@ var XZJJ = (function () {
       })(),
       artifact: c.装备武器 || null,
       dao: c.大道 || {},
-      血脉: c.血脉 || {}
+      灵根: c.灵根 || {}
     });
     if (!u) return null;
     u.side = side;
@@ -22072,7 +22123,7 @@ var XZJJ = (function () {
        根因：翻译结果的**回灌**（xzTransRestoreFromCache）原来只写在选人流程的 '_launch' 里，
        而重开走的是 'restartJJ → startJJ → newState' —— **根本不经 '_launch'**。
        于是重开后 store 是空的：
-         · 常驻（血脉/装备/玄诀）挂不上 ⇒ buff 全丢；
+         · 常驻（灵根/装备/玄诀）挂不上 ⇒ buff 全丢；
          · 招式机制名在 calcDamage 里读的**是同一个 store** ⇒ 玄技效果一起失效。
        他的怀疑完全正确，两件事是同一个原因。
 
@@ -23473,14 +23524,14 @@ var XZJJ = (function () {
                z.气血上限 = hpMax;   // ← 这里把**战斗内的**上限写回了变量
 
            而战斗内的 maxHp ≠ 变量里的上限。它是
-               「变量上限 × 常驻上限加成（血脉/玄诀/武器/翻译机制名里的 气血上限:X%）」
+               「变量上限 × 常驻上限加成（灵根/玄诀/武器/翻译机制名里的 气血上限:X%）」
            一旦把它写回变量，下一局装配就会**在这个已经被放大的基数上再乘一次**：
                1160 → 1508 → 1960 → 2548 → 3312 …（实测每局 ×1.3）
            而 '气血' 每局被写成当时的剩余值（比如 723），之后就不动了 ⇒
            玩家看到的正是「当前血一直是 723，最大生命值每次开局都不一样」。
 
            为什么这必然复发、且必须在这里堵：'气血上限' 的真源只有一个 ——
-           正文 AI 按《境界体系》算出的那个数（血池 = (大境界基数 + 体质×4 + 血脉定额) × 8）。
+           正文 AI 按《境界体系》算出的那个数（血池 = (大境界基数 + 体质×4 + 灵根定额) × 8）。
            脚本进战斗时是要**临时**加上常驻加成的，但那个加成只该活在**这一局**里，
            绝不能落回变量 —— 落回去就等于把"临时加成"洗成了"新基准"，
            而基准只增不减，玩家会一路被抬到打不动、且卡面比例全乱。
@@ -24086,29 +24137,29 @@ var XZJJ = (function () {
       out += sec('大道（' + dao.length + ' 条特性已装配）', dBody);
     }
 
-    /* ── 血脉（★ v72：只显示 名字 / 品阶 / 纯度 / 效果 —— 越级与减伤已下架）── */
-    if (f.bloodRank && f.bloodRank !== '无') {
-      out += sec('血脉', '<div style="display:flex;flex-wrap:wrap;">'
-        + chip('血脉', esc(f.bloodName || f.bloodRank), '#e8e3d3')
-        + chip('品阶', esc(f.bloodRank), '#e8c98f')
-        + (f.bloodPurity !== undefined ? chip('纯度', Number(f.bloodPurity) + '%', '#7fd2c1') : '')
+    /* ── 灵根（★ v72：只显示 名字 / 品阶 / 纯度 / 效果 —— 越级与减伤已下架）── */
+    if (f.spiritRootRank && f.spiritRootRank !== '无') {
+      out += sec('灵根', '<div style="display:flex;flex-wrap:wrap;">'
+        + chip('灵根', esc(f.spiritRootName || f.spiritRootRank), '#e8e3d3')
+        + chip('品阶', esc(f.spiritRootRank), '#e8c98f')
+        + (f.spiritRootPurity !== undefined ? chip('纯度', Number(f.spiritRootPurity) + '%', '#7fd2c1') : '')
         + '</div>'
         /* ★ v240（玩家报「效果那行下面又冒出一段 +6%…看着重复」）：
            两条是**故意分开**的 —— 上面是玩家写的原文（叙事自由），下面那条是引擎真吃的数值。
            但两行并排确实像重复 ⇒ 原文收进折叠，解析出的条目常显。 */
-        /* ★ v246（用户：「血脉原文倒是放上来啊，这里都只写个什么 +6% 受到的伤害降低6%」）：
+        /* ★ v246（用户：「灵根原文倒是放上来啊，这里都只写个什么 +6% 受到的伤害降低6%」）：
            原文**默认平铺显示**，不折叠、不替换成解析结果。
            引擎认出来的机制名另起一行标注，两者都在，谁也不顶掉谁。 */
-        + (f.bloodEffect ? ('<div style="margin-top:3px;padding:4px 8px;border-radius:5px;'
+        + (f.spiritRootEffect ? ('<div style="margin-top:3px;padding:4px 8px;border-radius:5px;'
             + 'border:1px solid rgba(201,168,106,.32);background:rgba(201,168,106,.07);'
             + 'color:#e8dcc0;font-size:11.5px;line-height:1.65;">'
-            + '<i style="font-style:normal;color:#8a8578;">原文　</i>' + esc(f.bloodEffect) + '</div>') : '')
-        /* ★★ v235（玩家报）：血脉文本里明明写了「受到伤害降低 6%」，界面上却看不到这一条。
+            + '<i style="font-style:normal;color:#8a8578;">原文　</i>' + esc(f.spiritRootEffect) + '</div>') : '')
+        /* ★★ v235（玩家报）：灵根文本里明明写了「受到伤害降低 6%」，界面上却看不到这一条。
            这里把两件事分开显示：
              ① **认出来了哪几条**（引擎真吃的数值）—— 逐条列出，玩家能和原文对上；
              ② **没兑现的原因**（纯度 0 / 品阶为无）—— 写成红字，不再静默丢弃。 */
         + (function () {
-            var ef = f.bloodEffects || [];
+            var ef = f.spiritRootEffects || [];
             var h = '';
             if (ef.length) {
               h += '<div style="display:flex;flex-wrap:wrap;margin-top:3px;">'
@@ -24125,12 +24176,12 @@ var XZJJ = (function () {
                   }).join('')
                 + '</div>';
             }
-            if (!f.bloodActive && (f.bloodEffect || ef.length)) {
+            if (!f.spiritRootActive && (f.spiritRootEffect || ef.length)) {
               h += '<div style="margin-top:2px;padding:3px 7px;border-radius:5px;'
                 + 'border:1px solid rgba(240,138,132,.45);background:rgba(240,138,132,.10);'
                 + 'color:#f0a6a0;font-size:10.5px;line-height:1.6;">'
-                + '⚠ 血脉未觉醒（品阶「' + esc(f.bloodRank || '无') + '」· 纯度 ' + Number(f.bloodPurity || 0) + '%）：'
-                + '上面这些效果<b>当前一分不兑现</b>。把「血脉.纯度」写到 1~100 才会生效。</div>';
+                + '⚠ 灵根未觉醒（品阶「' + esc(f.spiritRootRank || '无') + '」· 纯度 ' + Number(f.spiritRootPurity || 0) + '%）：'
+                + '上面这些效果<b>当前一分不兑现</b>。把「灵根.纯度」写到 1~100 才会生效。</div>';
             }
             return h;
           })());
@@ -24185,9 +24236,9 @@ var XZJJ = (function () {
        当前条 / 已出手）从这份详情里删除 —— 顶部时间轴与每张卡的时序条已经外显，
        这里不再复读。 */
     /* chip() 已提到 IIFE 级（与 sec/sub 同处），这里直接用。 */
-    /* ★ v324（用户：「血脉这里删了，下面有了就不要重复显示」）：
+    /* ★ v324（用户：「灵根这里删了，下面有了就不要重复显示」）：
        头部的 '_bl' 只服务于那枚 chip，chip 已删，定义一并撤掉。
-       血脉改由下方 'sixSourceHtml' 的「血脉」那一段**唯一一处**输出。 */
+       灵根改由下方 'sixSourceHtml' 的「灵根」那一段**唯一一处**输出。 */
     return '<div style="border:1px solid rgba(201,168,106,0.28);border-radius:8px;padding:7px 9px;background:rgba(3,13,20,0.45);">' + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;'
       + 'border-bottom:1px solid rgba(201,168,106,.28);padding-bottom:5px;">'
       + '<b style="font-size:13px;color:#e8c98f;letter-spacing:.06em;">' + esc(f.name) + '</b>'
@@ -24206,8 +24257,8 @@ var XZJJ = (function () {
           return chip('力', q.力量, '#f0a6a0') + chip('敏', q.敏捷, '#7fe0b0')
             + chip('体', q.体质, '#e6bd76') + chip('智', q.智力, '#7fa8d9');
         })()
-      /* ★ v324（用户：「血脉这里删了，下面有了就不要重复显示」）：
-         这一枚 chip 删除 —— 血脉改由下方 'sixSourceHtml' 那一段唯一输出（含品阶色与原文）。 */
+      /* ★ v324（用户：「灵根这里删了，下面有了就不要重复显示」）：
+         这一枚 chip 删除 —— 灵根改由下方 'sixSourceHtml' 那一段唯一输出（含品阶色与原文）。 */
       /* ★ v106：**「攻 / 防」这一行删掉**。
          它显示的 'atkVal / defVal' 是 **v94 之前的旧伤害模型**的两个中间量：
          v94 起基数已换成「招式写死的技能伤害 + 属性部分」，'defVal' 在
@@ -24323,7 +24374,7 @@ var XZJJ = (function () {
         + chip('品阶', '凡阶', '#e6bd76') + chip('目标', '单体', '#9fd8e8') + chip('耗灵', '无', '#7fa8d9')
         + '</div>'
         + '<div style="font-size:12px;line-height:1.6;color:#b7b8b3;margin-top:4px;">'
-        + '不开玄技，以本身修为徒手一击。<br>不吃玄技的招式效果，只走面板本身与血脉 / 玄诀 / 武器里的那部分。</div>';
+        + '不开玄技，以本身修为徒手一击。<br>不吃玄技的招式效果，只走面板本身与灵根 / 玄诀 / 武器里的那部分。</div>';
     }
     var bits = [];   /* v235：兜底用；正常走下面的小框 */
     /* ★ v106：删掉「属性」与「流派」两段。
@@ -24485,7 +24536,7 @@ var XZJJ = (function () {
   }
   /* 背包条目 → 引擎能认的**效果集**（机制名）。
      ★★★ v330【用户：「以前是丹药是这个名字就能更新，现在我们只看效果，所以改一下，
-                       道具类的描述改成效果，然后依旧和武器玄诀玄技血脉的效果格式同步。
+                       道具类的描述改成效果，然后依旧和武器玄诀玄技灵根的效果格式同步。
                        且丹药不再固定名字，而是根据效果契合就行了。」】★★★
 
      旧实现有三层"猜"（这就是用户要拆的东西）：
@@ -26694,7 +26745,7 @@ function build() {
                   });
                 }
       }
-      /* ★★ v270：常驻加成（武器/玄诀/血脉/招式里 dur=9999 的那批）改走 _xzPerm 之后，
+      /* ★★ v270：常驻加成（武器/玄诀/灵根/招式里 dur=9999 的那批）改走 _xzPerm 之后，
          上面那张表**一条都不会亮**（那些条目只认 v75*Rounds 手数字段，常驻不写手数）
          ⇒ 玩家会以为武器被动/玄诀被动丢了（用户原话：「增益这回直接加都不加了」）。
          这里补一段把常驻项摊出来：名字 + 数值，角标一律 9999（面板印成 ∞）。
@@ -26728,7 +26779,7 @@ function build() {
       /* ★★★ v324（用户：「『每回合额外回复灵力上限的 8%』这种 buff 没有在增益上显示，
          记得补上，看看有多少这种 buff 漏了的」）★★★
          漏的不止一条，是**一整类**。上面 '_xzPerm' 那一段只认 'XZ_PERM_KEYS' 那 12 个键
-         （那是**招式临时增益**用的那套），而血脉 / 兵器 / 玄诀 '效果' 翻出来的机制
+         （那是**招式临时增益**用的那套），而灵根 / 兵器 / 玄诀 '效果' 翻出来的机制
          走的是另一条通道 'mechBuffsOf' —— 那条通道的 19 个键里有一大半
          （mpRegen / lifesteal / pierce / onHurtHeal / lowHpDr / antiCrit /
            hpMaxK / mpMaxK / ignoreShieldPct / shieldMaxPct / deathImmuneHeal / trackOnStart）
@@ -26741,7 +26792,7 @@ function build() {
         var _MECH_DISP = {
           /* 与 _xzPerm 同名的三条（招式临时也会走这里，靠下面的同名去重避免印两枚） */
           amp: ['增伤', 'pct'], pierce: ['穿防', 'pct'], dr: ['减伤', 'pct'],
-          /* 血脉 / 兵器 / 玄诀 独有、之前**完全没有显示口**的键（本次补的就是这批） */
+          /* 灵根 / 兵器 / 玄诀 独有、之前**完全没有显示口**的键（本次补的就是这批） */
           mpRegen: ['回灵', 'pct'],
           lifesteal: ['吸血', 'pct'],
           onHurtHeal: ['受击回血', 'pct'],
@@ -26755,7 +26806,7 @@ function build() {
           crit: ['暴击', 'pct'], critDmg: ['暴伤', 'pct'],
           evade: ['闪避', 'pct'], regen: ['回血', 'pct'],
           hasteFlat: ['提速', 'flat'],
-          /* trackOnStart 的值是**拉条点数**（buildBloodBuffs 已 ×300 折过），不是百分比
+          /* trackOnStart 的值是**拉条点数**（buildSpiritRootBuffs 已 ×300 折过），不是百分比
              ★ v449：生成它的效果项（~~抢先手~~）已删，但**显示口留着** ——
              旧存档 / 旧卡里可能还躺着 trackOnStart 数值，引擎照旧吃它、面板也得照旧写出来。
              「下架一个效果项」≠「让老数据变成哑巴」。 */
@@ -26836,10 +26887,10 @@ function build() {
       var pe = (f.passive && f.passive.effects) ? f.passive.effects : null;
             if (pe && pe.length) {
               var _art = (f.artifact && f.artifact.effects) || [];
-              var _bloodOnes = [], _artOnes = [], _heartOnes = [], _seenArt = {};
+              var _spiritRootOnes = [], _artOnes = [], _heartOnes = [], _seenArt = {};
               for (var _pi = 0; _pi < pe.length; _pi++) {
                 var _pt = String(pe[_pi] || '');
-                if (_pt.indexOf('血脉·') === 0) { _bloodOnes.push(_pt); continue; }
+                if (_pt.indexOf('灵根·') === 0) { _spiritRootOnes.push(_pt); continue; }
                 /* 武器效果项：与 artifact.effects 里的名字完全相等 —— 单独成枚，别混进「玄诀」 */
                 if (_art.indexOf(_pt) >= 0) {
                   if (!_seenArt[_pt]) { _seenArt[_pt] = 1; _artOnes.push(_pt); }
@@ -26941,11 +26992,11 @@ function build() {
                 out.push({ t: '兵器·' + _anm + _pn, k: 'good', nm: _anm, n: 9999 });
                 _usedNm[_anm] = 1;                /* 同一条兵器别印两枚 */
               }
-              /* ★ v246（用户：「查看弹层里上面的血脉去掉，就留下面的」）：
-                 六源·血脉段已经把原文、品阶、纯度、机制都摆全了，
-                 这里再放一遍就是重复 ⇒ 血脉条目**不进 buff 清单**。 */
-              for (var _bi = 0; _bi < _bloodOnes.length; _bi++) {
-                /* （刻意不 push：血脉由 sixSourceHtml 的「血脉」段单独呈现） */
+              /* ★ v246（用户：「查看弹层里上面的灵根去掉，就留下面的」）：
+                 六源·灵根段已经把原文、品阶、纯度、机制都摆全了，
+                 这里再放一遍就是重复 ⇒ 灵根条目**不进 buff 清单**。 */
+              for (var _bi = 0; _bi < _spiritRootOnes.length; _bi++) {
+                /* （刻意不 push：灵根由 sixSourceHtml 的「灵根」段单独呈现） */
               }
             }
       var db = f.daoBuffs || null;
@@ -27118,7 +27169,7 @@ function build() {
     lowDr: '<path d="M12 2.8l7.6 2.9v5.6c0 4.3-3.2 7.3-7.6 8.8-4.4-1.5-7.6-4.5-7.6-8.8V5.7z"/>' +
            '<path d="M7.6 14.6h8.8"/>',
     /* 吸血：**血滴 + 齿形（两枚尖）**（"从对面身上咬下来"）。
-       ⚠ 不能跟「灵力上限」的水滴同形 —— 两者同场不少（血脉写吸血、玄诀写灵力上限）。 */
+       ⚠ 不能跟「灵力上限」的水滴同形 —— 两者同场不少（灵根写吸血、玄诀写灵力上限）。 */
     vamp: '<path d="M12 3.2c3.2 4.4 5.4 7.4 5.4 10a5.4 5.4 0 0 1-10.8 0c0-2.6 2.2-5.6 5.4-10z"/>' +
           '<path d="M9.4 12.2 10.6 15 12 12.6 13.4 15 14.6 12.2"/>',
     /* 受击回血：**盾里一颗心**（挨打时回血），与纯心的「每手回血」区分 */
@@ -27131,7 +27182,7 @@ function build() {
            '<circle cx="12" cy="12" r="3.4"/>',
     /* 破盾：**盾被斜劈开、右半块脱落**（两块分开画，中间一道缝）。
        ⚠ 为什么不用「剑扎盾」：那是 'pierce'（穿防）的形，两者同场很常见
-         （武器写穿防、血脉写破盾），剑扎盾会让卡面出现两把一样的剑。
+         （武器写穿防、灵根写破盾），剑扎盾会让卡面出现两把一样的剑。
        ⚠ 也别用「裂盾」（shieldBroken = 破防）：裂盾讲的是"你在挨"，破盾讲的是"你在拆"。 */
     shieldBreak: '<path d="M11.2 3.2 4.6 5.7v5.9c0 3.9 2.9 6.8 6.6 8.2"/>' +
                  '<path d="M12.8 3.2l6.6 2.5v5.9c0 1.9-.7 3.6-1.9 5"/>' +
@@ -27232,7 +27283,7 @@ function build() {
     /* ★ v278：护盾/叠甲这类「有一层盾条」的先判（带「甲」「盾」字，
        不能让它被下面宽泛的 '/甲|防/' 抢走）。 */
     if (/护盾|叠甲|甲壁|护体盾|双盾/.test(t)) return 'shield';
-    /* ★ v278：「护身减伤」是**减伤**（血脉/效果项给的持续减伤），不是金身 ——
+    /* ★ v278：「护身减伤」是**减伤**（灵根/效果项给的持续减伤），不是金身 ——
        旧判据里 '/护身/' 排在 '/减伤/' 前面 ⇒ 它拿到了 ward（盾里一颗星）。
        玩家报的「护身减伤显示成别的图标」就是这个。⇒ 减伤类先吃掉，ward 只留真无敌。 */
     if (/减伤|受击减伤|减|防|甲|护体|皮实|耐造|硬/.test(t)) return 'def';
@@ -27256,8 +27307,8 @@ function build() {
      ⇒ 按**图标语义**去重：同一类只留一条（层数/数值大的优先，其次先出现的）。
         同时把文字显示出来 —— 纯图标玩家读不出「破甲20%」到底是什么。 */
   /* ★★★ v243（玩家第三次报重复：「开局一个减伤 整场，一个护身减伤 整场」——
-     两者都来自血脉效果，只是叫法不同；对面破防也重复了一次）：
-     同一件事会从好几处进列表（v75 字段 / 血脉机制 / 兵器效果项 / 势种），
+     两者都来自灵根效果，只是叫法不同；对面破防也重复了一次）：
+     同一件事会从好几处进列表（v75 字段 / 灵根机制 / 兵器效果项 / 势种），
      名字又各不相同（「减伤」vs「护身减伤」vs「受到的伤害降低6%」）——
      **按名字去重没用，必须按语义（图标 key）去重**。
      ⇒ 抽成 'jjbBuffsDedup' 一份，卡片图标与查看界面**共用**；
@@ -27690,9 +27741,9 @@ function build() {
   /* ★★★ v433（用户：「buff 消失了或者新增都要在战报里说一声，这才是有用的战报」）：
      每次渲染对一遍「谁身上有哪些状态」——
        多出来的播「获得」，少掉的播「失去」；层数从 3 变 2 不播（改个数字没必要刷屏）。
-     ★ 首帧只记快照不播报：开局那批（兵器 / 血脉 / 玄诀）不是"这一手刚得到的"，
+     ★ 首帧只记快照不播报：开局那批（兵器 / 灵根 / 玄诀）不是"这一手刚得到的"，
        否则一开打就刷十几条，真正的变化反而被淹掉。
-     ★ 键用**机制名**（与 jjbBuffsDedup 同一套口径）：同一件事从兵器、血脉、引擎三处
+     ★ 键用**机制名**（与 jjbBuffsDedup 同一套口径）：同一件事从兵器、灵根、引擎三处
        同时进来时只会播一条，「穿防」和「破盾」是两个键、各播各的。
      ★ 只写 S.log，不碰任何战斗数值。 */
   var _BUFF_SNAP = {};
@@ -31055,14 +31106,14 @@ function build() {
                   而引擎其实吃得很好。玩家看到「0 条」当然断定没挂上。
                ② 反过来，store 里有翻译、但装配失败（throw 被 buildFighterFromData
                   的 catch 吞掉）时，这条战报照样报「N 条已挂上」⇒ 假绿。
-             ⇒ 改成数**装配结果**：直接遍历存活单位的 bloodBuffs/heartBuffs/artifactBuffs
+             ⇒ 改成数**装配结果**：直接遍历存活单位的 spiritRootBuffs/heartBuffs/artifactBuffs
                （那三个数组就是 mechBuffsOf 的唯一来源，数它 = 数真正进公式的条数）。
              ⚠ 不许改回读 store：store 是「翻译过什么」，不是「挂上了什么」。
                这两个问题的答案在任何情况下都不相等。 */
           var _n = 0;
           try {
             aliveList().forEach(function (f) {
-              _n += ((f.bloodBuffs || []).length + (f.heartBuffs || []).length + (f.artifactBuffs || []).length);
+              _n += ((f.spiritRootBuffs || []).length + (f.heartBuffs || []).length + (f.artifactBuffs || []).length);
             });
           } catch (eAp) {}
           /* 如实分三种情况报，别再笼统一句「0 条」让玩家猜 */
@@ -31420,7 +31471,7 @@ function build() {
             } else {
               bRun.disabled = false; bRun.textContent = '✦ 翻译/重翻';
               var why = (r && r.reason === 'model-failed') ? '模型没返回可用的翻译块（连接失败、或模型没按格式输出）'
-                : (r && r.reason === 'no-source') ? '没有收集到可翻的效果原文（检查这四个人的招式/血脉/装备是否写在变量里）'
+                : (r && r.reason === 'no-source') ? '没有收集到可翻的效果原文（检查这四个人的招式/灵根/装备是否写在变量里）'
                 : '当前环境调不到对话模型（脚本没拿到 TavernHelper 生成接口）';
               refresh('翻译没跑起来：' + why + '。\n接下来两条路任选：'
                 + '①点「✦ 翻译/重翻」重试一次；'

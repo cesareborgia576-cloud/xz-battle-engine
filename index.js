@@ -379,9 +379,9 @@ var PORTRAIT_URLS = {
   '雷电将军': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E9%9B%B7%E7%94%B5%E5%B0%86%E5%86%9B/%E9%9B%B7%E7%94%B5%E5%B0%86%E5%86%9B_%E7%AB%8B%E7%BB%98_1.webp',
   '卡芙卡': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E5%8D%A1%E8%8A%99%E5%8D%A1/%E5%8D%A1%E8%8A%99%E5%8D%A1_%E7%AB%8B%E7%BB%98_1.webp',
   '维琳娜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E7%BB%B4%E7%90%B3%E5%A8%9C/%E7%BB%B4%E7%90%B3%E5%A8%9C_%E7%AB%8B%E7%BB%98_1.webp',
-  '蕾米埃尔': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E8%95%BE%E7%B1%B3%E5%9F%83%E5%B0%94/%E8%95%BE%E7%B1%B3%E5%9F%83%E5%B0%94_%E7%AB%8B%E7%BB%98_1.webp',
+  '蕾米埃尔': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E8%95%BE%E7%B1%B3%E5%9F%83%E5%B0%94/%E8%95%BE%E7%B1%B3%E5%9F%83%E5%B0%94_%E7%AB%8B%E7%BB%98_11.webp',
   '清宵': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E6%B8%85%E5%AE%B5/%E6%B8%85%E5%AE%B5_%E7%AB%8B%E7%BB%98_1.webp',
-  '绯雪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E7%BB%AF%E9%9B%AA/%E7%BB%AF%E9%9B%AA_%E7%AB%8B%E7%BB%98_1.webp',
+  '绯雪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E7%BB%AF%E9%9B%AA/%E7%BB%AF%E9%9B%AA_%E7%AB%8B%E7%BB%98_3.webp',
 };
 
 function portraitUrlOf(name) {

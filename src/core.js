@@ -987,9 +987,12 @@ function xzNormRealmName(r) {
       var inner = /巅峰|圆满/.test(tail) ? '巅峰' : (/后期/.test(tail) ? '后期' : (/中期/.test(tail) ? '中期' : (/初期/.test(tail) ? '初期' : '')));
       if (!inner) { if (/巅峰|圆满/.test(v)) inner = '巅峰'; }
       if (inner) {
-        /* 巅峰档在本卡多用专称；「练气后期」是真实键，其余巅峰档名（大X）也要认。
-           ⚠ 两个专称不含大境名：「金丹后期」无「金丹」、「炼虚后期」无「炼虚」，
-           必须单列 —— 否则「炼虚后期」会退化成「炼虚后期」，17.92 掉成 17.26。 */
+        /* 「巅峰 / 圆满 / 大圆满」是**老存档**的第四档写法（修仙六境已无巅峰档，
+           现行每境只有初期/中期/后期三档）⇒ 一律折成该境「后期」，不单独立档。
+           ⚠ 下面三条 base===X → X后期 不是冗余：兜的是「巅峰」这种后缀本身认不出大境名的
+             写法（例如模型只写「炼虚巅峰」而 XZ_PEAK_COEFF 里没有这一项时的老路径）。
+             ⚠ 「大X」那一支（大筑基/大元婴…）在六境表里取不到键，会落到 base + '后期'，
+             这是**有意**的降级：老存档的「大凝府」之类靠 XZ_OLD_PREFIX 在更早一步就换名了。 */
         if (inner === '巅峰') {
           if (base === '练气') return '练气后期';
           if (base === '金丹') return '金丹后期';
@@ -1882,8 +1885,6 @@ function xzHitCutOf(attacker, skill) {
 
 function _v228RealmRoot(name) {
   var s = String(name == null ? '' : name);
-  var PAIRS = { '炼虚后期': '炼虚', '金丹后期': '金丹' };
-  for (var pk in PAIRS) if (s.indexOf(pk) !== -1) return PAIRS[pk];
   for (var rk in XZ_LEVEL_COEFF) if (s.indexOf(rk) !== -1) return rk;
   return s;
 }

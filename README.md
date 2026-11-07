@@ -17,16 +17,16 @@ B.parseEffect('伤害:2400｜烧尽三里')
 // → { kind:'damage', dmgFlat:2400, dur:0, isBuff:false, ... }
 
 B.qualityPower('玄阶')          // → 41
-B.clampToCap(99999, '玄阶', '玄枢后期', '伤害')   // → 定档上限内的值
-B.bigRealm('凝府中期')          // → '凝府'
-B.realmCoeff('玄枢')            // → 1.5
+B.clampToCap(99999, '玄阶', '筑基初期', '伤害')   // → 定档上限内的值
+B.bigRealm('练气中期')          // → '练气'
+B.realmCoeff('筑基')            // → 1.5
 
 B.critRate(atk, def)            // → 0.35
 B.dr(def, ctx)                  // → 0.2
 B.rollHit(atk, def, skill)      // → { mode:'命中', total:17.5, note:'【…】' }
 
-B.attrCap('帝境')               // → 20   （单项上限）
-B.attrTotalCap('帝境')          // → 38   （总量上限，保证不可能双满）
+B.attrCap('炼虚')               // → 20   （单项上限）
+B.attrTotalCap('炼虚')          // → 38   （总量上限，保证不可能双满）
 B.clampFour({力量:20,敏捷:20,体质:1,智力:1}, 38)
 // → { v:{力量:18,敏捷:18,体质:2,智力:2}, over:42, cap:38, cut:true }
 ```

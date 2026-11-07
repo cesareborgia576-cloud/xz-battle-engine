@@ -438,17 +438,22 @@ if (!fs.existsSync(TRUE_SRC)) {
       : bad('出口是 null / 缺失：' + nulls.join('、'));
 
     /* 数值真的算得出来 —— 「挂上了」和「算得对」是两件事。
-       这两个数是项目里的固定基准（玄阶 41 / 帝境 17.26），改动了就该有人知道。 */
+       这两个数是项目里的固定基准（玄阶 41 / 炼虚 17.26），改动了就该有人知道。 */
     const q = typeof reg.qualityPowerOf === 'function' ? reg.qualityPowerOf('玄阶') : undefined;
     /* ⚠ v473：期望值跟着 QUALITY_POWER 走（玄阶 41 → 102）。
        这里**必须**是硬编码而不是从引擎读 —— 本文件验的就是「CDN 上那份
        是不是我们以为的那份」，从被测对象身上现取期望值，等于自己证明自己。 */
     q === 102 ? ok('qualityPowerOf(玄阶) → 102') : bad('qualityPowerOf(玄阶) → ' + q);
 
-    const m = typeof reg.realmMultByName === 'function' ? reg.realmMultByName('帝境') : undefined;
-    typeof m === 'number' && Math.abs(m - 17.26) < 1e-9
-      ? ok('realmMultByName(帝境) → 17.26')
-      : bad('realmMultByName(帝境) → ' + m);
+    /* ⚠ v191：期望值 17.26 是**旧十二境**的「帝境中期」。换成六境三档后
+       「炼虚」裸名走的是中期档 = 16.64（REALM_COEFFS 里 '炼虚': 16.64）。
+       17.26 在新表里根本不存在 —— 旧值留着这道闸就恒红，
+       而红的原因看着像"CDN 上那份引擎不对"，其实是判据没跟着换体系。
+       同 qualityPowerOf 的理由：期望值必须硬编码，不许从被测对象身上现取。 */
+    const m = typeof reg.realmMultByName === 'function' ? reg.realmMultByName('炼虚') : undefined;
+    typeof m === 'number' && Math.abs(m - 16.64) < 1e-9
+      ? ok('realmMultByName(炼虚) → 16.64')
+      : bad('realmMultByName(炼虚) → ' + m);
   }
 
   /* ~~秘境模块（XZ_MIJING）是独立 IIFE，有自己的 window 挂载点。~~

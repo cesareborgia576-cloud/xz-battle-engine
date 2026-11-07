@@ -230,13 +230,13 @@ try {
     pc && pc['玄阶'] === 41 ? ok('QUALITY_POWER 从引擎取到了（玄阶=41）') : bad('QUALITY_POWER 不对：' + JSON.stringify(pc));
 
     const rc = probe.REALM_COEFFS;
-    rc && rc['帝境'] === 17.26 ? ok('REALM_COEFFS 从引擎取到了（帝境=17.26）') : bad('REALM_COEFFS 不对：' + (rc && rc['帝境']));
+    rc && rc['炼虚'] === 17.26 ? ok('REALM_COEFFS 从引擎取到了（炼虚=17.26）') : bad('REALM_COEFFS 不对：' + (rc && rc['炼虚']));
 
     const q = probe.qualityPowerOf('玄阶');
     q === 41 ? ok('qualityPowerOf(玄阶) → 41（外壳转发通了）') : bad('qualityPowerOf(玄阶) → ' + q);
 
-    const m = probe.realmMultByName('玄枢后期');
-    typeof m === 'number' && Math.abs(m - 1.78) < 1e-9 ? ok('realmMultByName(玄枢后期) → 1.78') : bad('realmMultByName(玄枢后期) → ' + m);
+    const m = probe.realmMultByName('筑基初期');
+    typeof m === 'number' && Math.abs(m - 1.78) < 1e-9 ? ok('realmMultByName(筑基初期) → 1.78') : bad('realmMultByName(筑基初期) → ' + m);
 
     const line = probe.xzEffLineOf('伤害', 100);
     line ? ok('xzEffLineOf(伤害,100) → ' + JSON.stringify(line).slice(0, 60)) : bad('xzEffLineOf 返回空');

@@ -349,9 +349,9 @@ const realRandom = Math.random;
 
 /* ══════════ ④ 构造输入 ══════════ */
 const REALMS = [
-  '凡人初期', '引玄中期', '凝府后期', '玄枢巅峰', '化域圆满',
-  '尊玄初期', '穹境中期', '玄罡后期', '玄王初期', '玄皇中期',
-  '玄宗后期', '玄圣巅峰', '帝境初期', '凝府', '玄皇', '帝境', '未知境界', '', null, undefined,
+  '凡人初期', '练气初期', '练气后期', '筑基后期', '筑基后期',
+  '金丹初期', '金丹中期', '元婴初期', '元婴中期', '化神初期',
+  '化神后期', '炼虚后期', '炼虚中期', '练气', '化神', '炼虚', '未知境界', '', null, undefined,
 ];
 const QUALITIES = ['凡阶', '黄阶', '玄阶', '地阶', '天阶', '神阶', '不是阶', '', null];
 const KINDS = ['伤害', '治疗', 'buff', 'debuff', 'control', 'shield', 'drain', 'summon', '', null];
@@ -515,12 +515,12 @@ for (const four of FOUR) both('xzClampFourTotal', [four, 0], '四维钳制');
 /* 命中 / 暴击 / 减伤 / 承伤：需要 fighter 结构，尽量给全 */
 const ATK = {
   mech: { crit: 10, critDmg: 50, pierce: 5 }, blood: {}, states: {},
-  spd: 120, level: 30, realm: '玄枢后期', nameKey: '测甲',
+  spd: 120, level: 30, realm: '筑基初期', nameKey: '测甲',
   v75BuffPct: 0.1, v75MarkRounds: 0,
 };
 const DEF = {
   mech: { dr: 0.2, evade: 8 }, blood: {}, states: {},
-  spd: 100, level: 20, realm: '凝府中期', nameKey: '测乙',
+  spd: 100, level: 20, realm: '练气中期', nameKey: '测乙',
 };
 const SKILL = { name: '斩', quality: '玄阶', hit: 5, elem: '火', style: '剑' };
 both('xzCritRateOf', [ATK, DEF, {}], '暴击率');

@@ -372,6 +372,16 @@ var PORTRAIT_URLS = {
   '胡列娜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/胡列娜/_1792939784783.png',
   '蓝佛子': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/蓝佛子/_1792939689201.png',
   '古月': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/douluo-qipao@main/古月/_1792939710212.png',
+  /* ── v557：二游 DLC 批次（作者 2026-11-08 给图）──
+     这是战斗界面唯一能拿到的立绘来源（引擎看不到 05 的 XZ_ILLU_STAND）。
+     值必须是**字符串**：多图轮播在 05 的 xzGalleryUrls，这里写成数组会让渲染层拿到数组。 */
+  '至冬女王': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E8%87%B3%E5%86%AC%E5%A5%B3%E7%8E%8B/%E8%87%B3%E5%86%AC%E5%A5%B3%E7%8E%8B_%E7%AB%8B%E7%BB%98_1.webp',
+  '雷电将军': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E9%9B%B7%E7%94%B5%E5%B0%86%E5%86%9B/%E9%9B%B7%E7%94%B5%E5%B0%86%E5%86%9B_%E7%AB%8B%E7%BB%98_1.webp',
+  '卡芙卡': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E5%8D%A1%E8%8A%99%E5%8D%A1/%E5%8D%A1%E8%8A%99%E5%8D%A1_%E7%AB%8B%E7%BB%98_1.webp',
+  '维琳娜': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E7%BB%B4%E7%90%B3%E5%A8%9C/%E7%BB%B4%E7%90%B3%E5%A8%9C_%E7%AB%8B%E7%BB%98_1.webp',
+  '蕾米埃尔': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E8%95%BE%E7%B1%B3%E5%9F%83%E5%B0%94/%E8%95%BE%E7%B1%B3%E5%9F%83%E5%B0%94_%E7%AB%8B%E7%BB%98_1.webp',
+  '清宵': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E6%B8%85%E5%AE%B5/%E6%B8%85%E5%AE%B5_%E7%AB%8B%E7%BB%98_1.webp',
+  '绯雪': 'https://gcore.jsdelivr.net/gh/cesareborgia576-cloud/character-images@main/%E7%BB%AF%E9%9B%AA/%E7%BB%AF%E9%9B%AA_%E7%AB%8B%E7%BB%98_1.webp',
 };
 
 function portraitUrlOf(name) {
@@ -5030,7 +5040,7 @@ var SPIRIT_ROOT_EFFECT_KEYS = [
        ⚠ 排在 '破盾' 之后但仍在 '减伤' 之前 —— 否则「护体灵盾」会被 '减伤' 的宽泛词截胡。 */
     { re: /(护盾|护体灵盾|灵盾|盾壁)/,                                   key: 'shieldMaxPct',    cap: 0.50, txt: '开场获得护盾（气血上限的）' },
     { re: /(免死|留一口气|致命.{0,3}自愈|濒死.{0,3}回复|保命)/,           key: 'deathImmuneHeal', cap: 0.30, txt: '致命伤强留一口气并自愈（每场一次）' },
-    { re: /(每回合.{0,3}回蓝|回复.{0,3}灵力|每回合.{0,3}灵力|纳灵|回蓝|恢复灵力)/, key: 'mpRegen', cap: 0.08, txt: '每回合额外回复灵力上限的' },
+    { re: /(每回合.{0,3}回蓝|回复.{0,3}灵力|每回合.{0,3}灵力|纳灵|回蓝|恢复灵力|持续回蓝)/, key: 'mpRegen', cap: 0.08, txt: '每回合额外回复灵力上限的' },
     /* ★★★ v323：'提速' —— 之前完全没有这条规则，「提速:18」一个字都不认。
        与招式里的 '提速' 同口径（《招式字段》第 19 行）：**写点数 = 速度点数**，
        'unit:'flat'' ⇒ buildSpiritRootBuffs 不除 100，直接落成点数；
@@ -5069,7 +5079,7 @@ var SPIRIT_ROOT_EFFECT_KEYS = [
        ⇒ 补一条关键词，并让它排在 '受击回血' / '命中回血' / '吸血' **之后**
          （那三条更具体，先命中就 break，不会把「受击回血 6%」错记成每手回血）。
        cap 口径见《数值表》§效果封顶「每手回血」那一行（10%）。 */
-    { re: /(每手.{0,3}回气血|每回合.{0,3}回气血|回血)/,                   key: 'regen',           cap: 0.10, txt: '每手回复气血上限的' }
+    { re: /(每手.{0,3}回气血|每回合.{0,3}回气血|回血|持续治疗)/,           key: 'regen',           cap: 0.10, txt: '每手回复气血上限的' }
   ];
 
 /* ★★★ v284：玄诀 '效果' 里**已经被白名单用 indexOf 认成机制**的那 7 个名字 ★★★

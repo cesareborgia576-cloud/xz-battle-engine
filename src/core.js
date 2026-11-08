@@ -1519,6 +1519,12 @@ function _v75ParseEffect(text) {
   if (_normM && !XZ_ATOM_TYPES[_normM[1]] && typeof XZ_ATOM_RETIRED !== 'undefined' && XZ_ATOM_RETIRED[_normM[1]]) {
     _normM[1] = XZ_ATOM_RETIRED[_normM[1]];
   }
+  /* ★ v566：**别名兜底**（只读；正式名见 XZ_ATOM_ALIAS 头注释）。
+     放在 RETIRED 之后：旧名重定向优先，别名只补它没覆盖到的同义写法。
+     ⚠ 这里只改“读进来的这一条”，不回写变量、不进提示词词表。 */
+  if (_normM && !XZ_ATOM_TYPES[_normM[1]] && typeof XZ_ATOM_ALIAS !== 'undefined' && XZ_ATOM_ALIAS[_normM[1]]) {
+    _normM[1] = XZ_ATOM_ALIAS[_normM[1]];
+  }
   if (_normM && XZ_ATOM_TYPES[_normM[1]]) {
     var _tp = XZ_ATOM_TYPES[_normM[1]];
     var _rest = text.slice(_normM[0].length);

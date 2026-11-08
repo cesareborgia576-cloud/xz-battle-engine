@@ -25070,8 +25070,8 @@ var XZ_JJB_SKIN = `
 
 /* 卡片容器：两种尺寸的唯一开关 */
 .xz-jjb-row{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;}
-.xz-jjb-row.is-solo{justify-content:center;}
-.xz-jjb-row.is-solo .xz-jjb-card{flex:0 1 auto;height:min(100%,460px);min-height:0;}
+.xz-jjb-row.is-solo{justify-content:flex-start;}
+.xz-jjb-row.is-solo .xz-jjb-card{flex:0 0 calc((100% - 10px) / 2);height:auto;min-height:150px;}
 .xz-jjb-row.is-multi{overflow-y:auto;overscroll-behavior:contain;padding-right:3px;}
 .xz-jjb-row.is-multi::-webkit-scrollbar{width:4px;}
 .xz-jjb-row.is-multi::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:99px;}
@@ -25215,11 +25215,11 @@ var XZ_JJB_SKIN = `
 }
 .xz-jjb-look:hover{border-color:rgba(201,168,106,.55);background:rgba(201,168,106,.14);}
 
-/* 血 / 灵：细长条 + 贴着右端的数字（tabular-nums，数字变时不会左右跳） */
-.xz-jjb-hprow,.xz-jjb-mprow{display:flex;align-items:center;gap:9px;margin-bottom:6px;}
+/* 血 / 灵：数字**压在条内右端**（不占 flex 宽度，条不再被挤窄） */
+.xz-jjb-hprow,.xz-jjb-mprow{display:flex;align-items:center;gap:9px;margin-bottom:6px;position:relative;}
 .xz-jjb-bar-lbl{width:14px;flex:none;text-align:center;font-size:10px;color:var(--xz-ink-3);}
 .xz-jjb-hp,.xz-jjb-mp{
-  position:relative;flex:1 1 auto;min-width:0;height:7px;border-radius:99px;
+  position:relative;flex:1 1 auto;min-width:0;height:16px;border-radius:99px;
   background:rgba(255,255,255,.055);overflow:hidden;
 }
 .xz-jjb-hpf,.xz-jjb-mpf{
@@ -25229,9 +25229,11 @@ var XZ_JJB_SKIN = `
 .xz-jjb-hpf{background:linear-gradient(90deg,var(--xz-hp-a),var(--xz-hp-b));box-shadow:0 0 10px rgba(255,93,108,.28);}
 .xz-jjb-mpf{background:linear-gradient(90deg,var(--xz-mp-a),var(--xz-mp-b));box-shadow:0 0 10px rgba(89,180,255,.22);}
 .xz-jjb-bar-txt{
-  flex:0 0 auto;text-align:right;
-  font-size:11px;color:var(--xz-ink-2);letter-spacing:.02em;
-  font-variant-numeric:tabular-nums;font-family:var(--xz-num);
+  position:absolute;right:7px;top:50%;transform:translateY(-50%);z-index:2;
+  pointer-events:none;white-space:nowrap;
+  font-size:10px;font-weight:700;color:#f3f0e8;
+  text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.7);
+  letter-spacing:.02em;font-variant-numeric:tabular-nums;font-family:var(--xz-num);
 }
 
 /* ── 状态：**只有图标**（+ 层数角标），一栏高，横向可滑 ──────────────────
@@ -25662,7 +25664,7 @@ var XZ_JJB_SKIN = `
   .xz-jjb-side{padding:9px 10px;}
   .xz-jjb-lbl{margin-bottom:6px;font-size:9.5px;}
   .xz-jjb-row{gap:8px;}
-  .xz-jjb-row.is-multi .xz-jjb-card{flex:0 0 calc((100% - 8px) / 2);}
+  .xz-jjb-row.is-multi .xz-jjb-card,.xz-jjb-row.is-solo .xz-jjb-card{flex:0 0 calc((100% - 8px) / 2);}
   .xz-jjb-u-info{padding:0 10px 10px;margin-top:-22px;}
   .xz-jjb-nm{font-size:14px;}
   .xz-jjb-rlm{font-size:10.5px;}
@@ -25768,8 +25770,8 @@ var XZ_JJB_SKIN = `
        （改前 360px 屏 234.7 / 390px 屏 358.0 / 414px 屏 389.4 —— 越大越丑）。
      ⚠ 只加在 .is-solo 上：.is-multi 的卡片是 flex:0 0 calc((100%-8px)/2) + min-height:150px，
        在那里塞 148px 立绘会把卡片顶到 230px，违反"视口恒等于两张卡"的约定。 */
-  .xz-jjb-row.is-solo .xz-jjb-u-art{flex:0 0 148px;min-height:0;}
-  .xz-jjb-row.is-solo .xz-jjb-card{flex:0 0 auto;height:auto;}
+  /* v567：卡片尺寸已恒定，solo 不再单独给 148px 立绘带（会与 multi 差一档） */
+  /* v567：solo 卡片不再单独覆盖 height:auto */
 
   /* ★★★ v473：**名字行拆成两行 —— 名字独占第一行** ★★★
      实测（390×844、压力档 9 字名 + 9 字境界）：
@@ -25836,7 +25838,7 @@ var XZ_JJB_SKIN = `
    ⚠ 判据用 height 不用 width：横屏手机（844×390）宽度也是 844、不该走这一档，
      它的毛病是对阵区太矮，跟屏宽无关。 */
 @media (max-width:560px) and (max-height:700px){
-  .xz-jjb-row.is-solo .xz-jjb-u-art{flex:0 0 84px;}
+  /* v567：矮屏也不再给 solo 单独压立绘 */
 }
 @media (prefers-reduced-motion:reduce){
   #xz-jjb-overlay *{animation:none !important;transition:none !important;}

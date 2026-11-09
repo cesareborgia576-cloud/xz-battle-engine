@@ -1434,7 +1434,10 @@ function xzHeal(f, amount) {
        这是纯加成，失败也只是少加一点，不该让一次治疗整个失败。 */
   try {
     if (typeof v2StateVal === 'function') {
-      var _hl = (Number(v2StateVal(f, '治疗')) || 0) * 0.04;
+      /* ★ v570：每层强度改走 `v2Per` 唯一出口（`叠层治疗:20` 的 20 从此真的参与计算）。 */
+      var _hlPer = (typeof v2Per === 'function') ? v2Per('治疗', 'heal', f) : 0.04;
+      var _hlCap = (typeof v2Cap === 'function') ? v2Cap('治疗', 'heal', f) : 0.20;
+      var _hl = Math.min(_hlCap, (Number(v2StateVal(f, '治疗')) || 0) * _hlPer);
       if (_hl > 0) amt = Math.round(amt * (1 + Math.min(0.60, _hl)));
     }
   } catch (eHl0) {}
@@ -4784,7 +4787,20 @@ var V2_STATES = {
   '减速': { side: 'foe',  max: 5,  slow: 0.05, outCut: 0.03, full: '冰封' },
   '流血': { side: 'foe',  max: 5,  dot: 0.03,        full: '割裂' },
   '减伤': { side: 'self', max: 5,  dr: 0.05, fin: 0.12, full: '垒壁' },
-  '增伤': { side: 'self', max: 5,  spd: 0.04, dmg: 0.02, track: 0.02, full: '风驰' },   // ★ v65：track = 每层自己前拉一条的百分比
+  /* ★★★ v570：`dmg` 0.02 → 0.05（用户拍板选 B，修「叠层增伤效果这么小」）★★★
+     ── 为什么原来那个 0.02 是错的 ─────────────────────────────────────────
+     `叠层` 一族七条，其余六条满层都与「一次性写法」持平或略高：
+       叠层减伤 dr:0.05 → 满层 25%（`减伤:20` = 20%）
+       叠层暴击 crit:0.05 → 满层 25%（`暴击:20` = 20%）
+       叠层暴伤 critDmg:0.06 → 满层 30%（`暴伤:20` = 20%）
+       叠层治疗 heal:0.04 → 满层 20%（`治疗:20` = 20%）
+       叠层提速 hasteFlat:8 → 满层 40 点（`提速:40` = 40 点）
+     **只有叠层增伤是 dmg:0.02 → 满层 10%，连 `增伤:20` 的一半都不到。**
+     它不是"设计上就该弱"，是一族里唯一一个数没对齐 —— 与 `叠层减伤` 的 0.05 对照，
+     增伤/减伤这一对本来就该同幅。⇒ 改成 0.05，满层 25%。
+     ⚠ `track:0.02` **不动**：它管行动条（每层前拉 20 点 / 满条 1000），
+       与伤害不是同一个量纲，改它会连带改节奏。那一项的数值有 B2 闸钉着。 */
+  '增伤': { side: 'self', max: 5,  spd: 0.04, dmg: 0.05, track: 0.02, full: '风驰' },   // ★ v65：track = 每层自己前拉一条的百分比
   /* ★ v108：'spd: 0.04' 是**表内死字段** —— 全项目没有任何读者（v65 起疾风改走
      track 前拉条，注释也写了「不动 spd」，但这个键忘了删）。
      留着它 = 下一个读表的人会以为「疾风加速度」，然后发现没反应（bug ⑥ 的同款）。
@@ -4822,6 +4838,157 @@ var V2_STATES = {
   //   「敌多减伤」效果项名也一并删掉 —— 纸上写着、引擎不算，是 bug ③「规则只在纸面」的同款。
   //   流派核心机制一律归流派玄诀，不留在状态表里当摆设，也不挂在玄技上。
 };
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★★ v570：势种「每层强度」的**唯一换算出口**（用户拍板选 B）★★★
+   用户原话：「叠层增伤到底什么机制，为什么效果这么小，有没有bug」→ 选定 B：
+   「`pct` 当作**满层总强度**，每层 = `pct / max`」。
+
+   ── 修的是什么（v570 之前的三处病）──────────────────────────────────────
+   ① **`pct` 有写无读**：`case 'v2stack'` 里明明存了
+      `_xzV2Stack[key] = { pct: Math.min(1, Number(e.pct)||0) }`，
+      而全文件没有任何读者 ⇒ 玩家写 `叠层增伤:20` 或 `叠层增伤:200`，**结果一模一样**。
+      更糟的是 07 的自选池还写着 `base:20, unit:'pct'`，等于把这个 bug 写成文档。
+   ② **每层强度写死在代码里**：`减伤` 写死 `*0.05`（15104）、`暴击` 写死 `*0.05`、
+      `受击减伤` 写死 `*0.04`、`治疗` 写死 `*0.04` —— 表里改什么都不生效，
+      与 `V2_STATES` 那张表承诺的两套数。这正是 v65 在同一段注释里警告过的病。
+   ③ **`增伤.dmg` 一族里唯一没对齐的数**（0.02，见 V2_STATES 那段注释）。
+
+   ── 换算口径（只有这一条，别处不许再算）────────────────────────────────
+     `v2Per(key, field)` = 每层实际收益
+       · 玩家写了 `pct`（>0）⇒ `pct / def.max`（`叠层增伤:20` = 满 5 层共 20% ⇒ 每层 4%）
+       · 没写 pct（老数据 / 引擎内部自己叠）⇒ 表里那个字段的默认值（逐字向后兼容）
+     `v2Cap(key, field)` = 这一档的总上限 = `每层 × 层数上限`
+       消费点用它当 Math.min 的夹子，于是「写 200」不会变成每层 40% 那种荒唐值。
+
+   ⚠ 为什么按 `def.max` 除而不是按「当前实际层数」：
+     层数是会变的（1 层 → 5 层），拿它当分母，同一个 buff 在第 1 层和第 5 层
+     每层收益不一样 —— 那不是"叠层"，那是账算不准。强度必须是个**定值**。
+   ⚠ `pct` 的来源是**施加者写的那一条效果**，挂在 `_xzV2Stack[势种].pct` 上。
+     同一个人身上同时挂着两个不同 pct 的叠层增伤？不会：`_xzV2Stack` 按势种去重
+     （重挂只延长时间，见 case 'v2stack'），后写的那个 pct **不覆盖**先写的
+     （下面 `v2Per` 取的是「先挂那条」的 pct，与"刷新不叠加"同口径）。
+   ⚠ 常数项（`track` / `slow` / `hasteFlat`）**不吃 pct 缩放**：
+     它们各有自己的量纲与闸（B2 量 20 点、B3 量 −50、提速 8 点/层），
+     而且玩家写 `叠层增伤:20` 时那个 20 说的是"伤害百分比"，不是"行动条点数"。
+     把 pct 套到行动条上 = 玩家写个数顺手改了节奏，闸也全乱。
+   ══════════════════════════════════════════════════════════════════════════ */
+/* ★★★ v571：势种来源登记表 + 「叠层增伤」的面板唯一出口 ★★★
+   作者原话（2026-11-09）：
+     「如果一个技能有两个叠层增伤，或者多个技能/被动有两个及以上的叠层增伤，
+       该怎么算。如果说，全部写入增伤值，那就好办，因为我们有增伤值上限，
+       其次buff中，显示这个叠层增伤的来源是谁哪个玄技或玄诀就行了。」
+
+   ── 多来源怎么算（定了，别再改口径）──────────────────────────────────
+   **各来源的 pct 求和**，然后整体封顶 1.0（= 满层 100%，再高没意义）。
+   为什么不取最大值：作者拍的是「全部写入增伤值，因为有上限」——
+   上限就是兜底，不靠「悄悄只认一个」来防溢出。取最大值会让
+   「两个 20% 的叠层增伤」永远等于「一个 20%」，玩家会觉得第二个白写了。
+   ⚠ 层数**仍然只有一个计数器**（`f.v2stk['增伤']`）：两个来源不会让每手叠 2 层，
+     变的是「每层多强」。这条要跟玩家说清楚 —— 不然会有人以为双来源能双倍叠层。
+
+   ── 为什么必须有一个「唯一出口」──────────────────────────────────────
+   面板（`xzDmgUpOf`）和结算（`calcDamage` 的增伤乘区）以前各算各的：
+   结算把 `层数 × 每层` 加进 `_drFoldAmp`，面板**一个字节都没读** ⇒
+   玩家叠了五层，面板「增伤值」纹丝不动，于是报「叠了没变化」。
+   ⇒ 现在两边都只准调 `xzStackDmgOf()`，谁再就地写 `v2StateVal * v2Per` 就是第二份口径。
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* 该势种的全部来源（按登记顺序）。老存档没有 `srcs` ⇒ 返回空数组，不编造来源。 */
+function v2StackSrcsOf(f, key) {
+  try {
+    var o = f && f._xzV2Stack && f._xzV2Stack[key];
+    var a = o && o.srcs;
+    return (a && a.length) ? a : [];
+  } catch (eSS) { return []; }
+}
+/* 登记一个来源。同名来源只保留一条（重挂只刷新 pct，不重复计入）。 */
+function v2StackAddSrc(f, key, name, pct) {
+  try {
+    var m = f && f._xzV2Stack;
+    var o = m && m[key];
+    if (!o) return;
+    var nm = String(name == null ? '' : name).trim() || '未知来源';
+    var p = Number(pct) || 0;
+    if (!(p > 0)) return;
+    if (!o.srcs) o.srcs = [];
+    for (var i = 0; i < o.srcs.length; i++) {
+      if (String(o.srcs[i].name) === nm) { o.srcs[i].pct = p; return; }
+    }
+    o.srcs.push({ name: nm, pct: p });
+  } catch (eSA) {}
+}
+
+function v2StackPctOf(f, key) {
+  /* 该势种的「满层总强度」。0 = 没写（走表内默认值）。
+     ★ v571：多来源求和（见上方大口径），整体封顶 1.0。 */
+  try {
+    var m = f && f._xzV2Stack;
+    var o = m && m[key];
+    if (!o) return 0;
+    var a = o.srcs;
+    var sum = 0;
+    if (a && a.length) {
+      for (var i = 0; i < a.length; i++) sum += Number(a[i] && a[i].pct) || 0;
+    } else {
+      /* 老存档 / 引擎内部自己挂的那种：只有单个 pct 字段 */
+      sum = Number(o.pct) || 0;
+    }
+    if (!(sum > 0)) return 0;
+    return Math.min(1, sum);
+  } catch (eSP) { return 0; }
+}
+function v2Per(key, field, f) {
+  /* 每层收益（唯一口径）。f 可省略 —— 省略时一律走表内默认值。 */
+  var def = (typeof V2_STATES !== 'undefined' && V2_STATES[key]) ? V2_STATES[key] : null;
+  if (!def) return 0;
+  var base = Number(def[field]) || 0;
+  /* 只有「按百分比结算的增益字段」吃 pct 缩放；常数项原样返回（见上面注释）。 */
+  var SCALABLE = { dmg: 1, dr: 1, crit: 1, critDmg: 1, heal: 1 };
+  if (!SCALABLE[field]) return base;
+  var p = v2StackPctOf(f, key);
+  if (p <= 0) return base;
+  var mx = Number(def.max) || 5;
+  return p / mx;
+}
+function v2Cap(key, field, f) {
+  /* 这一档的总上限 = 每层 × 层数上限。消费点的 Math.min 一律夹这个。 */
+  var def = (typeof V2_STATES !== 'undefined' && V2_STATES[key]) ? V2_STATES[key] : null;
+  var mx = def ? (Number(def.max) || 5) : 5;
+  return v2Per(key, field, f) * mx;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★★ v571：`叠层增伤` 的**唯一出口**（面板与结算共用）★★★
+   作者原话：「会不会把增伤值加入面板里，还是说生效了但是不加入」
+   ⇒ 从 v571 起：**加入面板，而且面板与结算用的是同一个数**。
+
+   ── 返回值 ────────────────────────────────────────────────────────────
+   `{ pct, stacks, cap, per, srcs }`
+     pct    已经乘好层数、已经夹过 `cap` 的最终增伤（0.20 = +20%）
+     stacks 当前层数（面板/buff 角标要显示「×3」）
+     cap    这一档的满层上限（`v2Cap`）
+     per    每层强度（`v2Per`）
+     srcs   来源名数组（buff 里显示「来源：XX」用）
+
+   ⚠ 夹顶用 `v2Cap` 而不是写死 0.25：`叠层增伤:200` 这种疯值必须被表内 max 挡住，
+     否则「写 200 得 40%×5 = 200%」直接穿掉增伤上限。
+   ⚠ `stacks` 走 `v2StateVal` 不直读 `f.v2stk` —— 「暴击」那种分流只有 `v2StateVal` 认。
+   ══════════════════════════════════════════════════════════════════════════ */
+function xzStackDmgInfoOf(f) {
+  var out = { pct: 0, stacks: 0, cap: 0, per: 0, srcs: [] };
+  if (!f) return out;
+  try {
+    var st = (typeof v2StateVal === 'function') ? (Number(v2StateVal(f, '增伤')) || 0) : 0;
+    out.stacks = st;
+    out.srcs = v2StackSrcsOf(f, '增伤');
+    out.per = (typeof v2Per === 'function') ? v2Per('增伤', 'dmg', f) : 0;
+    out.cap = (typeof v2Cap === 'function') ? v2Cap('增伤', 'dmg', f) : 0;
+    if (st > 0 && out.per > 0) out.pct = Math.min(out.cap, st * out.per);
+  } catch (eSD) {}
+  return out;
+}
+function xzStackDmgOf(f) { return xzStackDmgInfoOf(f).pct; }
 
 // 挂层：加层 + 行动条联动 + 满层质变（每场每状态一次，由 v2FullOnce 记）
 function v2Add(f, key, n, src2) {
@@ -13583,7 +13750,7 @@ function xzTemperUpgrade(effObj, quality, realm) {
 
 /* ⑥ 查背包里某档淬晶有多少份 + 扣掉 n 份
    ── 为什么按 '物品名称' 找、而不是按 '类型' ──
-     '类型:材料' 底下还有玄币、功勋、玄石、灵草…全部混在一起。
+     '类型:材料' 底下还有玄币、功勋、灵石、灵草…全部混在一起。
      按类型扣 = 扣到哪条看运气。名字是唯一且玩家看得见的那个键。
    ── 数量扣到 0 怎么办 ──
      整条删掉（'数量: 0' 留在变量里会让背包页显示一行 ×0 的死条目，
@@ -13754,15 +13921,20 @@ function xzTemperHaveOf(tier) {
   try { return xzTemperHaveIn(readMvuVars(), tier); } catch (e) { return 0; }
 }
 
-/* ── 命中加值 = 招式品质加值 + 敏捷加值 ──
-   品质那一列是《数值表》品质档原表：凡+0 黄+1 玄+2 地+4 天+6 神+8。
-   敏捷加值是 v229 新增：**每点敏捷 +0.5 点命中**，四舍五入到 0.5 粒度。
-   为什么是 0.5 —— d20 只有 20 面、判定阈 12，1 点 ≈ 5% 命中差；
-   敏捷 4~12 的常见跨度 × 0.5 = +2~+6 点，正好把「敏捷 12 的弓手」
-   顶到接近天阶招式的命中水平，而不至于一招必中。 */
-var XZ_HIT_BONUS = { '凡阶': 0, '黄阶': 1, '玄阶': 2, '地阶': 4, '天阶': 6, '神阶': 8 };
-/* 敏捷 → 命中点数。0.5 点/敏捷，见上方注释。 */
-var XZ_AGI_HIT_RATE = 0.5;
+/* ── 招式品质 → **削减对方闪避值的百分点** ──
+   ★★★ v570：量纲从「d20 点数」换成「百分点」，全部 ×5 ★★★
+   旧口径（d20 三档制）：凡+0 黄+1 玄+2 地+4 天+6 神+8 —— 单位是**骰面**。
+   1 个骰面 = 20 面里的 1 份 = **5% 命中**，所以搬成百分比时一律 ×5：
+       凡 0 ／ 黄 5 ／ 玄 10 ／ 地 20 ／ 天 30 ／ 神 40
+   ⚠ **不 ×5 就是错的**，而且是很难发现的那种错：不报错、不崩，
+     只是品质差异缩到原来的 1/5 —— 神阶招式只能削掉 8% 闪避（本应 40%），
+     玩家会感觉「换了好武器没用」，但任何日志里都看不出异常。
+   ⚠ 这张表只参与 `xzHitCutOf`（削闪避），**不参与任何伤害计算**。 */
+var XZ_HIT_BONUS = { '凡阶': 0, '黄阶': 5, '玄阶': 10, '地阶': 20, '天阶': 30, '神阶': 40 };
+/* ★ v570：`XZ_AGI_HIT_RATE` 已删。它从 v260 起就是**零读者死常量**
+   （v260 定口径「没有命中值这个东西，命中加成 = 削减对方闪避值」，
+     敏捷不再加命中），留着只会让人以为「敏捷还加命中」，改引擎时白改一遍。
+   ⇒ 敏捷现在只经由 `xzEvadeValueOf` 的 `agi * 3` 影响闪避值（守方侧）。 */
 function xzHitBonusOf(skill) {
   try {
     var q = String((skill && (skill.品质 || skill.quality)) || '').replace(/阶$/, '') + '阶';
@@ -13785,6 +13957,31 @@ function xzHitBonusOf(skill) {
    ⇒ 攻方**没有**正向的命中加值（敏捷也不再加命中）；
    ⇒ 守方有一个**闪避值**（敏捷 + 境界 + 其他加成，有上限）；
    ⇒ 所有「加命中」的效果，一律实现为**削减守方的闪避值**。 */
+/* ★★★ v570【作者定口径】闪避值 = **百分比**，不再是 d20 点数 ★★★
+   作者原话（2026-11-09）：
+     「甲，但是闪避值不是命中率。命中率是对谁的命中率，而不是一个数值。
+       所以不能写命中率出来。所以闪避值就是闪避值，命中率是后台代码计算，
+       也就是在战报里展开之后显示。而不是一个写在属性里，是灵活的。」
+
+   ── 这三句话定下了三件事，改的时候一条都不许走样 ─────────────────────
+   ① **闪避值就是百分比本身**。写 `闪避:12` ⇒ 闪避值 12。
+      v570 之前它是「d20 上的点数」（12% × 20 = 2.4 点），
+      玩家看到 2.4 而自己写的是 12，两边永远对不上 —— 这就是作者要改的根。
+   ② **面板只许显示「闪避值」这一个数**，不许显示命中率。
+      命中率是「谁打谁」的函数：同一个人，被同境打和被高两境打，命中率完全不同。
+      把它印在属性面板上就是在撒谎（面板只有一个人，没有对手）。
+   ③ **命中率只在战报里展开显示**（`xzRollHit` 的 note），且必须写清
+      「打你的人是哪个境界、带什么品质的招」—— 因为没有对手就没有命中率。
+
+   ── 换算率：为什么 1 点 = 5% ──────────────────────────────────────────
+   旧口径 1 点闪避值 = 1 个骰面（d20 有 20 面）= **5%** 的命中。
+   改成百分比时按 5 倍换算 ⇒ **已有配装的强度一分不变**，
+   只是把「2.4 点」这个玩家看不懂的数翻译成「12」这个他自己写下的数。
+   ⚠ 这一条是本次改造唯一的平衡承诺：老档不该因为换了单位突然变强/变弱。
+      要动强度就动封顶（`XZ_EVADE_CAP`），别偷偷改这里的 5。 */
+var XZ_EVADE_CAP = 75;      /* 闪避值封顶 75%（原 15 点 × 5 = 75，同幅搬家） */
+var XZ_EVADE_PT2PCT = 5;    /* 1 旧点 = 5%（见上：1 个骰面 = 5%） */
+
 function xzEvadeValueOf(u) {
   try {
     var agi = Number(u && (u.agi !== undefined ? u.agi
@@ -13797,31 +13994,35 @@ function xzEvadeValueOf(u) {
       var keys = Object.keys(XZ_LEVEL_COEFF);
       for (var i = 0; i < keys.length; i++) { if (rn.indexOf(keys[i]) >= 0) { rIdx = i; break; } }
     } catch (eR) {}
-    /* 效果项类闪避（灵根 / 大道 / 临时）：百分比 × 20 折成点数（d20 满分 20） */
-    var pts = 0;
-    try { pts += (Number(u && u.tempEvadeBoost) || 0) * 20; } catch (e1) {}
+    /* ── 效果项那几路：它们本来就是**百分比**（tempEvadeBoost / _xzPerm.evade /
+       灵根 / 大道 存的全是 0.12 这种），v570 之前乘 20 折点数，现在直接相加。 */
+    var pts = 0;                                   /* 单位：百分点 */
+    try { pts += (Number(u && u.tempEvadeBoost) || 0) * 100; } catch (e1) {}
     /* ★ v270：常驻闪避（武器/玄诀/灵根被动）—— 以前它写在 tempEvadeBoost 上，
        手数 9999 永不递减，还会把招式临时闪避顶成永久。现在独立进 _xzPerm。 */
-    try { pts += xzPermOf(u).evade * 20; } catch (ePerm) {}
+    try { pts += xzPermOf(u).evade * 100; } catch (ePerm) {}
     try {
       (u.spiritRootBuffs || []).forEach(function (bb) {
-        if (bb && bb.buff) pts += (Number(bb.buff.evade) || 0) * 20;
+        if (bb && bb.buff) pts += (Number(bb.buff.evade) || 0) * 100;
       });
     } catch (e2) {}
     try {
       (u.daoBuffs || []).forEach(function (db) {
-        if (db && db.buff && db.buff.evade) pts += (Number(db.buff.evade) || 0) * 20;
+        if (db && db.buff && db.buff.evade) pts += (Number(db.buff.evade) || 0) * 100;
       });
     } catch (e3) {}
-    var v = agi * 0.6 + rIdx * 1.5 + pts;
-    /* 封顶 15：d20 上限 20，攻方最大约 20+8=28 ⇒ 闪避值再高就永远打不中了 */
-    return Math.min(15, Math.round(v * 10) / 10);
+    /* ── 敏捷与境界：原来折成 d20 点数（agi×0.6 + rIdx×1.5），
+       现在按 ×5 搬到百分比上，等于 agi×3 + rIdx×7.5。 */
+    var v = agi * 3 + rIdx * 7.5 + pts;
+    /* 封顶 75（= 旧 15 点 × 5）：留 25% 的余量，
+       保证「总有人打得中」，也保证同境对拼不会变成互相打空。 */
+    return Math.round(Math.min(XZ_EVADE_CAP, Math.max(0, v)) * 10) / 10;
   } catch (e) { return 0; }
 }
 /* 攻方对守方闪避值的**削减** = 招式品质 + 命中类效果项（这就是「命中加成」的唯一形态） */
 function xzHitCutOf(attacker, skill) {
   var cut = 0;
-  try { cut += Number(xzHitBonusOf(skill)) || 0; } catch (e1) {}        /* 品质：凡0…神8 */
+  try { cut += Number(xzHitBonusOf(skill)) || 0; } catch (e1) {}        /* 品质：凡0 黄5 玄10 地20 天30 神40（百分点） */
   /* ★ v272：删掉 'attacker.v75HitFlat' 那行 —— 全仓零写入点，恒为 undefined，
      'cut += 0' 白算一次（v260 起攻方已无「命中加值」这个概念）。 */
   return cut;
@@ -13839,43 +14040,56 @@ function _v228RealmRoot(name) {
   return s;
 }
 
-/* ★ 落档判定。返回 { mode:'命中'|'险中'|'落空', roll, total, note }
-   ★ v229：命中加值 = 招式品质加值 + **攻方敏捷加值**（每点敏捷 +0.5）。
-     闪避不再单独立机制 —— **总值落在落空档，就是对方闪开了**。 */
+/* ★ 落档判定。返回 { mode:'命中'|'落空', roll, chance, note }
+   ══════════════════════════════════════════════════════════════════════════
+   ★★★ v570【作者定口径】命中率是**后台算出来的**，只在战报里展开 ★★★
+   作者原话：「闪避值不是命中率。命中率是对谁的命中率，而不是一个数值。
+     所以不能写命中率出来……命中率是后台代码计算，也就是在战报里展开之后显示。
+     而不是一个写在属性里，是灵活的。」
+
+   ── 为什么命中率不能是一个属性 ────────────────────────────────────────────
+   同一个人，被同境打和被高两境打，命中率完全不同。
+   属性面板上只有「一个人」，没有对手 —— 印在面板上的命中率必然是假的。
+   ⇒ 面板只显示「闪避值 N%」（这个人自己的属性）；
+     命中率只在**这一手、这个对手、这一招**时现算，写进战报。
+
+   ── 判定公式（v570 起，闪避值是百分比，不再是 d20 点数）─────────────────
+       有效率 = 闪避值 − 招式品质削减          （凡0 黄5 玄10 地20 天30 神40）
+       命中率 = 100 − 有效率
+       掷 d100：≤ 命中率 → 命中；否则 → 落空（整手 0 伤）
+
+   ⚠ 「险中」这一档 v570 **删了**：它是旧 d20 三档制的中间档（伤害 ×0.5），
+     在百分比体系里没有落点 —— 作者要的是「闪避值多少，就打掉多少命中」。
+     留着它，玩家永远算不清「我的 30% 闪避值到底值多少」。
+     ⇒ 现在语义只剩一句：**闪避值 N% ⇒ 对方打你空 N%**。
+   ⚠ 同境保底（条目第 133 行「同境界不会落空」）**v570 一并废除**。
+     留着它，同境对战闪避值堆到 75% 也一次打不空 —— 而玩家主战场就是同境，
+     那这个属性等于废的。这是**平衡决策，作者选「甲」时已拍板**。
+     要回滚：恢复 `if (sameRealm) mode='险中'` 那一句即可，但问题会一起回来。
+   ══════════════════════════════════════════════════════════════════════════ */
 function xzRollHit(attacker, defender, skill) {
-  var roll = 1 + Math.floor(Math.random() * 20);
-  /* ★ v260：判定 = d20 + 基础命中(12) + 攻方削减 − 守方闪避值。
-     攻方**没有**命中加值（敏捷不再加命中，只影响速度与守方闪避值）。 */
+  var roll = 1 + Math.floor(Math.random() * 100);   /* d100，面值 1..100 */
   var evadeVal = xzEvadeValueOf(defender);
+  /* 招式品质削掉的闪避值（旧名「命中加值」，作者口径：命中加成 = 削减对方闪避值） */
   var cut = xzHitCutOf(attacker, skill);
-  var qBonus = xzHitBonusOf(skill);
-  var agiBonus = 0;              /* v260：攻方敏捷不再提供命中加值 */
-  var bonus = cut;
-  var dodge = evadeVal;          /* 守方闪避值（已含敏捷/境界/效果项） */
-  var total = roll + 12 + cut - dodge;
-  /* 同大境界保底：条目第 133 行「同境界不会落空，最差险中」。
-     ⚠ 这里**直接比字符串里的十二大境名**，不查 REALM_COEFFS ——
-       查表会踩两个坑：① 专称（炼虚后期/金丹后期）不带大境名，字符串查不到；
-       ② 退化成拿「系数」当「档位」比（练气初期 1.00 ≠ 练气初期 1.04，
-       但两者是**同一个大境界**，按系数比永远判不出「同境」）。
-       判据只有一个问题要回答：是不是同一个大境界。 */
-  var sameRealm = false;
-  try {
-    var a = String((attacker && (attacker.境界 || attacker.realm)) || '');
-    var d = String((defender && (defender.境界 || defender.realm)) || '');
-    if (a && d) sameRealm = (_v228RealmRoot(a) === _v228RealmRoot(d));
-  } catch (eS) {}
-  var mode;
-  if (total >= 12) mode = '命中';
-  else if (total >= 7) mode = '险中';
-  else mode = sameRealm ? '险中' : '落空';
-  if (sameRealm && mode === '落空') mode = '险中';
+  var eff = Math.max(0, Math.min(100, evadeVal - cut));   /* 有效率，百分点 */
+  var chance = Math.max(0, Math.min(100, 100 - eff));     /* 命中率，百分点 */
+  var mode = (roll <= chance) ? '命中' : '落空';
+  /* 战报里把「为什么是这个命中率」摊开 —— 玩家看得到才算数，
+     否则又是「面板写着一个数、打起来是另一个数」。 */
+  var _dn = String((defender && defender.name) || '?');
+  var note = '【命中判定 d100 掷 ' + roll + ' ≤ ' + Math.round(chance) + '%'
+    + '｜' + _dn + ' 闪避值 ' + (Math.round(evadeVal * 10) / 10) + '%'
+    + (cut ? (' − 本招品质削 ' + cut + '%') : '')
+    + (Math.abs(eff - evadeVal) > 0.05 ? (' = 有效 ' + (Math.round(eff * 10) / 10) + '%') : '')
+    + '】';
   return {
-    mode: mode, roll: roll, qBonus: qBonus, agiBonus: agiBonus, bonus: bonus, dodge: dodge, total: total,
-    note: '【落档 d' + roll + ' +基础12'
-          + (cut ? (' −削闪避' + cut) : '') + ' −闪避值' + evadeVal
-          + ' = ' + total + '｜' + (mode === '落空' ? '落空（对方闪开）' : mode) +
-          (mode === '险中' ? '（伤害减半）' : '') + '】'
+    mode: mode, roll: roll, chance: chance, evade: evadeVal, eff: eff, cut: cut,
+    qBonus: xzHitBonusOf(skill), agiBonus: 0, bonus: cut,
+    /* 旧字段原样保留：老读者读的是 dodge / total，改成新口径但不删字段，
+       免得别的分支静默拿到 undefined（本项目最贵那类 bug）。 */
+    dodge: eff, total: chance,
+    note: note
   };
 }
 
@@ -15049,9 +15263,20 @@ function calcDamage(attacker, defender, skill, isAoe) {
          玩家与作者都被那张表骗了（工具/effect_channels.mjs 扫出来的「字段没人读」就是它）。
          现在唯一真相源是 V2_STATES：改表即改结算，且质检能自动证明。 */
       var _V2D = (typeof V2_STATES !== 'undefined') ? V2_STATES : {};
-      var _jfDef = _V2D['增伤'] || {}, _cnDef = _V2D['集气'] || {}, _ygDef = _V2D['减伤'] || {}, _hzDef = _V2D['减速'] || {};
+      /* ★ v572：`_jfDef`（`_V2D['增伤']`）已删 —— v570 把「叠层增伤」改成走
+         `xzStackDmgOf(attacker)` 之后，它**再没有任何读者**，成了「算了没人乘」。
+         这正是 `_v278_compute_unused` 抓到的那种形状（v101/v104/v108/v270/v277 五次事故同型），
+         留着会让下一个人以为「增伤」还从这里读表。
+         其余三个仍在用，别顺手一起删：
+           `_cnDef.charge`（集气→蓄能）、`_ygDef.fin`（减伤→岩固）、`_hzDef.outCut`（减速→寒霜）。 */
+      var _cnDef = _V2D['集气'] || {}, _ygDef = _V2D['减伤'] || {}, _hzDef = _V2D['减速'] || {};
       var _jf = v2StateVal(attacker, '增伤');
-      if (_jf && _jfDef.dmg) _drFoldAmp += _jf * Number(_jfDef.dmg);   /* ★ v124：疾风势种→增伤乘区 */
+      /* ★ v570/v571：每层强度走 `v2Per`，总贡献走 `xzStackDmgOf` ——
+         **面板（xzDmgUpOf）读的是同一个函数**，两处永远同值。
+         作者 2026-11-09 拍板：「全部写入增伤值，那就好办，因为我们有增伤值上限」。
+         ⚠ 别在这里写成 `_jf * v2Per(...)`：那就是第二份口径，
+            面板要不要跟、夹顶夹在哪，又得各算一遍（v570 前就是这么漂的）。 */
+      if (_jf && typeof xzStackDmgOf === 'function') _drFoldAmp += xzStackDmgOf(attacker);   /* ★ v124：疾风势种→增伤乘区 */
       var _ng = v2StateVal(attacker, '集气');
       if (_ng && _cnDef.charge) {
         _drFoldAmp += _ng * Number(_cnDef.charge);   /* ★ v124：蓄能势种→增伤乘区 */
@@ -15097,11 +15322,13 @@ function calcDamage(attacker, defender, skill, isAoe) {
       }
       var _jzd = v2StateVal(defender, '敌多增伤');
       if (_jzd) _drSelfReduce += Math.min(0.15, _jzd * 0.015);   /* ★ v124：→减伤乘区 */
-      var _rs2 = v2StateVal(defender, '受击减伤'); if (_rs2) _drSelfReduce += Math.min(0.20, _rs2 * 0.04);   // 体·肉身受击叠层减伤（★ v124：→减伤乘区）
+      var _rs2 = v2StateVal(defender, '受击减伤');
+      if (_rs2) _drSelfReduce += Math.min(0.20, _rs2 * ((typeof v2Per === 'function') ? v2Per('受击减伤', 'dr', defender) : 0.04));   // 体·肉身受击叠层减伤（★ v124/v570：→减伤乘区）
       /* ★ v108：这里原来有一行 'var _pj = v2StateVal(defender,'破甲'); if (_pj) ampPool += _pj * 0.06;'
          —— ampPool 自 v94 起不乘进 rawFinal ⇒ 破甲 5 层对伤害**毫无影响**。
          现改走活乘区 v75VulnMult（见 11548 的 v75VulnPct），本行删除，别复活。 */
-      var _drg = v2StateVal(defender, '减伤'); if (_drg) _drSelfReduce += Math.min(0.25, _drg * 0.05);   /* ★ v124：→减伤乘区 */
+      var _drg = v2StateVal(defender, '减伤');
+      if (_drg) _drSelfReduce += Math.min(0.25, _drg * ((typeof v2Per === 'function') ? v2Per('减伤', 'dr', defender) : 0.05));   /* ★ v124/v570：→减伤乘区 */
       var _sn = v2StateVal(attacker, '减速'); if (_sn) _drFoldAmp -= Math.min(0.15, _sn * 0.03);   /* ★ v124：攻方自减→fold 负向 */
     } catch (eV2) {}
   }
@@ -15174,7 +15401,7 @@ function calcDamage(attacker, defender, skill, isAoe) {
   if (isCrit) { try { critMult += Math.min(0.50, mechSumField(attacker, 'critDmg')); } catch (eCD) {} }
   /* ★ 2026-11-04：叠层暴伤（机制名 `叠层爆伤`）—— 每层 +6%，五层满 +30%，
      与上面那条共用同一个 0.50 封顶（不另开口子，免得四条来源各封 0.5 叠出 3.5 倍）。 */
-  if (isCrit) { try { critMult += Math.min(0.50, (v2StateVal(attacker, '暴伤') || 0) * 0.06); } catch (eCD2) {} }
+  if (isCrit) { try { critMult += Math.min(0.50, (v2StateVal(attacker, '暴伤') || 0) * ((typeof v2Per === 'function') ? v2Per('暴伤', 'critDmg', attacker) : 0.06)); } catch (eCD2) {} }
   /* ★ v94：'暴伤:X%' 机制名（applyV75Effects 落的 v94CritDmgPct）—— 原来这类效果没有读取点 */
   if (isCrit && (attacker.v94CritDmgPct || 0) > 0) critMult += Math.min(0.50, attacker.v94CritDmgPct);
   /* ★ v270：常驻暴伤（_xzPerm.critDmg）—— 同样走活乘区。 */
@@ -15370,7 +15597,10 @@ function calcDamage(attacker, defender, skill, isAoe) {
     } catch (eHitLog) {}
     return { isDodge: true, dmg: 0, isCrit: false, details: '[落空 ' + hitRoll.roll + ']', capped: false, ignoreShield: false };
   }
-  var hitMult = (hitRoll.mode === '险中') ? 0.5 : 1.0;
+  /* ★ v570：「险中」档已删（闪避值改成百分比后只剩命中/落空两档）。
+     这一行保留成恒 1，是为了让下面「险中x0.5」那几处拼字不会突然拿到 undefined；
+     真要让伤害减半，就走别的机制（虚弱 / 减伤乘区），不要再复活中间档。 */
+  var hitMult = 1.0;
   rawFinal = rawFinal * hitMult;
 
   var capped = false;
@@ -15414,7 +15644,9 @@ function calcDamage(attacker, defender, skill, isAoe) {
        ⚠ 别把 xzNote（陷阵减伤）也加进来：xzMult 仍在「一律不乘」清单里（见 12769 段），
          加了就是新一次的「显示与引擎打架」。它要显示，得先把 xzMult 接进 rawFinal 并过闸。 */
     + weakenNote
-    + (hitMult < 1 ? ' 险中x0.5' : '')
+    /* ★ v570：`险中x0.5` 这一项删了（中间档已废，hitMult 恒 1）。
+       命中率本身已经写进落空时的战报（xzRollHit 的 note），
+       命中时不重复报 —— 玩家不需要每一手都看见「这次打中了」。 */
     + (isDivine ? ' 招式' : '') + (isAoe ? ' 范围' : '')
     + ' -> ' + finalDmg + ']';
 
@@ -15619,9 +15851,30 @@ function xzRecalcSpd(f) {
   var hp = Math.min(0.6, (hasH ? (Number(f.v75HastePct) || 0) : 0) + p.hastePct);
   /* ★ 2026-11-04：叠层提速（机制名 `叠层提速`）—— 每层 +8 点，五层满 +40 点。
      落 'hasteFlat' 这一项、与「常驻提速点」同一个加法项，**不另起一路速度**：
-     另起一路的话 `xzRecalcSpd` 就不是「速度唯一出口」了，面板与结算会重新分家。 */
+     另起一路的话 `xzRecalcSpd` 就不是「速度唯一出口」了，面板与结算会重新分家。
+     ★★★ v571：`* 8` 改成读表 ★★★
+       上面那句「改表即改结算」在这儿一直是假的：表里 `'提速': { …, hasteFlat: 8 }`
+       写着的 8 没人读，这里是硬编码 `* 8`。数值恰好相同，所以从来没红过 ——
+       与登记册里 `暴击.crit`（11390 写死 0.05）、`减伤.dr`（11366 写死 0.05）
+       完全同型的「表内死字段」：改了《数值表》玩家却发现没变化。
+       探针 `工具/verify_v2_states.mjs` 的 S5 段就是抓这个的（v571 已把它的读者图
+       补上方括号与 v2Per/v2Cap 调用形态，所以这条终于扫出来了）。
+     ⚠ 常数项（track/slow/hasteFlat）不吃 pct 缩放，所以**不能**写成 v2Per(...)——
+       v2Per 对非 SCALABLE 字段虽然原样返回，但语义上这里是「每层常数点」，
+       走 `v2Per(key,'hasteFlat')` 反而会让人误以为它能被来源 pct 缩放。
+       直接用表内的 `hasteFlat` 才是唯一真相源。 */
   var _v2hf = 0;
-  try { _v2hf = (typeof v2StateVal === 'function') ? ((v2StateVal(f, '提速') || 0) * 8) : 0; } catch (eHf2) {}
+  try {
+    if (typeof v2StateVal === 'function') {
+      /* ⚠ 接收者名必须叫 `def` —— 这是 `工具/verify_v2_states.mjs` 读者图认的名字
+         （`DEF_RECEIVERS = /^(?:def|d|_dd|_jfDef|…)$/`）。换个名字它扫不到，
+         字段又会被判「没人读」，闸重新变红。同理字段名要写成 `def.hasteFlat`
+         这种点号形态，动态键名 `def[k]` 一样扫不到。 */
+      var def = (typeof V2_STATES !== 'undefined' && V2_STATES['提速']) ? V2_STATES['提速'] : null;
+      var _hfPer = def ? (Number(def.hasteFlat) || 8) : 8;
+      _v2hf = (v2StateVal(f, '提速') || 0) * _hfPer;
+    }
+  } catch (eHf2) { _v2hf = 0; }
   var hf = (hasH ? (Number(f.v75HasteFlat) || 0) : 0) + p.hasteFlat + _v2hf;
   /* ★ 临时减速与常驻减速要**相加**（不能二选一）—— 写成三元会让常驻减速被临时那条顶掉 */
   var sp = Math.min(0.6, (hasS ? (Number(f._v75SlowPct) || 0) : 0) + p.slowPct);
@@ -15687,7 +15940,10 @@ function xzCritRateOf(f, defender, opt) {
     }
     if ((Number(f.lustStacks) || 0) > 0) r += Math.min(0.30, (Number(f.lustStacks) || 0) * 0.06);
     if (isSkill) {
-      if ((Number(f.swordIntent) || 0) > 0) r += (Number(f.swordIntent) || 0) * 0.05;
+      /* ★ v570：`暴击` 势种每层强度也走 `v2Per` 唯一出口。
+         ⚠ 这里读的是 `f.swordIntent`（`v2StateVal` 对 '暴击' 的分流），
+           与「剑意」共用同一个计数器 —— 剑意不是势种，它没有 pct，走默认 0.05 不变。 */
+      if ((Number(f.swordIntent) || 0) > 0) r += (Number(f.swordIntent) || 0) * ((typeof v2Per === 'function') ? v2Per('暴击', 'crit', f) : 0.05);
       if ((Number(f.tongmingRounds) || 0) > 0) r += 0.20 + (Number(f.swordIntent) || 0) * 0.02;
       r += Math.min(0.40, mechSumField(f, 'crit'));
     }
@@ -15717,8 +15973,18 @@ function xzDmgUpOf(f) {
        **唯独这个函数不读它** ⇒ 面板「增伤值」恒 0。
        ⇒ 在这里一并计入，calcDamage 那边改读本函数，不各自算一份。 */
     var _mechAmp = Math.min(0.60, mechSumField(f, 'amp'));
+    /* ★★★ v571：**叠层增伤必须计入「增伤值」** ★★★
+       作者原话（2026-11-09）：「叠层增伤会不会把增伤值加入面板里，还是说生效了但是不加入」
+       ⇒ 以前的答案是「生效了，但不加入」：结算侧把它加进 `_drFoldAmp`，
+         面板侧一行都没读 ⇒ 玩家叠满五层，面板「增伤值」一动不动，看着像没生效。
+       ⇒ 现在计入，且与结算**同一个函数**（`xzStackDmgOf`），面板与实战不会各说各话。
+       ⚠ 它已经由 `xzStackDmgOf` 夹过 `v2Cap`（满层上限），这里不再单独夹一次 ——
+         两处夹、值不一样时，调高的那次永远不生效（本项目踩过）。
+       ⚠ 与 `v75BuffPct` / `_xzPerm.dmg` / `amp` 三源**同池相加**后再受 0.6 总夹：
+         这就是作者说的「全部写入增伤值，因为我们有增伤值上限」。 */
+    var _stackUp = (typeof xzStackDmgOf === 'function') ? xzStackDmgOf(f) : 0;
     up = Math.min(0.6, ((Number(f.v75BuffPct) > 0 && (Number(f.v75BuffRounds) || 0) > 0) ? Number(f.v75BuffPct) : 0)
-      + xzPermOf(f).dmg + _mechAmp);
+      + xzPermOf(f).dmg + _mechAmp + _stackUp);
     down = Math.min(0.6, ((Number(f.v75DebuffPct) > 0 && (Number(f.v75DebuffRounds) || 0) > 0) ? Number(f.v75DebuffPct) : 0) + xzPermOf(f).dmgDown);
   } catch (eDU) {}
   return Math.round((up - down) * 1000) / 1000;
@@ -16344,10 +16610,20 @@ function applyV75Effects(attacker, target, skill) {
           if (!attacker._xzV2Stack) attacker._xzV2Stack = {};
           var _vsOld = attacker._xzV2Stack[_vsKey];
           var _vsRounds = _isPerm ? 0 : dur;
+          /* ★★★ v571：来源名（作者要「buff 中显示这个叠层增伤的来源是谁哪个玄技或玄诀」）★★★
+             取顺序：招式名 → 机制名 → 兜底「未知来源」。
+             ⚠ 不要另存一个 `f._xzV2Src` 之类的旁路键：buff 显示读的就是这一处，
+               旁路键迟早与势种本体脱钩（本项目「有写无读」的经典死法）。 */
+          var _vsSrcName = String((skill && (skill.name || skill.名称)) || e.key || '').trim() || '未知来源';
+          var _vsPct = Math.min(1, Number(e.pct) || 0);
           if (_vsOld) {
             /* 常驻一旦挂上就保持常驻（重挂一次临时的不该把它降级） */
             if (_isPerm) { _vsOld._perm = true; _vsOld.rounds = 0; }
             else { _vsOld.rounds = Math.max(Number(_vsOld.rounds) || 0, _vsRounds); }
+            /* ★ v571：**多来源不是「后写的覆盖先写的」** —— 作者拍的是「全部写入增伤值」。
+               把这一条也登记进 srcs（同名只刷新 pct），强度按 srcs 求和（见 v2StackPctOf）。
+               ⚠ 层数仍然只有一个计数器：两个来源不会让每手叠 2 层，变的是「每层多强」。 */
+            try { if (typeof v2StackAddSrc === 'function') v2StackAddSrc(attacker, _vsKey, _vsSrcName, _vsPct); } catch (eSA1) {}
             BattleState.logs.push(an + ' 续【' + esc(e.key) + '】—— 每击仍在蓄养势种「'
               + esc(_vsKey) + '」' + (_isPerm ? '（整场）' : ('，' + xzDurText(dur))) + '）');
             break;
@@ -16356,7 +16632,9 @@ function applyV75Effects(attacker, target, skill) {
             rounds: _vsRounds,
             /* ★ 常驻用布尔标记，不用 rounds===0 当哨兵（0 有歧义，见逐手递减那段） */
             _perm: _isPerm,
-            pct: Math.min(1, Number(e.pct) || 0)
+            pct: _vsPct,
+            /* ★ v571：来源清单 —— 面板 buff 与「多来源求和」都只认这一份 */
+            srcs: (_vsPct > 0 ? [{ name: _vsSrcName, pct: _vsPct }] : [])
           };
           /* 当场先给一层：不然「挂了但这一手没打中」看起来毫无动静 */
           var _vsGain = 0;
@@ -24379,8 +24657,15 @@ var XZJJ = (function () {
           _s += chip('穿防值', _pct(_pc) + (_pc > 0 ? '' : ''), _pc > 0 ? '#e6bd76' : '#8a949e');
           _s += chip('减伤值', _pct(_dr), _dr > 0 ? '#8fe0c4' : '#8a949e');
           _s += chip('增伤值', (_up >= 0 ? '+' : '') + _pct(_up), _up > 0 ? '#ffb3a7' : (_up < 0 ? '#8fe0c4' : '#8a949e'));
-          /* 闪避值不是百分比 —— 它是 d20 上的「点数」（封顶 15），口径见 xzEvadeValueOf */
-          _s += chip('闪避值', String(Math.round(_ev * 10) / 10), _ev > 0 ? '#7fd2c1' : '#8a949e');
+          /* ★★★ v570：闪避值 = 百分比本身，直接显示这个数 ★★★
+             作者口径：「闪避值不是命中率……不能写命中率出来。」
+             ⇒ 这里**只显示闪避值**，一个字的命中率都不许出现 ——
+               同一个人被同境打和被高两境打，命中率完全不同，
+               面板上没有对手，写出来就是假的。
+             命中率在战报里按「这一次、这个对手、这一招」现算（见 xzRollHit）。
+             ⚠ 别把 `100 − _ev` 印在这里当作"命中率"：那是「被同境白板打」的特例，
+               不是这个人的属性。这正是 v570 要拆掉的那个误解。 */
+          _s += chip('闪避值', (Math.round(_ev * 10) / 10) + '%', _ev > 0 ? '#7fd2c1' : '#8a949e');
           return _s;
         })()
       /* ★ v324（用户：「卡片的查看弹层的…暴击率按出玄技计…闪避值＝d20 上的点数（封顶 15）给我删了」）：
@@ -26955,7 +27240,31 @@ function build() {
       try {
         for (var _sk in V2_STATES) {
           var _sv = (typeof v2StateVal === 'function') ? Number(v2StateVal(f, _sk) || 0) : 0;
-                    if (_sv > 0) out.push({ t: _sk + ' ×' + _sv, k: 'neutral', nm: _sk, n: _sv });
+          if (!(_sv > 0)) continue;
+          /* ★★★ v571：叠层增伤这一条要带「实际加了多少」与「来源是谁」★★★
+             作者原话：「buff 中，显示这个叠层增伤的来源是谁哪个玄技或玄诀就行了」。
+             为什么只给「增伤」加这一层：其余势种（减伤/暴击/暴伤/治疗/提速…）
+             走的是各自的乘区，玩家在面板上**看不到**对应那一项，加了反而又造一个新误会。
+             增伤这一个有面板对应项（`增伤值`），所以必须说清「这 N 层 = 多少 %、谁给的」。
+             ⚠ `t` 只放「名字 + 数值 + 来源」，**手数/层数交给 n 角标** ——
+               旧病是把手数拼进名字，于是卡面出现「灼烧3手 · 剩3」（v271 已修，别复活）。 */
+          if (_sk === '增伤' && typeof xzStackDmgInfoOf === 'function') {
+            var _si = xzStackDmgInfoOf(f);
+            var _srcNames = (_si.srcs || []).map(function (x) { return String(x && x.name || ''); })
+              .filter(function (x) { return !!x; });
+            var _seenSrc = {}, _srcUniq = [];
+            for (var _si2 = 0; _si2 < _srcNames.length; _si2++) {
+              if (_seenSrc[_srcNames[_si2]]) continue;
+              _seenSrc[_srcNames[_si2]] = 1; _srcUniq.push(_srcNames[_si2]);
+            }
+            out.push({
+              t: '叠层增伤 ×' + _sv + '（+' + (Math.round(_si.pct * 1000) / 10) + '%）'
+                + (_srcUniq.length ? ('｜来源：' + _srcUniq.join('、')) : ''),
+              k: 'good', nm: _sk, n: _sv
+            });
+            continue;
+          }
+          out.push({ t: _sk + ' ×' + _sv, k: 'neutral', nm: _sk, n: _sv });
         }
       } catch (eSt2) {
         /* 兜底：V2_STATES 不可用（部分加载）时退回旧口径 */

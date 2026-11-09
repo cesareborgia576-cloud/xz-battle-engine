@@ -368,7 +368,20 @@ var V2_STATES = {
   '减速': { side: 'foe',  max: 5,  slow: 0.05, outCut: 0.03, full: '冰封' },
   '流血': { side: 'foe',  max: 5,  dot: 0.03,        full: '割裂' },
   '减伤': { side: 'self', max: 5,  dr: 0.05, fin: 0.12, full: '垒壁' },
-  '增伤': { side: 'self', max: 5,  spd: 0.04, dmg: 0.02, track: 0.02, full: '风驰' },   // ★ v65：track = 每层自己前拉一条的百分比
+  /* ★★★ v570：`dmg` 0.02 → 0.05（用户拍板选 B，修「叠层增伤效果这么小」）★★★
+     ── 为什么原来那个 0.02 是错的 ─────────────────────────────────────────
+     `叠层` 一族七条，其余六条满层都与「一次性写法」持平或略高：
+       叠层减伤 dr:0.05 → 满层 25%（`减伤:20` = 20%）
+       叠层暴击 crit:0.05 → 满层 25%（`暴击:20` = 20%）
+       叠层暴伤 critDmg:0.06 → 满层 30%（`暴伤:20` = 20%）
+       叠层治疗 heal:0.04 → 满层 20%（`治疗:20` = 20%）
+       叠层提速 hasteFlat:8 → 满层 40 点（`提速:40` = 40 点）
+     **只有叠层增伤是 dmg:0.02 → 满层 10%，连 `增伤:20` 的一半都不到。**
+     它不是"设计上就该弱"，是一族里唯一一个数没对齐 —— 与 `叠层减伤` 的 0.05 对照，
+     增伤/减伤这一对本来就该同幅。⇒ 改成 0.05，满层 25%。
+     ⚠ `track:0.02` **不动**：它管行动条（每层前拉 20 点 / 满条 1000），
+       与伤害不是同一个量纲，改它会连带改节奏。那一项的数值有 B2 闸钉着。 */
+  '增伤': { side: 'self', max: 5,  spd: 0.04, dmg: 0.05, track: 0.02, full: '风驰' },   // ★ v65：track = 每层自己前拉一条的百分比
   /* ★ v108：'spd: 0.04' 是**表内死字段** —— 全项目没有任何读者（v65 起疾风改走
      track 前拉条，注释也写了「不动 spd」，但这个键忘了删）。
      留着它 = 下一个读表的人会以为「疾风加速度」，然后发现没反应（bug ⑥ 的同款）。
@@ -913,7 +926,7 @@ var XZ_AUTO_UNSUPPORTED = {
      '定身:auto' 就会读成「机制在、只是别写 auto」，玩家照着改写法，白改。 */
 };
 
-var XZ_HIT_BONUS = { '凡阶': 0, '黄阶': 1, '玄阶': 2, '地阶': 4, '天阶': 6, '神阶': 8 };
+var XZ_HIT_BONUS = { '凡阶': 0, '黄阶': 5, '玄阶': 10, '地阶': 20, '天阶': 30, '神阶': 40 };
 
 var XZ_SUB_LABEL = {
   haste: '提速', slow: '减速', evade: '闪避', dr: '减伤', dmg: '增伤',
@@ -1926,31 +1939,35 @@ function xzEvadeValueOf(u) {
       var keys = Object.keys(XZ_LEVEL_COEFF);
       for (var i = 0; i < keys.length; i++) { if (rn.indexOf(keys[i]) >= 0) { rIdx = i; break; } }
     } catch (eR) {}
-    /* 效果项类闪避（灵根 / 大道 / 临时）：百分比 × 20 折成点数（d20 满分 20） */
-    var pts = 0;
-    try { pts += (Number(u && u.tempEvadeBoost) || 0) * 20; } catch (e1) {}
+    /* ── 效果项那几路：它们本来就是**百分比**（tempEvadeBoost / _xzPerm.evade /
+       灵根 / 大道 存的全是 0.12 这种），v570 之前乘 20 折点数，现在直接相加。 */
+    var pts = 0;                                   /* 单位：百分点 */
+    try { pts += (Number(u && u.tempEvadeBoost) || 0) * 100; } catch (e1) {}
     /* ★ v270：常驻闪避（武器/玄诀/灵根被动）—— 以前它写在 tempEvadeBoost 上，
        手数 9999 永不递减，还会把招式临时闪避顶成永久。现在独立进 _xzPerm。 */
-    try { pts += xzPermOf(u).evade * 20; } catch (ePerm) {}
+    try { pts += xzPermOf(u).evade * 100; } catch (ePerm) {}
     try {
       (u.spiritRootBuffs || []).forEach(function (bb) {
-        if (bb && bb.buff) pts += (Number(bb.buff.evade) || 0) * 20;
+        if (bb && bb.buff) pts += (Number(bb.buff.evade) || 0) * 100;
       });
     } catch (e2) {}
     try {
       (u.daoBuffs || []).forEach(function (db) {
-        if (db && db.buff && db.buff.evade) pts += (Number(db.buff.evade) || 0) * 20;
+        if (db && db.buff && db.buff.evade) pts += (Number(db.buff.evade) || 0) * 100;
       });
     } catch (e3) {}
-    var v = agi * 0.6 + rIdx * 1.5 + pts;
-    /* 封顶 15：d20 上限 20，攻方最大约 20+8=28 ⇒ 闪避值再高就永远打不中了 */
-    return Math.min(15, Math.round(v * 10) / 10);
+    /* ── 敏捷与境界：原来折成 d20 点数（agi×0.6 + rIdx×1.5），
+       现在按 ×5 搬到百分比上，等于 agi×3 + rIdx×7.5。 */
+    var v = agi * 3 + rIdx * 7.5 + pts;
+    /* 封顶 75（= 旧 15 点 × 5）：留 25% 的余量，
+       保证「总有人打得中」，也保证同境对拼不会变成互相打空。 */
+    return Math.round(Math.min(XZ_EVADE_CAP, Math.max(0, v)) * 10) / 10;
   } catch (e) { return 0; }
 }
 
 function xzHitCutOf(attacker, skill) {
   var cut = 0;
-  try { cut += Number(xzHitBonusOf(skill)) || 0; } catch (e1) {}        /* 品质：凡0…神8 */
+  try { cut += Number(xzHitBonusOf(skill)) || 0; } catch (e1) {}        /* 品质：凡0 黄5 玄10 地20 天30 神40（百分点） */
   /* ★ v272：删掉 'attacker.v75HitFlat' 那行 —— 全仓零写入点，恒为 undefined，
      'cut += 0' 白算一次（v260 起攻方已无「命中加值」这个概念）。 */
   return cut;
@@ -1963,39 +1980,28 @@ function _v228RealmRoot(name) {
 }
 
 function xzRollHit(attacker, defender, skill) {
-  var roll = 1 + Math.floor(Math.random() * 20);
-  /* ★ v260：判定 = d20 + 基础命中(12) + 攻方削减 − 守方闪避值。
-     攻方**没有**命中加值（敏捷不再加命中，只影响速度与守方闪避值）。 */
+  var roll = 1 + Math.floor(Math.random() * 100);   /* d100，面值 1..100 */
   var evadeVal = xzEvadeValueOf(defender);
+  /* 招式品质削掉的闪避值（旧名「命中加值」，作者口径：命中加成 = 削减对方闪避值） */
   var cut = xzHitCutOf(attacker, skill);
-  var qBonus = xzHitBonusOf(skill);
-  var agiBonus = 0;              /* v260：攻方敏捷不再提供命中加值 */
-  var bonus = cut;
-  var dodge = evadeVal;          /* 守方闪避值（已含敏捷/境界/效果项） */
-  var total = roll + 12 + cut - dodge;
-  /* 同大境界保底：条目第 133 行「同境界不会落空，最差险中」。
-     ⚠ 这里**直接比字符串里的十二大境名**，不查 REALM_COEFFS ——
-       查表会踩两个坑：① 专称（炼虚后期/金丹后期）不带大境名，字符串查不到；
-       ② 退化成拿「系数」当「档位」比（练气初期 1.00 ≠ 练气初期 1.04，
-       但两者是**同一个大境界**，按系数比永远判不出「同境」）。
-       判据只有一个问题要回答：是不是同一个大境界。 */
-  var sameRealm = false;
-  try {
-    var a = String((attacker && (attacker.境界 || attacker.realm)) || '');
-    var d = String((defender && (defender.境界 || defender.realm)) || '');
-    if (a && d) sameRealm = (_v228RealmRoot(a) === _v228RealmRoot(d));
-  } catch (eS) {}
-  var mode;
-  if (total >= 12) mode = '命中';
-  else if (total >= 7) mode = '险中';
-  else mode = sameRealm ? '险中' : '落空';
-  if (sameRealm && mode === '落空') mode = '险中';
+  var eff = Math.max(0, Math.min(100, evadeVal - cut));   /* 有效率，百分点 */
+  var chance = Math.max(0, Math.min(100, 100 - eff));     /* 命中率，百分点 */
+  var mode = (roll <= chance) ? '命中' : '落空';
+  /* 战报里把「为什么是这个命中率」摊开 —— 玩家看得到才算数，
+     否则又是「面板写着一个数、打起来是另一个数」。 */
+  var _dn = String((defender && defender.name) || '?');
+  var note = '【命中判定 d100 掷 ' + roll + ' ≤ ' + Math.round(chance) + '%'
+    + '｜' + _dn + ' 闪避值 ' + (Math.round(evadeVal * 10) / 10) + '%'
+    + (cut ? (' − 本招品质削 ' + cut + '%') : '')
+    + (Math.abs(eff - evadeVal) > 0.05 ? (' = 有效 ' + (Math.round(eff * 10) / 10) + '%') : '')
+    + '】';
   return {
-    mode: mode, roll: roll, qBonus: qBonus, agiBonus: agiBonus, bonus: bonus, dodge: dodge, total: total,
-    note: '【落档 d' + roll + ' +基础12'
-          + (cut ? (' −削闪避' + cut) : '') + ' −闪避值' + evadeVal
-          + ' = ' + total + '｜' + (mode === '落空' ? '落空（对方闪开）' : mode) +
-          (mode === '险中' ? '（伤害减半）' : '') + '】'
+    mode: mode, roll: roll, chance: chance, evade: evadeVal, eff: eff, cut: cut,
+    qBonus: xzHitBonusOf(skill), agiBonus: 0, bonus: cut,
+    /* 旧字段原样保留：老读者读的是 dodge / total，改成新口径但不删字段，
+       免得别的分支静默拿到 undefined（本项目最贵那类 bug）。 */
+    dodge: eff, total: chance,
+    note: note
   };
 }
 
@@ -2101,7 +2107,10 @@ function xzCritRateOf(f, defender, opt) {
     }
     if ((Number(f.lustStacks) || 0) > 0) r += Math.min(0.30, (Number(f.lustStacks) || 0) * 0.06);
     if (isSkill) {
-      if ((Number(f.swordIntent) || 0) > 0) r += (Number(f.swordIntent) || 0) * 0.05;
+      /* ★ v570：`暴击` 势种每层强度也走 `v2Per` 唯一出口。
+         ⚠ 这里读的是 `f.swordIntent`（`v2StateVal` 对 '暴击' 的分流），
+           与「剑意」共用同一个计数器 —— 剑意不是势种，它没有 pct，走默认 0.05 不变。 */
+      if ((Number(f.swordIntent) || 0) > 0) r += (Number(f.swordIntent) || 0) * ((typeof v2Per === 'function') ? v2Per('暴击', 'crit', f) : 0.05);
       if ((Number(f.tongmingRounds) || 0) > 0) r += 0.20 + (Number(f.swordIntent) || 0) * 0.02;
       r += Math.min(0.40, mechSumField(f, 'crit'));
     }

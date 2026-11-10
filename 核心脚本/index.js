@@ -4840,9 +4840,16 @@ var V2_STATES = {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
-   ★★★ v570：势种「每层强度」的**唯一换算出口**（用户拍板选 B）★★★
-   用户原话：「叠层增伤到底什么机制，为什么效果这么小，有没有bug」→ 选定 B：
-   「`pct` 当作**满层总强度**，每层 = `pct / max`」。
+   ★★★ v580 翻案：势种「每层强度」的**唯一换算出口** ★★★
+   v570 曾拍「`pct` 当作**满层总强度**，每层 = `pct / max`」，
+   结果是玩家勾了自选器默认的 20，每层反而从表内 5% 掉到 4%（写 20 比不写还弱）。
+   作者 2026-11-11 拍板「翻案」⇒ **数值就是每层强度**：
+     `叠层增伤:5`  = 每层 +5%（与表内默认一致），满 5 层 +25%
+     `叠层增伤:20` = 每层 +20%，满 5 层 +100%
+   ⚠ 这是**口径翻案，不是默认平衡调整**：07 八条的默认数值已按各自表内每层值
+     对齐（增伤/减伤/暴击 5、暴伤 6、提速 8 点、治疗 4、破甲 6、减速 3），
+     玩家不改数字时，改前改后强度逐字相同。老存档里手写 20 的那批会变强，
+     这是翻案的必然结果（作者已知会改到既有存档的实际强度）。
 
    ── 修的是什么（v570 之前的三处病）──────────────────────────────────────
    ① **`pct` 有写无读**：`case 'v2stack'` 里明明存了
@@ -4855,23 +4862,29 @@ var V2_STATES = {
    ③ **`增伤.dmg` 一族里唯一没对齐的数**（0.02，见 V2_STATES 那段注释）。
 
    ── 换算口径（只有这一条，别处不许再算）────────────────────────────────
-     `v2Per(key, field)` = 每层实际收益
-       · 玩家写了 `pct`（>0）⇒ `pct / def.max`（`叠层增伤:20` = 满 5 层共 20% ⇒ 每层 4%）
-       · 没写 pct（老数据 / 引擎内部自己叠）⇒ 表里那个字段的默认值（逐字向后兼容）
-     `v2Cap(key, field)` = 这一档的总上限 = `每层 × 层数上限`
-       消费点用它当 Math.min 的夹子，于是「写 200」不会变成每层 40% 那种荒唐值。
-
-   ⚠ 为什么按 `def.max` 除而不是按「当前实际层数」：
-     层数是会变的（1 层 → 5 层），拿它当分母，同一个 buff 在第 1 层和第 5 层
-     每层收益不一样 —— 那不是"叠层"，那是账算不准。强度必须是个**定值**。
+     `v2Per(key, field, f)` = 每层实际收益（**第三参 f 不许省**：省了读不到
+       `_xzV2Stack`，一律回落表内默认值 —— 玩家写的数就成了摆设）
+       · 玩家写了 `pct`（>0）⇒ **直接就是每层强度**（`叠层增伤:20` ⇒ 每层 0.20）
+       · 点数字段 `hasteFlat` ⇒ `pct × 100`（写 8 = 每层 +8 点速度）
+       · 没写 pct（老数据 / 引擎内部自己叠）⇒ 表里那个字段的默认值
+       · `side:'foe'` 的破甲／减速，f 传的是**承受者**：强度由命中消费点
+         `xzV2StackSyncPer` 同步过去，别拿施加者去量（见该函数头注释）。
+     `v2Cap(key, field)` = 这一档的总上限 = `每层 × 层数上限`（公式不变）
+   ⚠ 强度必须是**定值**，不许拿「当前实际层数」当分母：层数会从 1 涨到 5，
+     用它算每层收益，同一个 buff 每层都在变 —— 那不是叠层，是账算不准。
+     v580 起连 `def.max` 也不除了：玩家写多少，每层就是多少。
    ⚠ `pct` 的来源是**施加者写的那一条效果**，挂在 `_xzV2Stack[势种].pct` 上。
-     同一个人身上同时挂着两个不同 pct 的叠层增伤？不会：`_xzV2Stack` 按势种去重
-     （重挂只延长时间，见 case 'v2stack'），后写的那个 pct **不覆盖**先写的
-     （下面 `v2Per` 取的是「先挂那条」的 pct，与"刷新不叠加"同口径）。
-   ⚠ 常数项（`track` / `slow` / `hasteFlat`）**不吃 pct 缩放**：
-     它们各有自己的量纲与闸（B2 量 20 点、B3 量 −50、提速 8 点/层），
-     而且玩家写 `叠层增伤:20` 时那个 20 说的是"伤害百分比"，不是"行动条点数"。
+     v571 起同一个势种可以**多个来源**：`_xzV2Stack[势种].srcs` 是来源清单，
+     `v2StackPctOf` 把各来源的 pct **求和后夹 1.0**（不是"只认先挂那条"）。
+     旧注释写过「后写的不覆盖先写的、v2Per 取先挂那条」—— 那是 v571 前的口径，
+     已作废；照它改代码会让第二个来源白写。层数计数器仍只有一份，别混淆。
+   ⚠ `track` / `slow`（行动条节奏）**不吃 pct 缩放**：
+     它们各有自己的量纲与闸（B2 量 20 点、B3 量 −50），
+     玩家写 `叠层增伤:20` 时那个 20 说的是"伤害百分比"，不是"行动条点数"。
      把 pct 套到行动条上 = 玩家写个数顺手改了节奏，闸也全乱。
+     ⚠ `hasteFlat` 是**例外**：它是「每层 +N 点速度」的点数字段，v580 起接通 pct
+       （按点数解释，不按百分比），否则 `叠层提速` 写 8 与写 80 一模一样。
+       三个此前「数值纯摆设」的势种（提速 / 破甲 / 减速）由这一改全部接上。
    ══════════════════════════════════════════════════════════════════════════ */
 /* ★★★ v571：势种来源登记表 + 「叠层增伤」的面板唯一出口 ★★★
    作者原话（2026-11-09）：
@@ -4920,8 +4933,10 @@ function v2StackAddSrc(f, key, name, pct) {
 }
 
 function v2StackPctOf(f, key) {
-  /* 该势种的「满层总强度」。0 = 没写（走表内默认值）。
-     ★ v571：多来源求和（见上方大口径），整体封顶 1.0。 */
+  /* 该势种的「每层强度」（v580 翻案前这里是「满层总强度」）。
+     0 = 没写（走表内默认值）。★ v571：多来源求和，整体封顶 1.0 = 每层最多 100%。
+     ⚠ 夹子仍是 1.0：写 `叠层增伤:200` 只会到「每层 100%」，不是「满层 200%」；
+       再往上由各乘区自己的封顶（`Math.min(0.25/0.30/0.50…)`）兜住。 */
   try {
     var m = f && f._xzV2Stack;
     var o = m && m[key];
@@ -4943,13 +4958,21 @@ function v2Per(key, field, f) {
   var def = (typeof V2_STATES !== 'undefined' && V2_STATES[key]) ? V2_STATES[key] : null;
   if (!def) return 0;
   var base = Number(def[field]) || 0;
-  /* 只有「按百分比结算的增益字段」吃 pct 缩放；常数项原样返回（见上面注释）。 */
-  var SCALABLE = { dmg: 1, dr: 1, crit: 1, critDmg: 1, heal: 1 };
-  if (!SCALABLE[field]) return base;
+  /* ★★★ v580 翻案：**数值 = 每层强度**，不再是「满层总强度」 ★★★
+     v570 把玩家写的 20 除以层数上限 ⇒ 每层 4%，比表内默认 5% 还弱；
+     勾了自选器默认反而变弱，07 文案却还写着「每层 +5%」。
+     现在 `叠层增伤:20` = 每层 +20%（满 5 层 +100%），写 5 = 每层 +5%。
+     ⚠ 自选器八条的默认值已按各自表内每层值对齐（5/5/5/6/8/4/6/5），
+       玩家不动数值时强度与翻案前逐字相同 —— 翻的是口径，不是默认平衡。 */
+  var SCALABLE = { dmg: 1, dr: 1, crit: 1, critDmg: 1, heal: 1, vuln: 1, outCut: 1 };
+  /* 点数字段（每层 +N 点速度）：玩家写的数直接当点数，不按百分比换算。
+     ⚠ 不接通 `track` / `slow`：那两项管行动条节奏，写个伤害百分比顺手改节奏
+       是 v570 明令禁止的（B2/B3 闸量的是这两个点数量纲）。 */
+  var POINT = { hasteFlat: 1 };
+  if (!SCALABLE[field] && !POINT[field]) return base;
   var p = v2StackPctOf(f, key);
   if (p <= 0) return base;
-  var mx = Number(def.max) || 5;
-  return p / mx;
+  return POINT[field] ? (p * 100) : p;
 }
 function v2Cap(key, field, f) {
   /* 这一档的总上限 = 每层 × 层数上限。消费点的 Math.min 一律夹这个。 */
@@ -5914,6 +5937,90 @@ function xzStackSet(f, need, rounds, parts) {
   }
   f._xzStack = { need: n, cur: 0, rounds: r, parts: p };
   return true;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★★ v580：叠层势种的**命中消费点**（作者：「改成每命中」）★★★
+
+   一记攻击真落地（landedDmg > 0）才给 `_xzV2Stack` 里每个势种补 1 层。
+   与溅射 / 叠爆**同一个口径**：闪避、被护盾全额吸收、无敌归零都不推进计数，
+   否则「打空也涨层」会让玩家觉得层数来得莫名其妙。
+
+   ⚠ **一记群攻只算一次命中**，不管扫中几个人 —— 由调用方保证不在逐目标循环里调。
+     叠层上限只有 5，群攻打三人一次涨 3 层，两记就满，等于把封顶架空。
+     溅射那条「群攻不溅」是同一个先例，别在这里开另一个口子。
+   ⚠ 补层一律走 `v2Add`：层数上限、满层质变、行动条前拉全部免费继承。
+     自己写 `f.v2stk[k]++` 会绕开上限（叠到 99 层）且拿不到质变。
+   ⚠ 寿命（rounds）**仍只由 `processHandBuffs` 一处递减**（v401 铁律）。
+     这里只消费、不减手 —— 谁出手谁减一手，与「命中几次」无关。
+   ⚠ 两条战斗链都必须接：`executeAttack`（斗法台）与极简演武（v270 那次
+     「减益没挂上」就是漏接第二条链）。两条链的施效顺序相反，所以演武这处
+     钩子必须放在 `applyV75Effects` **之后**，否则「挂开关的这一击」会漏叠一层。
+   ★★★ v580 续查：**层挂在谁身上，由 `V2_STATES[key].side` 决定** ★★★
+     六条 `side:'self'`（增伤／减伤／暴击／暴伤／提速／治疗）叠在出手者自己身上；
+     两条 `side:'foe'`（破甲／减速）必须叠在**被打中的那个人**身上 ——
+     `xzVulnOf(defender)` 读的是承受者的破甲层数，寒霜 outCut 读的是承受者
+     自己出手时的减速层数，`v2Add` 的退条／冰封也落在承受者身上。
+     v580 前这里一律叠给 attacker ⇒ 玩家写「叠层破甲」结果是自己变脆、
+     写「叠层减速」结果是自己出手变弱、自己退条、满层还把自己冻住 ——
+     减益整条方向反了，且零报错。这是本项目最贵的那类静默 bug。
+     ⚠ 第三参数 `target` 必须传；群攻只取**第一个真命中的目标**，
+       与「一记群攻只算一次命中」同一口径，不按人数给每人各叠一层。
+   ⚠ 承受者身上那份「每层强度／来源」是 `_dataOnly` 数据载体，不是开关：
+     补层遍历、逐手递减两处都必须跳过它，否则第二手起数值就回落表内默认。
+   ══════════════════════════════════════════════════════════════════════════ */
+/* 把「每层强度 / 来源清单」同步到 foe 势种的实际承受者。
+   为什么必须同步：消费点（xzVulnOf、寒霜 outCut）读的都是**承受者**的
+   `_xzV2Stack[key]`；只把层数送过去、强度还留在施加者身上，玩家写的
+   `叠层破甲:20` 就会静默回落表内 0.06 —— 又是「写了没反应」。
+   ⚠ 用同一个 map、靠 `_dataOnly` 区分「载体」与「开关」，不另开旁路键：
+     旁路键迟早与势种本体脱钩（本项目「有写无读」的经典死法）。
+   ⚠ 承受者自己若也挂着同势种的**真开关**（敌人也会叠层破甲），不许覆盖它，
+     只把来源并进去 —— 与 v571 多来源求和口径一致。 */
+function xzV2StackSyncPer(owner, key, src) {
+  try {
+    if (!owner || !key || !src) return false;
+    if (!owner._xzV2Stack) owner._xzV2Stack = {};
+    var d = owner._xzV2Stack[key];
+    if (!d) d = owner._xzV2Stack[key] = { _dataOnly: true, pct: 0, srcs: [] };
+    var p = Number(src.pct) || 0;
+    var a = (src.srcs && src.srcs.length) ? src.srcs : (p > 0 ? [{ name: '叠层·' + key, pct: p }] : []);
+    if (p > 0 && Number(d.pct) !== p) d.pct = p;
+    if (!d.srcs) d.srcs = [];
+    for (var i = 0; i < a.length; i++) {
+      var nm = String((a[i] && a[i].name) || '').trim();
+      var pp = Number(a[i] && a[i].pct) || 0;
+      if (!nm || !(pp > 0)) continue;
+      var hit = false;
+      for (var j = 0; j < d.srcs.length; j++) {
+        if (String((d.srcs[j] && d.srcs[j].name) || '') === nm) { d.srcs[j].pct = pp; hit = true; break; }
+      }
+      if (!hit) d.srcs.push({ name: nm, pct: pp });
+    }
+    return true;
+  } catch (eSync) { return false; }
+}
+function xzV2StackOnHit(attacker, landedDmg, target) {
+  try {
+    if (!attacker || !(Number(landedDmg) > 0)) return 0;
+    var m = attacker._xzV2Stack;
+    if (!m) return 0;
+    var got = 0;
+    Object.keys(m).forEach(function (k) {
+      var o = m[k];
+      if (!o || o._dataOnly === true) return;
+      var def = (typeof V2_STATES !== 'undefined' && V2_STATES[k]) ? V2_STATES[k] : null;
+      var toFoe = !!(def && def.side === 'foe');
+      var owner = toFoe ? target : attacker;
+      if (!owner) return;
+      if (toFoe && owner !== attacker) xzV2StackSyncPer(owner, k, o);
+      try {
+        /* v2Add 返回 gained（真涨了几层）；封顶后返回 0，不计入 */
+        if (typeof v2Add === 'function' && (Number(v2Add(owner, k, 1, attacker)) || 0) > 0) got += 1;
+      } catch (eV2h1) {}
+    });
+    return got;
+  } catch (eV2h0) { return 0; }
 }
 
 /* 命中时叠一层；满了就兑换。landedDmg 只用来判「这一下真打中了」（同溅射口径）。
@@ -11442,14 +11549,21 @@ var XZ_ATOM_TYPES = {
      · 差额白名单：它是「引擎有、世界书没列」的**唯一**合法出口
      · 反向判红：表里的名字若**出现在**世界书目录里，当场红 ——
        那是「偷偷开放」，模型会照抄一条本不该写的机制
-   ── 为什么 `免控` 在这里 ──────────────────────────────────────────────
-   用户 2026-11-04 原话：「免控可以留着在脚本里，以后随时启用」。
-   目前只有 NPC 的《定神符》用到它；眩晕 / 定身 / 禁锢 / 封印 / 沉默 / 石化 / 麻痹
-   **全部已下架**，玩家侧写了没有任何可化解的对象 ⇒ 列给模型只会产出无效效果。
-   要开放时：从本表删掉 ＋ 进《效果表》目录，两处一起改（闸会盯着这一对）。
+   ── 为什么 `免控` / `净化` 在这里 ──────────────────────────────────
+   `免控`：用户 2026-11-04 原话：「免控可以留着在脚本里，以后随时启用」。
+     目前只有 NPC 的《定神符》用到它；眩晕 / 定身 / 禁锢 / 封印 / 沉默 / 石化 / 麻痹
+     已全部不开放，玩家侧写了没有可化解的对象 ⇒ 列给模型只会产出无效效果。
+   `净化`：作者 2026-11-11 拍板「下架」。清自身负面这件事本身是好的，
+     但它不该再出现在世界书目录、翻译词表和开局自选器里 —— 那三处是模型／玩家
+     照抄的源头，留一个就会继续产出。引擎仍认这个名字（存量招式、预设、DLC 档案
+     都写着），所以走的是内部登记，不是硬删。
+   ⚠ 「下架」在本项目的口径（见 `工具/_v447_eff_picker.mjs` 的 BANNED 注释）：
+     **不摆自选器、不教模型写，引擎保留读旧档**。硬删会让整批存量招式静默失效。
+   ⚠ 这两条同时被 `xzAtomWords()` 过滤，不再进翻译器提示词。
    ══════════════════════════════════════════════════════════════════════════ */
 var XZ_ATOM_INTERNAL = {
-  '免控': 'NPC 定神符专用；控制类机制已全部下架，玩家侧没有可化解的对象'
+  '免控': 'NPC 定神符专用；控制类机制已全部不开放，玩家侧没有可化解的对象',
+  '净化': '清自身负面；作者拍板下架，不进目录／词表／自选器，引擎保留供存量数据解析'
 };
 
 /* 已废除的机制名（v94 二合一）：读到这些不报错，但**不进公式**，并在战报里点名 ——
@@ -12442,7 +12556,18 @@ function xzNormAtom(t) {
   return String(t === undefined || t === null ? '' : t)
     .replace(/：/g, ':').replace(/％/g, '%').replace(/\s+/g, '').trim();
 }
-function xzAtomWords() { return Object.keys(XZ_ATOM_TYPES).join(' '); }
+function xzAtomWords() {
+  /* ★★★ v580：词表必须排掉 `XZ_ATOM_INTERNAL` ★★★
+     原来直接 `Object.keys(XZ_ATOM_TYPES).join(' ')`，把 `免控` / `净化` 这类
+     「引擎认、但不给模型写」的名字一起塞进了「类型只能从下列词里选」——
+     模型照抄一条写了没用的机制，玩家还以为是 bug。
+     作者 2026-11-11：「下架。免控也拿掉。」⇒ 两条都登记进内部表，这里统一过滤。
+     ⚠ 内部机制**引擎仍认**（存量招式 / 预设玄技 / DLC 档案都写着），
+       只是不给模型看、不给玩家点 —— 这是本项目「下架」的既有口径。
+     ⚠ 不许改成写死数组：加机制就得手动同步，必然漏（`_v452` 判据 ③ 钉着）。 */
+  var _in = (typeof XZ_ATOM_INTERNAL !== 'undefined' && XZ_ATOM_INTERNAL) ? XZ_ATOM_INTERNAL : {};
+  return Object.keys(XZ_ATOM_TYPES).filter(function (k) { return !_in[k]; }).join(' ');
+}
 function xzAtomOk(a) {
   var t = xzNormAtom(a).split(':')[0];
   return !!(t && XZ_ATOM_TYPES[t]);
@@ -15290,7 +15415,8 @@ function calcDamage(attacker, defender, skill, isAoe) {
       /* ★ v65 寒霜 outCut：「被冰封的人自己出手更弱」——每层 −3%（表里写着的，以前没人读）。 */
       if (_hzDef.outCut) {
         var _frz = v2StateVal(attacker, '减速');
-        if (_frz > 0) _drFoldAmp -= Math.min(0.30, _frz * Number(_hzDef.outCut));   /* ★ v124：攻方自减→fold 负向 */
+        /* ★ v580：outCut 也走 v2Per —— `叠层减速` 的数值不再纯摆设 */
+        if (_frz > 0) _drFoldAmp -= Math.min(0.30, _frz * ((typeof v2Per === 'function') ? v2Per('减速', 'outCut', attacker) : Number(_hzDef.outCut)));
       }
       // ===== 特色深化（各路的独家机制，仅本路技能生效）=====
       /* ★ v279：这一段的增伤原来全落 ampPool（不进 rawFinal）⇒ 水/冰两路的"特色深化"
@@ -15329,7 +15455,14 @@ function calcDamage(attacker, defender, skill, isAoe) {
          现改走活乘区 v75VulnMult（见 11548 的 v75VulnPct），本行删除，别复活。 */
       var _drg = v2StateVal(defender, '减伤');
       if (_drg) _drSelfReduce += Math.min(0.25, _drg * ((typeof v2Per === 'function') ? v2Per('减伤', 'dr', defender) : 0.05));   /* ★ v124/v570：→减伤乘区 */
-      var _sn = v2StateVal(attacker, '减速'); if (_sn) _drFoldAmp -= Math.min(0.15, _sn * 0.03);   /* ★ v124：攻方自减→fold 负向 */
+      /* ★★★ v580 续查：**这里原来还有第二份「攻方减速 → 削伤」**，与上面 15366 的
+         寒霜 outCut（夹 0.30）在**同一帧各扣一次** ⇒ 5 层 ×3% 被扣成 30%，整整两倍。
+         两处读的都是 `v2StateVal(attacker,'减速') × v2Per('减速','outCut',attacker)`，
+         不是两个不同机制，是同一件事写了两遍（v65 一份、v124 又补一份，夹子还不一样）。
+         ⇒ 只留上面那一份：它是 V2_STATES 唯一真相源那条线，且夹子留了数值生效空间
+           （下面那份夹 0.15，玩家写「叠层减速:20」会被压到与默认 3% 几乎一样）。
+         ⚠ 别在这下面补一行「补偿」—— 补回来就是第三次同帧扣。 */
+
     } catch (eV2) {}
   }
   /* ★ v69 削攻 foeAtkCut：被削攻者出手伤害下降（与寒霜 outCut 同口径，出手侧统一生效） */
@@ -15859,10 +15992,11 @@ function xzRecalcSpd(f) {
        完全同型的「表内死字段」：改了《数值表》玩家却发现没变化。
        探针 `工具/verify_v2_states.mjs` 的 S5 段就是抓这个的（v571 已把它的读者图
        补上方括号与 v2Per/v2Cap 调用形态，所以这条终于扫出来了）。
-     ⚠ 常数项（track/slow/hasteFlat）不吃 pct 缩放，所以**不能**写成 v2Per(...)——
-       v2Per 对非 SCALABLE 字段虽然原样返回，但语义上这里是「每层常数点」，
-       走 `v2Per(key,'hasteFlat')` 反而会让人误以为它能被来源 pct 缩放。
-       直接用表内的 `hasteFlat` 才是唯一真相源。 */
+     ⚠ ★★★ v580 翻案：这里**改成走 `v2Per`** ★★★
+       v571 当时写「常数项不吃 pct 缩放，所以不能写成 v2Per」—— 那条口径让
+       `叠层提速` 的数值成了纯摆设（写 8 与写 80 逐字相同）。
+       现在 `v2Per` 对 `hasteFlat` 按**点数量纲**接通 pct（写 8 = 每层 +8 点），
+       与「伤害百分比」分开解释，不会顺手改到行动条节奏（track/slow 仍不吃）。 */
   var _v2hf = 0;
   try {
     if (typeof v2StateVal === 'function') {
@@ -15871,7 +16005,9 @@ function xzRecalcSpd(f) {
          字段又会被判「没人读」，闸重新变红。同理字段名要写成 `def.hasteFlat`
          这种点号形态，动态键名 `def[k]` 一样扫不到。 */
       var def = (typeof V2_STATES !== 'undefined' && V2_STATES['提速']) ? V2_STATES['提速'] : null;
-      var _hfPer = def ? (Number(def.hasteFlat) || 8) : 8;
+      /* ★ v580：写了 pct 就按「每层 N 点」用，没写才回落表内默认（老存档/引擎内部叠层）。 */
+      var _hfPer = (typeof v2Per === 'function') ? v2Per('提速', 'hasteFlat', f)
+        : (def ? (Number(def.hasteFlat) || 8) : 8);
       _v2hf = (v2StateVal(f, '提速') || 0) * _hfPer;
     }
   } catch (eHf2) { _v2hf = 0; }
@@ -16065,7 +16201,10 @@ function xzVulnOf(f, ctx) {
   var v = 0;
   try {
     var pj = Number(v2StateVal(f, '破甲')) || 0;
-    var pjPer = (V2_STATES && V2_STATES['破甲'] && V2_STATES['破甲'].vuln) ? V2_STATES['破甲'].vuln : 0.06;
+    /* ★ v580 翻案：写了 pct 用「每层强度」，没写回落表内 `vuln`（0.06）。
+       修的就是 `叠层破甲:20` 与 `:80` 逐字相同这个死值。 */
+    var pjPer = (typeof v2Per === 'function') ? v2Per('破甲', 'vuln', f)
+      : ((V2_STATES && V2_STATES['破甲'] && V2_STATES['破甲'].vuln) ? V2_STATES['破甲'].vuln : 0.06);
     /* ⚠ 这里**不许**再写 '? ... : mechSumField(f,'pierce')' 这种回落（见上 ① ②） */
     var _atomPv = (ctx && ctx.atomPierceVuln) ? Number(ctx.atomPierceVuln) || 0 : 0;
     v = Math.min(0.6,
@@ -16587,9 +16726,13 @@ function applyV75Effects(attacker, target, skill) {
              ── 为什么落在**施加这一刻**而不是每次命中 ────────────────────
              这一条是「挂上之后，接下来的命中会自己叠层」的**开关**，
              与溅射（'_xzSplash' 挂着，命中时由 'xzSplashOnHit' 消费）同构：
-             施加时先给 1 层（让玩家立刻看见效果），再挂一个逐手计时，
-             由逐手推进那一块（'processHandBuffs' 里的 '_xzV2Stack' 循环）
-             每手补 1 层 —— 消费点只有那一处（v401 铁律）。
+             施加时**只挂开关 + 逐手计时**，补层由 `xzV2StackOnHit`（命中消费点）做。
+             ⚠ v580 前这里还会「当场先给 1 层」，并且 `processHandBuffs` 每手无条件补 1 层
+               ⇒ 打空、站着不动都涨层，与「每次命中」的文案完全对不上。
+               现在两处都撤了：**挂上的那一击若真命中，由命中消费点给第 1 层**；
+               没命中就一层都不给，玩家看到的就是「打中了才涨」。
+             ⚠ 消费点只有 `xzV2StackOnHit` 一处（v401 铁律：生命周期只许一处说了算），
+               两条战斗链各接一次，群攻整记只算一次命中。
              ⚠ 原来这里写的函数名 ~~xzV2StackTick~~ **不存在**（那是设计时的暂定名，
                实现最终并进了 'processHandBuffs' 的一小段）。留着会被
                '_v404_stale_refs' 判成「注释指向不存在的符号」——
@@ -16607,6 +16750,9 @@ function applyV75Effects(attacker, target, skill) {
             try { console.warn('[施加] 叠层机制「' + String(e.key || '?') + '」指向未知势种「' + _vsKey + '」，已跳过'); } catch (eVs0) {}
             break;
           }
+          /* ★ v580 续查：`side:'foe'` 那两条是给对手挂减益，战报不许再说「蓄养」——
+             玩家读到「蓄养势种」会以为叠在自己身上，与面板、结算全对不上。 */
+          var _vsFoeSide = !!(V2_STATES[_vsKey] && V2_STATES[_vsKey].side === 'foe');
           if (!attacker._xzV2Stack) attacker._xzV2Stack = {};
           var _vsOld = attacker._xzV2Stack[_vsKey];
           var _vsRounds = _isPerm ? 0 : dur;
@@ -16624,7 +16770,8 @@ function applyV75Effects(attacker, target, skill) {
                把这一条也登记进 srcs（同名只刷新 pct），强度按 srcs 求和（见 v2StackPctOf）。
                ⚠ 层数仍然只有一个计数器：两个来源不会让每手叠 2 层，变的是「每层多强」。 */
             try { if (typeof v2StackAddSrc === 'function') v2StackAddSrc(attacker, _vsKey, _vsSrcName, _vsPct); } catch (eSA1) {}
-            BattleState.logs.push(an + ' 续【' + esc(e.key) + '】—— 每击仍在蓄养势种「'
+            BattleState.logs.push(an + ' 续【' + esc(e.key) + '】—— 每击仍在'
+              + (_vsFoeSide ? '给被打中的对手叠' : '蓄养自身') + '势种「'
               + esc(_vsKey) + '」' + (_isPerm ? '（整场）' : ('，' + xzDurText(dur))) + '）');
             break;
           }
@@ -16636,12 +16783,11 @@ function applyV75Effects(attacker, target, skill) {
             /* ★ v571：来源清单 —— 面板 buff 与「多来源求和」都只认这一份 */
             srcs: (_vsPct > 0 ? [{ name: _vsSrcName, pct: _vsPct }] : [])
           };
-          /* 当场先给一层：不然「挂了但这一手没打中」看起来毫无动静 */
-          var _vsGain = 0;
-          try { _vsGain = (typeof v2Add === 'function') ? v2Add(attacker, _vsKey, 1, attacker) : 0; } catch (eVs1) { _vsGain = 0; }
-          BattleState.logs.push(an + ' 起势【' + esc(e.key) + '】—— 此后每次命中蓄养势种「'
-            + esc(_vsKey) + '」一重' + (_vsGain > 0 ? ('（当前 ' + _vsGain + ' 重）') : '')
-            + (_isPerm ? '（整场）' : ('，' + xzDurText(dur))) + '）');
+          /* ★ v580：**不在这里给层**。挂上的这一击若真落地，命中消费点会给第 1 层；
+             打空就一层不给。当场白送一层会让「每命中」在闪避/护盾吸收时失真。 */
+          BattleState.logs.push(an + ' 起势【' + esc(e.key) + '】—— 此后每命中一次'
+            + (_vsFoeSide ? '给被打中的对手叠' : '蓄养自身势种') + '「'
+            + esc(_vsKey) + '」一重' + (_isPerm ? '（整场）' : ('，' + xzDurText(dur))) + '）');
           break;
         }
         case 'buff': {
@@ -17295,13 +17441,17 @@ function processHandBuffs(fighter) {
         }
       }
     } catch (eSpTick) {}
-    /* ★★★ v468：叠层增益／叠层减益的逐手推进 ★★★
+    /* ★★★ v580：叠层势种的**寿命递减**（补层已搬到命中消费点）★★★
        与条件机制名/溅射/叠爆**同一节奏、同一处**（谁出手谁走一手）。
-       每走一手补 1 层（'v2Add'），到期整个删掉。
+       ⚠ 这里**只减手数，不补层**。补层在 `xzV2StackOnHit`：一记攻击真落地才涨一层，
+         打空/被闪避/被护盾吃光都不涨（作者：「改成每命中」）。
+         原来在这里每手无条件 `v2Add(fighter, _vk, 1)`，等于「挂上之后站着不动也满层」，
+         与 07 八条 / 世界书十二处写的「每次命中」完全对不上。
+       ⚠ 别把补层挪回来「顺手再叠一次」—— 那就是两处补层，一击涨两层。
        ⚠ rounds === 0 是**常驻哨兵**（整场有效），写成 0 会把「三手叠层」
          偷升级成「永久叠层」—— 与溅射那条一模一样的坑，别踩第二次。
-       ⚠ 补层走 v2Add，因此**层数上限与满层质变全部免费继承**（V2_STATES.max / full），
-         自己写一套计数就享受不到满层质变，也不受上限约束（会叠到 99 层）。
+       ⚠ 到期只删「自行蓄养」这个开关，**已叠的层数保留**（v579 实测口径，
+         判据 `_v579_stack_buff` ⑦ 钉着）：删开关不等于清空 `f.v2stk`。
        ⚠ 与「叠满换伤」的区别：这条是**积少成多、不兑付**；
          叠满换伤是**攒够清零再攒**。两条可以同时挂，各算各的。 */
     try {
@@ -17310,8 +17460,12 @@ function processHandBuffs(fighter) {
         Object.keys(_vsMap).forEach(function (_vk) {
           var _vo = _vsMap[_vk];
           if (!_vo) return;
-          /* 每手先补一层（常驻与临时都补）—— 这才是"叠层"的本体 */
-          try { if (typeof v2Add === 'function') v2Add(fighter, _vk, 1, fighter); } catch (eVg1) {}
+          /* ★ v580：`_dataOnly` 是 foe 势种落在承受者身上的「每层强度／来源」载体，
+             寿命由施加者那边的开关管。这里不许递减、不许删 —— 否则第二手起
+             玩家写的 `叠层破甲:20` 就会静默回落表内 0.06。 */
+          if (_vo._dataOnly === true) return;
+          /* ★ v580：这里原来有一行「每手先补一层」的 v2Add —— 已删。
+             补层唯一出口是 `xzV2StackOnHit`（命中消费点），见该函数头注释。 */
           /* 常驻：'_perm' 显式为 true 就永不删。
              ⚠ **不许拿 rounds===0 当常驻哨兵**：0 同时能表示"还剩 0 手"，
                那条歧义会让「三手叠层」在第一手就被当成过期删掉
@@ -17745,6 +17899,10 @@ function executeAttack(attacker, target, skill) {
        只叠「真落地」的一击（landedDmg > 0）—— 闪避/被护盾吃光不推进计数，
        否则层数会涨得莫名其妙，且「闪避流克叠爆」这条不成立。 */
     try { if (actualDmg > 0 && typeof xzStackOnHit === 'function') xzStackOnHit(attacker, target, actualDmg); } catch (eStH) {}
+    /* ★ v580：叠层势种**每命中补 1 层**（作者：「改成每命中」）。
+       紧跟叠爆、同拿 `actualDmg`（真落地伤害）：被闪避 / 护盾吃光 / 无敌归零都不涨层。
+       ⚠ 施加侧 `case 'v2stack'` 已经不白送第 1 层 —— 挂开关的这一击命中就在这里领到第 1 层。 */
+    try { if (actualDmg > 0 && typeof xzV2StackOnHit === 'function') xzV2StackOnHit(attacker, actualDmg, target); } catch (eV2H) {}
     /* ★ v34：大道·受击／免死类（改造前 7 个键一个读者都没有）
          冰·寒心凝神 onHurtShield + chance → 受击时有几率自凝护盾
          水·海纳百川 absorbToMpChance      → 受击时按几率把该次伤害化作等量灵力
@@ -17948,6 +18106,13 @@ function executeAttackMultiple(attacker, targets, skill) {
   BattleState.logs.push(attName + ' 催动范围招式【' + esc(skill.name) + '】，席卷敌阵！');
 
   var aoeFxOk = fxAllowAoeFor(skill);   // 轻档下：同一记群攻只铺一次轨迹大特效
+  /* ★ v580：整记群攻的「真落地伤害」上限 —— 只用来判这一记算不算命中，
+     一记群攻最多给叠层势种补 1 层（逐目标循环里绝不调 `xzV2StackOnHit`）。 */
+  var _aoeLandedMax = 0;
+  /* ★ v580：整记群攻的「首个真命中目标」—— foe 势种（叠层破甲／叠层减速）
+     必须挂在被打中的人身上。一记只算一次命中 ⇒ 只取第一个真落地的目标，
+     不按人数给每个人各叠一层（世界书《效果表》叠层段写死了这条）。 */
+  var _aoeHitTarget = null;
   targets.forEach(function(target, tIdx) {
     if (!target.alive) return;
     if (aoeFxOk || tIdx === 0) playAttackVisualEffect(attacker, target, true, isSword, skill);
@@ -18057,6 +18222,11 @@ function executeAttackMultiple(attacker, targets, skill) {
       }
     } catch (eHurt34) {}
     var aoeDmgDesc = '';
+    /* ★ v580：只记「这一记有没有真打中」，不按命中人数累加 —— 群攻扫三人仍只补 1 层 */
+    if (actualDmg > 0) {
+      _aoeLandedMax = Math.max(_aoeLandedMax, actualDmg);
+      if (!_aoeHitTarget) _aoeHitTarget = target;
+    }
     if (actualDmg > 0) {
       aoeDmgDesc = '波及 ' + tarName + '，造成 🩸<b>' + actualDmg + '</b> 点伤害！';
     } else if (target.shieldHp > 0) {
@@ -18172,6 +18342,11 @@ function executeAttackMultiple(attacker, targets, skill) {
       BattleState.keyEvents.push(attacker.name + ' 以【' + ((skill && skill.name) ? skill.name : '普攻') + '】斩落了 ' + target.name);
     }
   });
+  /* ★ v580：群攻链的叠层命中消费点（与 executeAttack / 极简演武并列第三处）。
+     整记只调一次、拿 `_aoeLandedMax` 判「真落地」：一个都没打中就不涨层。
+     `_aoeHitTarget` = 第一个真落地的目标，foe 势种挂在他身上；
+     一个都没打中时它是 null ⇒ 叠层开关一层不叠（不退回自己身上）。 */
+  try { if (_aoeLandedMax > 0 && typeof xzV2StackOnHit === 'function') xzV2StackOnHit(attacker, _aoeLandedMax, _aoeHitTarget); } catch (eV2A) {}
 
   // 【蔓延】：本记群攻带【蔓延】时，把已挂上的中毒/灼烧扩散给其余存活敌人
   if (attacker._spreadMark) {
@@ -23283,6 +23458,12 @@ var XZJJ = (function () {
       if (sk && target.alive !== false) {
         try { applyV75Effects(actor, target, sk); } catch (eV75Jjb) {}
       }
+      /* ★★★ v580：叠层势种的命中消费点，必须放在 `applyV75Effects` **之后** ★★★
+         演武这条链是「先落伤、后施效」，与主战斗链顺序**相反**（主链 17602 施效在前）。
+         若跟溅射/叠爆一起挂在上面 23252 那处，挂开关的这一击就会漏叠一层 ——
+         两条链行为漂移，正是本项目最忌讳的那种「看起来都对、其实差一手」。
+         ⇒ 只在这里调一次，拿 `out.dmg`（真落地伤害）判命中。 */
+      try { if (out.dmg > 0 && typeof xzV2StackOnHit === 'function') xzV2StackOnHit(actor, out.dmg, target); } catch (eV2HJ) {}
       /* ★★ v270：减益**受击递减**（主战斗 13790 同口径）。
          演武原来完全不扣 ⇒ 破防/受制挂上就是永久的，「3 层」能挂满一整场。
          ⚠ 必须在 applyV75Effects **之后**（本击刚挂的靠上面的快照排除，不被自己扣）。 */

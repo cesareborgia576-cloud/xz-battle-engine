@@ -2164,7 +2164,10 @@ function xzVulnOf(f, ctx) {
   var v = 0;
   try {
     var pj = Number(v2StateVal(f, '破甲')) || 0;
-    var pjPer = (V2_STATES && V2_STATES['破甲'] && V2_STATES['破甲'].vuln) ? V2_STATES['破甲'].vuln : 0.06;
+    /* ★ v580 翻案：写了 pct 用「每层强度」，没写回落表内 `vuln`（0.06）。
+       修的就是 `叠层破甲:20` 与 `:80` 逐字相同这个死值。 */
+    var pjPer = (typeof v2Per === 'function') ? v2Per('破甲', 'vuln', f)
+      : ((V2_STATES && V2_STATES['破甲'] && V2_STATES['破甲'].vuln) ? V2_STATES['破甲'].vuln : 0.06);
     /* ⚠ 这里**不许**再写 '? ... : mechSumField(f,'pierce')' 这种回落（见上 ① ②） */
     var _atomPv = (ctx && ctx.atomPierceVuln) ? Number(ctx.atomPierceVuln) || 0 : 0;
     v = Math.min(0.6,

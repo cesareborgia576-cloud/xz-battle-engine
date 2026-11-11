@@ -26457,7 +26457,7 @@ var XZ_JJB_SKIN = `
   }
 }
 /* 技能滑轨那一坨：占满剩余宽度，**不换行**（换行会顶破 96px 的定高） */
-.xz-jjb-skwrap{display:flex;align-items:stretch;gap:6px;flex:1 1 auto;min-width:0;}
+.xz-jjb-skwrap{display:flex;align-items:stretch;gap:6px;flex:1 1 0;min-width:0;}
 /* ★★★ v479：右侧四宫格 —— 杂项 / 自动战斗 / 让过一手 / 逃跑 ★★★
    用户：「其他四个按钮，挤成四宫格，在最右侧」。
    ⇒ 固定 96px 宽、2×2 等分；四个键内部只剩一行小字（图标留着，字缩到 8.5px）。
@@ -26476,7 +26476,22 @@ var XZ_JJB_SKIN = `
   font-size:7.5px;line-height:1.1;gap:1px;letter-spacing:-.04em;
 }
 .xz-jjb-skrow{
-  display:flex;gap:8px;flex:1 1 auto;min-width:0;
+  /* ★★★ v590：flex 从 "1 1 auto" 改成 "1 1 0" ★★★
+     作者截图（453×878 手机）里，一页一个之后**卡片右边空了一大段、「›」孤零零吊在远处**。
+     实测：滑轨只有 185px，而按（屏 390 − 底栏内距 20 − 四宫格 112 − swrap gap 8
+     − 两个翻页键 36）应该拿到 214px，凭空少了 29px。
+     ── 真因（flex 基数的老坑）──────────────────────────────────────────
+       flex:1 1 auto 的基数是**内容宽**。滑轨的"内容"是若干 flex:1 1 0 的组，
+       而基数为 0 的子项对父级 max-content 的贡献约等于 0 ⇒ 滑轨算出 ~0 的基数，
+       再按 flex-grow:1 去分 swrap 的剩余空间。可 swrap 里**只有它一个**能长的，
+       理论上该全给它 —— 实际浏览器先按 auto 的基数定形，剩下的零头才按 grow 分，
+       于是滑轨停在 185，多出来的 29px 变成了 swrap 里看不见的空白。
+     ⇒ 改 flex:1 1 0：基数归零，剩余空间按 grow 全给滑轨，这才是"铺满"。
+     ⚠ 桌面档同一条规则也生效：桌面一页 1~3 个、组本身 flex:1 1 0，
+       滑轨铺满后每个组等分剩余宽度，比原来"按内容撑"更稳（不会第三个别扭地挤）。
+       桌面那一档有 max-width:154px 兜着单个键的宽度，不会撑成一条巨键。
+     ⚠ overflow-x:auto 保留：桌面放不下时仍可横滑（v166 的既有行为，不动）。 */
+  display:flex;gap:8px;flex:1 1 0;min-width:0;
   overflow-x:auto;scrollbar-width:none;padding-bottom:2px;
 }
 .xz-jjb-skrow::-webkit-scrollbar{display:none;}
@@ -26794,7 +26809,14 @@ var XZ_JJB_SKIN = `
     flex-wrap:nowrap;align-items:stretch;
     gap:6px;padding:6px 10px calc(6px + env(safe-area-inset-bottom,0px));
   }
-  .xz-jjb-skwrap{flex:1 1 auto;min-width:0;gap:4px;}
+  /* ★★★ v590：flex 从 "1 1 auto" 改成 "1 1 0" ★★★
+     实测链路（390×844）：底栏 367 − 四宫格 112 − gap 6 = 应有 249 给技能区，
+     但 swrap 只拿到 **229**，少的 20px 变成了底栏里看不见的空白，
+     于是滑轨只 185、技能卡右边空一段、「›」吊在远处（作者截图正是这个）。
+     真因同滑轨那条：flex:1 1 auto 按内容定基数，内容（两个 nav + 滑轨）
+     的 max-content 撑不出全部剩余空间 ⇒ 改 0 基数，剩余空间按 grow 全给。
+     ⚠ 手机一页一个时，这 20px 直接决定名字能不能写全，不是"差不多就行"。 */
+  .xz-jjb-skwrap{flex:1 1 0;min-width:0;gap:4px;}
   .xz-jjb-fn > .xz-jjb-mb,.xz-jjb-fn > #xz-jjb-endturn,.xz-jjb-fn > #xz-jjb-flee{
     flex:1 1 auto;width:auto;min-width:0;height:auto;
     font-size:7.5px;letter-spacing:-.04em;line-height:1.1;

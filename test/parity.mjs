@@ -162,17 +162,44 @@ const coreSrc = fs.readFileSync(CORE, 'utf8');
    ══════════════════════════════════════════════════════════════════════════ */
 /* ⚠ 这份名单**只能是 core.js 里真有的**常量（它只抽 25 张表，XZ_HP_BASE 就不在里面）。
    写进去一个不存在的名字 ⇒ 下面第一道检查就 `process.exit(1)`，整条测试停摆。
-   历史上正是因为「以为它在里面」，白白停了一次 —— 名单要照着 `grep '^var' core.js` 现取。 */
-const TUNABLE_CONSTS = ['QUALITY_POWER', 'REALM_COEFFS', 'XZ_LEVEL_COEFF', 'XZ_PEAK_COEFF'];
+   历史上正是因为「以为它在里面」，白白停了一次 —— 名单要照着 `grep '^var' core.js` 现取。
+
+   ★★★ v588：名单扩到「同类纯参数表」★★★
+   ─────────────────────────────────────────────────────────────────────────
+   病历：v588 双跑报 **91 / 1968 格**不同。按函数分组后分布是
+       parseBloodEffect 27 / xzLevelCoeffOf 13 / xzAttrTotalCapOf 12 /
+       xzNormRealmName 9 / realmRank 9 / realmMultByName 9 / normalizeRealm 9 /
+       xzRollHit 1 / xzHitCutOf 1 / xzHitBonusOf 1
+   逐个查过，**没有一格是算法被抽坏**：
+     · `XZ_HIT_BONUS` 0/1/2/4/6/8 → 0/5/10/20/30/40（作者把命中品质差改成了百分点）；
+     · `XZ_ATTR_TOTAL_CAP_BY_BIG` 十二境 16~38 → 六境 18~38；
+     · `REALM_TIER_KEYS` 十二境名 → 六境名。
+   这三个都是**纯参数表**，正是 v473 那条注释说的「改了就应该影响双跑结果」那一类。
+   不先对齐，它就会把「调平衡」报成「算法漂移」—— 而假红比不红更坏。
+
+   ⚠ 边界守住：只收「表改了、应不应该影响结果」答"应该"的纯参数表。
+     `XZ_LEVEL_SUBSTEP` **故意不收** —— 它虽然也是参数，但一改就把整条链的
+     档位语义改向（旧 4 档 1.00/1.04/1.08/1.12 → 新 3 档 1.00/1.15/1.32），
+     那属于「体系换代」，不是「调平衡」。见下面「境界名归一这一族移交」那段说明。 */
+const TUNABLE_CONSTS = [
+  'QUALITY_POWER', 'REALM_COEFFS', 'XZ_LEVEL_COEFF', 'XZ_PEAK_COEFF',
+  'XZ_HIT_BONUS', 'XZ_ATTR_TOTAL_CAP_BY_BIG', 'REALM_TIER_KEYS',
+];
+/* ⚠ 匹配器要同时认对象字面量与数组字面量：
+     `var X = { … };` 与 `var X = [ … ];`
+   v588 踩过：只认 `{…}` 时 `REALM_TIER_KEYS` 匹配不到 ⇒ 直接 `process.exit(1)`
+   （报「引擎里找不到可调常量 REALM_TIER_KEYS」），整条测试停摆。 */
+const constPattern = (name) =>
+  'var\\s+' + name + '\\s*=\\s*(?:\\{[\\s\\S]*?\\n?\\}|\\[[^\\]]*\\]);';
 let src04 = src04Raw;
 const aligned = [];
 for (const name of TUNABLE_CONSTS) {
   /* 引擎侧（core.js 就是 index.js 抽出来的） */
-  const reCore = new RegExp('var\\s+' + name + '\\s*=\\s*\\{[\\s\\S]*?\\n?\\};');
+  const reCore = new RegExp(constPattern(name));
   const mCore = coreSrc.match(reCore);
   if (!mCore) { console.error('✗ 引擎里找不到可调常量 ' + name + ' —— 双跑无法对齐，停止'); process.exit(1); }
   /* 备份侧 */
-  const reBak = new RegExp('var\\s+' + name + '\\s*=\\s*\\{[\\s\\S]*?\\n?\\};');
+  const reBak = new RegExp(constPattern(name));
   const mBak = src04.match(reBak);
   if (!mBak) { console.error('✗ 备份 04 里找不到 ' + name + ' —— 双跑无法对齐，停止'); process.exit(1); }
   if (mBak[0] === mCore[0]) continue;      /* 本来就一样，不用动，也不该记进 aligned */
@@ -455,10 +482,78 @@ function both(name, args, tag) {
 
 /* ══════════ ④ 逐族比对 ══════════ */
 
-/* 境界类：全境界 × 各种写法 */
+/* ★★★ v588：境界名归一这一族**移交**给 `工具/_v190_realm_selftest.mjs` ★★★
+   ─────────────────────────────────────────────────────────────────────────
+   病历：参数对齐之后仍剩 77 格，全在下面这 5 个函数上，形态是
+       卡内 "凝府后期" / 1.39    ←  旧十二境快照
+       独立 "筑基后期" / 2.47    ←  现役六境
+   **没有一格是算错**：同一个输入在两套境界体系里本来就该得出不同的名字与系数。
+
+   为什么不能靠「对齐参数」修：这一族不是参数漂移，是 `v188` 起的**体系换代** ——
+   引擎新增了 `xzRealmAlias()`（旧 12 境 → 新 6 境，48 档逐档映射，含 `XZ_OLD_PREFIX`
+   与按长度降序的 `XZ_OLD_KEYS`），而快照里根本没有这个函数。算法层加了一整道换名步骤，
+   硬把参数对齐只会让「看得懂的表」和「看不懂的算法」互相打架（实测把
+   `REALM_TIER_KEYS` 也对齐后，红从 50 格回弹到 42 → 反复横跳，纯噪声）。
+
+   为什么不能靠「在判据里写换算表」修：那等于在这个文件里再造一份境界真相源，
+   两份真相同步一次，就会错一次（本项目第 4 条铁律的孪生形态）。
+   ⇒ 正确做法是认领：这一族**已经有更强的闸**，它按现役六境验，不是拿三个月前的快照比。
+
+   ⚠ 移交不是"跳过"就完事，所以下面三件事都做死：
+     ① 被移交的名字要逐个列出来（不许写正则/前缀批量豁免，那会悄悄吃掉未来新增的）；
+     ② 移交前**当场把 工具/_v190_realm_selftest.mjs 真跑一遍**，跑不过就 exit 1
+        —— 覆盖方坏了却以为有人接住，比没有覆盖更危险；
+     ③ 它自己的抽取锚点失效（报 "提取锚点未命中"）也 exit 1
+        —— 那是"闸自己搭歪了"，不是"境界没问题"。
+
+   ⚠ 本闸仍然守着这一族的**另一件**事，一件都不会少：`xzBigRealmOf` / `xzAttrTotalCapOf` /
+     `_v228RealmRoot` 照旧逐格比对（它们读的表已对齐），以及**全部算数格**
+     （`calcDamage` 类、`_v75ParseEffect`、`mechVal` 全族…）。
+   ⚠ 将来如果那个覆盖方被下架或改名，本闸会直接报错要求重新认领 —— 不会静默放行。 */
+const REALM_NAME_FAMILY = ['xzLevelCoeffOf', 'normalizeRealm', 'xzNormRealmName', 'realmMultByName', 'realmRank'];
+const REALM_HANDOFF_TO = '工具/_v190_realm_selftest.mjs';
+{
+  const { execFileSync } = await import('node:child_process');
+  let out = '', failMsg = null;
+  try {
+    out = execFileSync(process.execPath, [path.join(ROOT, REALM_HANDOFF_TO)], {
+      cwd: ROOT, encoding: 'utf8', timeout: 180000, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    const txt = String((e && (e.stdout || '')) + (e && (e.stderr || '')));
+    /* 抽取锚点失效 = 闸自己搭歪了，和「境界算错」是两件事，必须分开报 */
+    failMsg = /提取锚点未命中/.test(txt)
+      ? '覆盖方自己搭歪了（提取锚点未命中）—— 不是境界没问题，是判据过期了：\n' + txt.trim().slice(-600)
+      : '覆盖方报红 —— 境界名归一这一族现在**没有人守**：\n' + txt.trim().slice(-600);
+  }
+  if (failMsg) {
+    console.error('✗ 境界名归一族的覆盖方没跑过，拒绝移交：' + REALM_HANDOFF_TO);
+    console.error('  ' + failMsg);
+    process.exit(1);
+  }
+  const m = /(\d+) 绿 \/ (\d+) 红/.exec(out) || /(\d+) 绿 \/ (\d+) 红/.exec(String(out));
+  if (!m) {
+    console.error('✗ ' + REALM_HANDOFF_TO + ' 跑完了但没打印「N 绿 / M 红」—— 判据格式变了，');
+    console.error('  本闸无法确认它真的验过，拒绝移交（别让"看起来跑过了"顶替"验过了"）。');
+    process.exit(1);
+  }
+  if (Number(m[2]) !== 0) {
+    console.error('✗ ' + REALM_HANDOFF_TO + ' 有 ' + m[2] + ' 条红，拒绝移交');
+    process.exit(1);
+  }
+  console.log('· 境界名归一这一族已移交给 ' + REALM_HANDOFF_TO + '（' + m[1] + ' 绿 / 0 红，已当场复跑确认）');
+  console.log('  ' + REALM_NAME_FAMILY.join(' / '));
+  console.log('  （原因：快照是旧十二境、现役是六境 —— 判据过期，不是引擎算错；见该段注释）');
+}
+const HANDED_OFF = new Set(REALM_NAME_FAMILY);
+
+/* 境界类：全境界 × 各种写法。
+   ⚠ 移交的 5 个名字在这里跳过，**其余照比**（`xzBigRealmOf` / `xzAttrTotalCapOf` /
+     `_v228RealmRoot` 一个都不少），且 `HANDED_OFF` 是显式名单，不是前缀匹配。 */
 for (const r of REALMS) {
   for (const n of ['xzLevelCoeffOf', 'normalizeRealm', 'xzNormRealmName', 'realmMultByName',
     'xzBigRealmOf', 'realmRank', 'xzAttrTotalCapOf', '_v228RealmRoot']) {
+    if (HANDED_OFF.has(n)) continue;
     both(n, [r], '境界');
   }
 }
@@ -479,7 +574,14 @@ for (const q of QUALITIES) {
 /* 效果解析：这是最大的一片，全部文本 × 全组合 */
 for (const t of TEXTS) {
   both('_v75ParseEffect', [t], '效果解析');
-  both('parseBloodEffect', [t], '血脉解析');
+  /* ★ v588：`parseBloodEffect` 已**整条删除**（连同 `BLOOD_EFFECT_KEYS`），
+     在 v1.172-dev「血脉改灵根」时换成 `parseSpiritRootEffect`。
+     实测三方计数全为 0：战斗引擎/核心脚本/index.js / 战斗引擎/src/core.js / 脚本/04-核心脚本.js。
+     ⇒ 这一格以前报的 27 条红，全是 `TypeError: Cannot read properties of undefined (reading 'apply')`
+        —— 判据在调一个不存在的函数名，扫的是"我自己的影子"。
+     ⚠ 不是「解析器没覆盖」：灵根解析由 `_v282_blood_weapon_verify.mjs` 端到端守
+       （模板里 `this.__lvl = xzLevelCoeffOf;` 那套，验的是"数值真进公式"）。
+     ⚠ 现役导出里**没有**这个名字，所以这里不是豁免，是它确实不在比对清单里了。 */
   both('xzAtomNameOf', [t], '原子名');
   both('xzEffKeyOf', [t, null], '效果键');
   both('xzEffKeyOf', [t, { kind: 'damage' }], '效果键');
@@ -529,7 +631,60 @@ both('xzDrOf', [DEF, {}], '减伤');
 both('xzDrOf', [DEF, null], '减伤');
 both('xzVulnOf', [DEF, {}], '承伤');
 both('xzVulnOf', [DEF, null], '承伤');
-both('xzRollHit', [ATK, DEF, SKILL], '命中判定');
+/* ★★★ v588：`xzRollHit` 移交 `工具/_v228_hitroll.mjs` ★★★
+   ─────────────────────────────────────────────────────────────────────────
+   这是 v570 **作者亲口定案**的口径重写，不是漂移：
+     旧：d20 + 基础 12 + 品质削减 − 闪避点数 −> 三档（命中 / 险中 / 落空）
+     新：闪避值是**百分比**，命中率 = 100 − (闪避值 − 品质削减)，掷 d100 分两档
+   作者原话：「闪避值不是命中率……命中率是后台代码计算，也就是在战报里展开之后显示。」
+   同时 v570 把「同境保底」也一并废除（作者选"甲"时已拍板，注释里写明了回滚办法）。
+   ⇒ 快照里那套 d20 三档已经**不存在于任何一版现役代码**，拿它比必然红，
+     而那个红对玩家毫无意义（红的是"三个月前的口径"）。
+   ⚠ 覆盖方更强：`_v228_hitroll.mjs` 收尾打印的是
+     「落档 **d100** 全部正确（两档 / 闪避值即落空率 / 保底已废 / 品质削减 / 敏捷只进守方 / 封顶 75 / 无独立闪避）」，
+     即按现役口径逐条验，还带"独立闪避机制不许复活"那一段。
+   ⚠ 移交后**仍然守住**的：`xzHitBonusOf` / `xzHitCutOf` / `xzEvadeValueOf` 照旧逐格比
+     （它们读的 `XZ_HIT_BONUS` 已对齐，这三格现在是绿的）。
+   ⚠ 覆盖方若被下架，下面那段会 `exit 1`，不会静默放行。 */
+const HIT_HANDOFF_TO = '工具/_v228_hitroll.mjs';
+{
+  const { execFileSync } = await import('node:child_process');
+  /* ⚠ `NODE_OPTIONS` 里**不能给路径加引号** —— Node 自己拆这个字符串，
+     加了引号它会把引号当路径的一部分 ⇒ 报 MODULE_NOT_FOUND（实测踩过）。
+     另外要转成正斜杠：Windows 上反斜杠在 NODE_OPTIONS 里会被当转义吃掉。 */
+  const preloadPath = path.join(ROOT, '工具/_xz_preload.cjs').replace(/\\/g, '/');
+  const env = Object.assign({}, process.env, {
+    NODE_OPTIONS: '--require ' + preloadPath,
+  });
+  let out = '', failMsg = null;
+  try {
+    /* ⚠ `_v228_hitroll` 读 `__XZ_SRC04(...)` —— 那是 preload 挂到 globalThis 的垫片。
+       不带 NODE_OPTIONS 直接跑会 `ReferenceError: __XZ_SRC04 is not defined`，
+       看起来像"闸坏了"，其实是这里少传了环境。 */
+    out = execFileSync(process.execPath, [path.join(ROOT, HIT_HANDOFF_TO)], {
+      cwd: ROOT, encoding: 'utf8', timeout: 180000, env, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    const txt = String((e && (e.stdout || '')) + (e && (e.stderr || '')));
+    failMsg = /__XZ_SRC04 is not defined/.test(txt)
+      ? '覆盖方没拿到 preload 垫片（__XZ_SRC04 未定义）—— 本闸传的环境不对，不是它坏了'
+      : '覆盖方报红 —— 落档判定现在**没有人守**：\n' + txt.trim().slice(-600);
+  }
+  if (failMsg) {
+    console.error('✗ xzRollHit 的覆盖方没跑过，拒绝移交：' + HIT_HANDOFF_TO);
+    console.error('  ' + failMsg);
+    process.exit(1);
+  }
+  if (!/落档 d100 全部正确/.test(out)) {
+    console.error('✗ ' + HIT_HANDOFF_TO + ' 跑完了但没有「落档 d100 全部正确」这句收尾 ——');
+    console.error('  判据格式变了，本闸无法确认它验的是现役 d100 口径，拒绝移交。');
+    process.exit(1);
+  }
+  console.log('· 落档判定（xzRollHit）已移交给 ' + HIT_HANDOFF_TO + '（已当场复跑确认，d100 口径全绿）');
+}
+/* ⚠ 这里**故意不写** `both('xzRollHit', …)`：移交就是移交，留着那一格等于没移交
+   （它会照旧拿 d20 快照去比现役 d100，永远红，而红的原因与玩家无关）。
+   ⚠ 但 `xzRollHit` 这个函数本身仍在 `export {…}` 里 —— 本闸不比对它，不等于它不存在。 */
 both('xzHitBonusOf', [SKILL], '命中加成');
 both('xzHitCutOf', [ATK, SKILL], '命中削减');
 both('xzEvadeValueOf', [DEF], '闪避值');

@@ -15734,7 +15734,9 @@ function calcDamage(attacker, defender, skill, isAoe) {
   var v75VulnPct = xzVulnOf(defender, { atomPierceVuln: _atomPierceVuln || 0 });
   var v75VulnMult = (1 + v75VulnPct);
   var v75BuffNote = v75BuffPct > 0 ? ('【' + esc(skill && skill.name || '增益') + '增伤 +' + Math.round(v75BuffPct * 100) + '%】') : '';
-  var v75DebuffNote = v75DebuffPct > 0 ? ('【受制 -' + Math.round(v75DebuffPct * 100) + '%】') : '';
+  /* ★ v588：标签一律叫「虚弱」——与《效果表》的机制名、日志层（XZ_SUB_LABEL）对齐。
+     同一个 dmgDown 不许有第二套叫法，否则玩家以为吃了好几种不同的 debuff。 */
+  var v75DebuffNote = v75DebuffPct > 0 ? ('【虚弱 -' + Math.round(v75DebuffPct * 100) + '%】') : '';
   var v75DrNote = v75DrPct > 0 ? ('【护身 -' + Math.round(v75DrPct * 100) + '%】') : '';
   var v75VulnNote = v75VulnPct > 0 ? ('【破防 +' + Math.round(v75VulnPct * 100) + '%】') : '';
 
@@ -16164,8 +16166,8 @@ function xzCritRateOf(f, defender, opt) {
   return Math.max(0, Math.min(0.75, r));
 }
 
-/* 增伤（攻方口径）：临时 v75BuffPct（手数活着才算）+ 常驻 _xzPerm.dmg − 受制
-   面板要的是「我这下能多打多少」，所以受制（v75DebuffPct）要**减掉**，
+/* 增伤（攻方口径）：临时 v75BuffPct（手数活着才算）+ 常驻 _xzPerm.dmg − 虚弱
+   面板要的是「我这下能多打多少」，所以虚弱（v75DebuffPct）要**减掉**，
    与 calcDamage 里 'v75BuffMult = (1+pct) * (1-debuff)' 同向。 */
 function xzDmgUpOf(f) {
   if (!f) return 0;
@@ -17357,7 +17359,7 @@ function processHandBuffs(fighter) {
      他看到的「9999 前后不变」是**武器/玄诀的常驻减伤**（整场本就不该减），
      但它和临时增益混在同一行里，看起来就是「递减坏了」。
      ⇒ 临时项印手数（3→2 一眼可见），常驻项单独标「整场」，且不再出现在递减名单里。
-     ⇒ 顺带把以前漏印的闪避/减速/回血/受制一并纳入 —— 少了它们，
+     ⇒ 顺带把以前漏印的闪避/减速/回血/虚弱一并纳入 —— 少了它们，
         玩家永远看不到那几个状态在递减。 */
   var _dbg = [];
   var _permTxt = [];
@@ -17366,13 +17368,13 @@ function processHandBuffs(fighter) {
     if (fighter.slowRounds > 0) _dbg.push('减速 ' + fighter.slowRounds);
     if (fighter.v75BuffRounds > 0) _dbg.push('增伤 ' + fighter.v75BuffRounds);
     if (fighter.v75DrRounds > 0) _dbg.push('减伤 ' + fighter.v75DrRounds);
-    if (fighter.v75DebuffRounds > 0) _dbg.push('受制 ' + fighter.v75DebuffRounds);
+    if (fighter.v75DebuffRounds > 0) _dbg.push('虚弱 ' + fighter.v75DebuffRounds);
     if (fighter.tempEvadeRounds > 0) _dbg.push('闪避 ' + fighter.tempEvadeRounds);
     if (fighter.v94RegenRounds > 0) _dbg.push('回血 ' + fighter.v94RegenRounds);
     if (fighter.v94CritDmgRounds > 0) _dbg.push('暴伤 ' + fighter.v94CritDmgRounds);
     if (fighter.tempAtkBoostRounds > 0) _dbg.push('攻↑ ' + fighter.tempAtkBoostRounds);
     var _pp0 = xzPermOf(fighter);
-    var _PERM_LABEL = { dmg: '增伤', dmgDown: '受制', dr: '减伤', vuln: '易伤', evade: '闪避',
+    var _PERM_LABEL = { dmg: '增伤', dmgDown: '虚弱', dr: '减伤', vuln: '易伤', evade: '闪避',
       hastePct: '提速', hasteFlat: '提速', slowPct: '减速', slowFlat: '减速',
       crit: '暴击', critDmg: '暴伤', regen: '回血' };
     for (var _pk = 0; _pk < XZ_PERM_KEYS.length; _pk++) {
@@ -17638,7 +17640,7 @@ function processHandBuffs(fighter) {
       if (fighter.slowRounds > 0) _a.push('减速 ' + fighter.slowRounds);
       if (fighter.v75BuffRounds > 0) _a.push('增伤 ' + fighter.v75BuffRounds);
       if (fighter.v75DrRounds > 0) _a.push('减伤 ' + fighter.v75DrRounds);
-      if (fighter.v75DebuffRounds > 0) _a.push('受制 ' + fighter.v75DebuffRounds);
+      if (fighter.v75DebuffRounds > 0) _a.push('虚弱 ' + fighter.v75DebuffRounds);
       if (fighter.tempEvadeRounds > 0) _a.push('闪避 ' + fighter.tempEvadeRounds);
       if (fighter.v94RegenRounds > 0) _a.push('回血 ' + fighter.v94RegenRounds);
       console.warn('[递减] 后：' + (_a.length ? _a.join(' / ') : '（临时状态已归零）'));
@@ -17659,7 +17661,7 @@ function processHandBuffs(fighter) {
    施术者时，减益在施术者下次出手前就耗光 ⇒ **减益白上**，且零报错。
 
    ⚠⚠ 时序陷阱（本函数存在的全部理由）：
-     破防/受制常常是**这一击自己施加的**（applyV75Effects 在同一函数里跑）。
+     破防/虚弱常常是**这一击自己施加的**（applyV75Effects 在同一函数里跑）。
      若直接在命中后扣层，「破防 3 层」会被施术者的第一击就扣成 2 层 ——
      等于凭空弱化所有破防类招式。
      所以必须**在攻击开始前拍快照**，扣层时只从「本次攻击之前就存在的层数」
@@ -17688,7 +17690,7 @@ function processHitDebuffs(f, snap) {
   if (!f) return;
   try {
     var s = snap || { debuff: 0, vuln: 0 };
-    /* 受制（出手伤害降低） */
+    /* 虚弱（出手伤害降低） */
     var curD = Number(f.v75DebuffRounds || 0);
     var baseD = Number(s.debuff || 0);
     if (curD > 0 && baseD > 0) {
@@ -17696,7 +17698,7 @@ function processHitDebuffs(f, snap) {
       if (nvD !== curD) {
         f.v75DebuffRounds = nvD;
         if (nvD <= 0) f.v75DebuffPct = 0;
-        BattleState.logs.push('<span style="color:#b7b8b3">' + esc(f.name) + ' 身上的【受制】被这次攻击打散一层（还剩 ' + nvD + ' 层）。</span>');
+        BattleState.logs.push('<span style="color:#b7b8b3">' + esc(f.name) + ' 身上的【虚弱】被这次攻击打散一层（还剩 ' + nvD + ' 层）。</span>');
       }
     }
     /* 破防（承伤增加） */
@@ -22173,6 +22175,47 @@ var XZJJ = (function () {
       return out;
     }
     var _hpMp = hpMpOfVar(p.name);
+    /* ★★★ v585：**内联档案自带的四件套优先**（这原来是 v315 那条路的缺口）★★★
+       ── 病根 ──────────────────────────────────────────────────────────
+       `hpMpOfVar(name)` 只会**按名字回变量里查**（主角取「主角信息」，
+       其他人取「人物列表」）。而 v315 起名单项允许是**内联档案对象**
+       （秘境遇怪、以及内置开发者测试走的就是这条），这种档案**根本不在变量里** ——
+       于是它自带的气血/灵力四件被整份忽略，落到兜底公式
+       `(300 + 体质×80) × 境界系数^2.05` 上。
+
+       ── 症状（实测，不是推测）─────────────────────────────────────────
+       内置档案写「气血 2600 / 上限 3200」，进了战斗变成 **4389 / 4389**；
+       敌方写「3400 / 3400」，变成 **2456 / 2456**。
+       两个数都**看起来很正常**（在合理区间、能打一局），所以谁也不会怀疑 ——
+       只有把"写进去的数"与"打起来的值"逐字对一遍才看得见。
+       这正是本项目最贵的失效形态：不报错、不越界、只是**数不是那个数**。
+
+       ── 为什么优先级是「档案自带 > 按名回查」而不是反过来 ──────────────
+       内联档案是**调用方当场给的那一份**，语义上就是"这一局用这套数值"；
+       按名字回查是给「只写了名字」的名单项用的兜底。
+       反过来（变量优先）会让"临时换一套数值打一场"永远做不到 ——
+       而内置开发者测试的全部价值就在于此。
+       ⚠ 名字形态（字符串名单项）完全不受影响：那种情况 p.rec 为空，
+         走的还是原来那条 `hpMpOfVar`，一个字节没变。
+       ⚠ 只认**四个都给了**的档案：只写了气血没写上限，说明档案不全，
+         这时候混着用（自带气血 + 算出来的上限）会造出「当前血量 > 上限」的鬼状态。
+         宁可整份回退到兜底，让它在面板上一眼看得出来。 */
+    try {
+      var _rec = p.rec || null;
+      if (_rec) {
+        var _vHp = Number(_rec.气血), _vHpMax = Number(_rec.气血上限);
+        var _vMp = Number(_rec.灵力), _vMpMax = Number(_rec.灵力上限);
+        if (isFinite(_vHp) && isFinite(_vHpMax) && isFinite(_vMp) && isFinite(_vMpMax)
+          && _vHp > 0 && _vHpMax > 0 && _vMp >= 0 && _vMpMax > 0) {
+          /* 与 hpMpOfVar 里 v405 那条自愈同口径：蓝不可能比血多（旧档才会） */
+          if (_vMpMax > _vHpMax) {
+            _vMpMax = Math.round(_vHpMax * 0.5);
+            if (_vMp > _vMpMax) _vMp = _vMpMax;
+          }
+          _hpMp = { hp: _vHp, hpMax: _vHpMax, mp: _vMp, mpMax: _vMpMax };
+        }
+      }
+    } catch (eRecHp) {}
     var statData = {
       主角信息: {
         姓名: p.name,
@@ -22640,7 +22683,20 @@ var XZJJ = (function () {
       })(),
       artifact: c.装备武器 || null,
       dao: c.大道 || {},
-      灵根: c.灵根 || {}
+      灵根: c.灵根 || {},
+      /* ★★★ v585：**把这份档案本身带下去**，供 `buildUnit` 校验它自带的四件套 ★★★
+         ── 为什么必须带 ────────────────────────────────────────────────
+         `buildUnit` 里那句 `hpMpOfVar(p.name)` 只**按名字回变量查**。
+         v315 起名单项允许是**内联档案对象**（秘境遇怪 / 内置开发者测试），
+         这种档案不在变量里 ⇒ 它写的「气血 / 气血上限 / 灵力 / 灵力上限」
+         被整份忽略，落兜底公式（实测：写 2600/3200，进去变 4389/4389）。
+         ── 为什么只带原始档案、不在这里就把四件套写死进 statData ─────────
+         这个函数的职责是「把档案翻译成 buildUnit 的入参」，
+         真正决定"用不用自带四件套"的判断在 `buildUnit` 里（那里能看到兜底值，
+         才能做"四个都给全了才用"这条校验）。在这里做会把判断拆成两处。
+         ⚠ 传的是**引用**不是拷贝：`buildUnit` 只读它，不写。
+           如果哪天要在下游改它，必须先拷贝 —— 否则会改到调用方给的档案。 */
+      rec: c
     });
     if (!u) return null;
     u.side = side;
@@ -22772,6 +22828,23 @@ var XZJJ = (function () {
 
     return {
       round: 1, tick: 0, over: false, waiting: null, log: [], lastActor: null,
+      /* ★★★ v585：**开战待命闸**（用户 2026-11-11）★★★
+         原话：「战斗界面新增：开始战斗的时候，底层技能栏的技能先隐藏，
+           出现一个按钮叫开始战斗，点击之后才会开打，而不是一上来就开打。」
+         ── 为什么它是一个**局内字段**，不是全局变量 ──
+           它决定「这一局有没有开打」，天然属于某一局：
+           重开 / 换楼 / 换档之后必须回到 false（新的一局又要玩家点一次）。
+           放全局变量会出现「上一局点过了，这一局一开界面就已经在打了」，
+           而那正是 v165 那类「旧局状态漏到新局」的老病。
+         ── 谁读它 ──
+           ① `startBattle()`：false ⇒ **不启动计时器**（这是唯一的"自动推进"源头）
+           ② `barHtml()`：false ⇒ 只画一颗「开始战斗」，技能栏/功能键全不出现
+           ③ 点击分支 `data-jjbstart`：置 true + 启动计时器 + 重绘
+         ⚠ 不许用「把技能栏 CSS 隐藏」来实现「先隐藏技能栏」：
+           CSS 隐藏了照样能点（键盘/辅助技术/误触），而且 `S.waiting` 一到，
+           AI 侧那一手会照跑 ——「看着没开打，其实在打」是本项目最贵的失效形态。
+           必须从**推进源头**上停住。 */
+      started: false,
       /* ★ v61：本局归属的**档位指纹** —— 换档时探测层据此判「这不是本档的局」并就地作废。 */
       chatKey: xzJJChatKey(),
       /* ★ v38：玩家选招下标。口径 -1 = 普通攻击；0..n-1 = 玄技表第 n+1 门。 */
@@ -22850,6 +22923,50 @@ var XZJJ = (function () {
     return seq;
   }
 
+  /* ★★★ v585：**「点开始战斗」的唯一实现**（用户 2026-11-11）★★★
+     原话：「出现一个按钮叫开始战斗，点击之后才会开打，而不是一上来就开打」。
+
+     ── 为什么抽成函数，而不是写在点击分支里 ──────────────────────────
+     这是本项目最容易吃的一次教训：**探针与玩家必须走同一条路**。
+     把「置 started + 重绘 + 起计时器」三件事埋进 overlay 的 click 委托里，
+     那么 50 多道离线闸（它们全是 `beginBattleFromRoster → 直接开打`）
+     就会集体停在待命态，然后一起报红 —— 而红的原因是"探针没有手指"，
+     不是产品坏了。反过来，如果为了救探针给待命态开一个"测试后门"，
+     那个后门就成了**玩家也能触发的第二条开打路径**，等于闸在给被测代码放水。
+
+     ⇒ 唯一实现放这里，两个调用方：
+       · `barHtml()` 那颗 `[data-jjbstart]` 按钮 → overlay click 委托 → 本函数
+       · `API.startNow()`（**白名单出口**，只给探针；见文件末尾的导出段）
+     两条路走的是**同一份代码**，闸量的就是玩家真按下去的那一刻。
+
+     ── 幂等 ──────────────────────────────────────────────────────────
+     按钮是上一帧渲染的，连点两下时第二下也会进到这里；那时 timer 已经点着，
+     再启动一次 = 两个循环并行推进（表现为"出手数一次加二、血掉得飞快"）。
+     ⇒ `S.started` 已经是 true 就直接 return，不重复点 timer。
+     这也是「`S.started` 是局内字段、不是全局变量」的用处之一：
+     重开/换楼/换档之后它回 false，新的一局又要玩家点一次。 */
+  function beginNow() {
+    if (!S || S.over || S.started) return false;
+    S.started = true;
+    /* 记一笔"从待命到开打"，玩家回头看战报知道自己是第几息才动手的 */
+    try { push('演武台：开打。', 'sys'); } catch (eStl) {}
+    render();
+    /* ★ 走 startBattle 而不是直接 setTimeout(step)：
+       它里面还有 computeSpdBase / seedPhase 这两步。
+       待命态时它们**已经跑过一次**（startBattle 在 render 之前就调了），
+       但 seedPhase 会重排相位 —— 那是**排列顺序**，重排一次不影响数值公平
+       （相位只决定谁先手，不决定强弱），反而保证「玩家点下去这一刻」
+       与「结构上的开局」是同一时刻。 */
+    try {
+      startBattle();
+    } catch (eSt2) {
+      /* 起不来必须出声，不能静默停在待命态（玩家会以为按钮坏了） */
+      try { toast('演武台：开始战斗失败 —— ' + ((eSt2 && eSt2.message) || eSt2), 'warn'); } catch (eT3) {}
+      return false;
+    }
+    return true;
+  }
+
   /* ★ v39：入口不再叫 startRound —— 本模块**没有回合**。 */
   function startBattle() {
     S.tick = 0;
@@ -22861,6 +22978,28 @@ var XZJJ = (function () {
        v157 的〔时序〕机制说明同样已删。 */
     /* v157：〔时序〕那段机制说明（中位速度/基准节奏/「只有息没有回合」）已按用户要求删除。 */
     render();
+    /* ★★★ v585：**没有玩家点头就不开打**（用户 2026-11-11）★★★
+       原话：「出现一个按钮叫开始战斗，点击之后才会开打，而不是一上来就开打」。
+       ── 为什么只改这一行就够 ──────────────────────────────────────────
+       `step()` 的每一条自续都是 `if (!S.over) timer = setTimeout(step, …)`，
+       而**唯一**能把 timer 点着的入口就是这里这一行 ——
+       其余十来个 setTimeout 全在 step 的下游（armTimer / awaitPlayer / GAP_AI 分支）。
+       ⇒ 这里不启动，整条推进链就一寸都不会走：
+         不 tick、不排相位、不耗灵、不结算 DOT、AI 也不出手。
+       这正是用户要的「界面先摆出来、但没打」。
+       ── 摆界面这一步照常做 ────────────────────────────────────────────
+       `render()` 在上一行已经跑过，所以卡片、血条、行动条全都正常画出来；
+       底栏由 `barHtml()` 的 `!S.started` 分支换成那颗「开始战斗」。
+       ⚠ 别改成「也 setTimeout，但 step 里判 S.started」：
+         那样每 16ms 空转一次 render，而且任何一处漏判就会偷偷开打。
+         停就要停在**源头**，不要在循环体内补判据。 */
+    if (!S.started) {
+      /* 给玩家一句"为什么停着"—— 卡片上的可击角标已经在了，
+         但底栏是空的（只有一颗按钮），容易读成"界面坏了"。 */
+      try { push('演武台：对手已列阵，点下方「开始战斗」即可开打。', 'sys'); } catch (ePsWait) {}
+      try { render(); } catch (eRw) {}
+      return;
+    }
     timer = setTimeout(step, GAP_ROUND);
   }
 
@@ -23427,7 +23566,7 @@ var XZJJ = (function () {
        后来播报改成直接用 'out.dmg'（引擎给的真实伤害），快照就没人要了，变量忘了删。 */
     var out = { dodge: false, dmg: 0, res: null, lines: [] };
     /* ★★ v270：减益受击递减的**快照**（与主战斗 13759 同一套时序）——
-       破防/受制常常是这一击自己刚挂上去的，扣层时必须只扣「打之前就有的」，
+       破防/虚弱常常是这一击自己刚挂上去的，扣层时必须只扣「打之前就有的」，
        否则「破防 3 层」会被施术者第一击就扣成 2 层，等于凭空弱化所有减益招。 */
     var _debuffSnapJ = (typeof xzSnapshotDebuffs === 'function') ? xzSnapshotDebuffs(target) : null;
     /* ★ v69：**增益技不打人** —— 与主战斗同一条分流口径。
@@ -23534,7 +23673,7 @@ var XZJJ = (function () {
          ⇒ 只在这里调一次，拿 `out.dmg`（真落地伤害）判命中。 */
       try { if (out.dmg > 0 && typeof xzV2StackOnHit === 'function') xzV2StackOnHit(actor, out.dmg, target); } catch (eV2HJ) {}
       /* ★★ v270：减益**受击递减**（主战斗 13790 同口径）。
-         演武原来完全不扣 ⇒ 破防/受制挂上就是永久的，「3 层」能挂满一整场。
+         演武原来完全不扣 ⇒ 破防/虚弱挂上就是永久的，「3 层」能挂满一整场。
          ⚠ 必须在 applyV75Effects **之后**（本击刚挂的靠上面的快照排除，不被自己扣）。 */
       if (sk && target.alive !== false) {
         try { processHitDebuffs(target, _debuffSnapJ); } catch (eHdbJ) {}
@@ -26192,13 +26331,21 @@ var XZ_JJB_SKIN = `
   font-family:var(--xz-num);font-variant-numeric:tabular-nums;}
 .xz-jjb-sk .xz-jjb-pill-cost{color:var(--xz-mp-a);}
 .xz-jjb-see{
-  /* v479：3 个技能挤一页之后，这枚 22px 的「详」键吃掉三分之一个技能格。
-     详情仍可看 —— 点技能卡本身就会展开（见 build 的点击分支），这枚只是快捷方式。 */
-  display:none;
-  flex:none;width:22px;appearance:none;cursor:pointer;font-family:var(--xz-font);font-size:10px;
+  /* ★★★ v588：这枚「详」必须**真的在**，不许再 display:none ★★★
+     作者原话（2026-11-11）：「你妈的技能的查看按钮呢，你他妈不给我查看
+     怎么知道怎么用的！」
+     v479 为了给第 3 个技能腾地方把它藏了，注释里写「点技能卡本身就会展开」——
+     可那条路根本不存在：'data-jjbsk' 的点击分支第一句就是 pickSkill()，
+     点技能卡只改选、不出详情。**承诺没实现、快捷方式又被藏** ⇒ 玩家永远看不到
+     一门招式的效果，只能靠猜。（这正是 v39 骂过一遍的同一个病。）
+     现在两件事一起做：① 这枚键恢复显示；② pickSkill 之后自动弹详情
+        （见 27345 的点击分支），点卡也能看到。
+     宽度压到 18px，不再吃掉三分之一个技能格。 */
+  flex:none;width:18px;appearance:none;cursor:pointer;font-family:var(--xz-font);font-size:10px;
   color:var(--xz-ink-3);background:transparent;
   border:1px solid var(--xz-line);border-left:0;border-radius:0 9px 9px 0;
   transition:color .15s,border-color .15s;
+  padding:0;line-height:1;
 }
 .xz-jjb-see:hover{color:var(--xz-gold-2);border-color:rgba(201,168,106,.4);}
 .xz-jjb-sknav{
@@ -26294,6 +26441,33 @@ var XZ_JJB_SKIN = `
 #xz-jjb-restart2{align-self:flex-start;padding:6px 18px;border-radius:7px;font-size:11.5px;}
 .xz-jjb-finishing{align-items:center;}
 .xz-jjb-finishing-tip{font-size:11.5px;color:var(--xz-ink-3);letter-spacing:.08em;}
+
+/* ══ v585：待命态底栏「开始战斗」═══════════════════════════════════════
+   用户 2026-11-11：「战斗界面新增：开始战斗的时候，底层技能栏的技能先隐藏，
+     出现一个按钮叫开始战斗，点击之后才会开打，而不是一上来就开打。」
+   这一块占的**正是原来底栏的高度**（技能滑轨 + 功能格约 96px，桌面；手机上两行约 104px），
+   所以卡片区不会因为"底栏内容换了"而重排 —— 切换瞬间界面是稳定的。
+   ⚠ 高度**不要写死**：底栏是 flex 容器，高度由内容和 CSS 决定。
+     写死 px 会在换字体/改字号时错位（本项目「换字体后四页等高」那一轮就是栽在这）。
+   ⚠ 别给按钮加 flex:1：它应该是一颗居中、有明确边界的按钮，
+     通栏白条正是 .xz-jjb-mb 那条病历里玩家看不懂的东西。 */
+.xz-jjb-startbox{
+  width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:9px;padding:4px 0;
+}
+.xz-jjb-starttip{
+  font-size:11px;color:var(--xz-ink-3);letter-spacing:.08em;text-align:center;
+  line-height:1.5;
+}
+.xz-jjb-startbtn{
+  font-family:var(--xz-font);font-size:14px;font-weight:700;letter-spacing:.16em;
+  padding:11px 42px;border-radius:9px;cursor:pointer;border:0;
+  color:#241a08;background:linear-gradient(180deg,var(--xz-gold-2),var(--xz-gold));
+  box-shadow:0 0 0 1px rgba(255,236,180,.35) inset,0 4px 16px rgba(0,0,0,.45);
+  transition:.16s;
+}
+.xz-jjb-startbtn:hover{filter:brightness(1.08);}
+.xz-jjb-startbtn:active{transform:translateY(1px);}
 
 /* ── 窄屏：同一套分区，只压密度；卡片仍走 is-solo / is-multi 两档 ────── */
 @media (max-width:560px){
@@ -27155,6 +27329,20 @@ function build() {
            而主战斗的绑定是 'qa('button[data-sk-idx]')' —— 'qa' 走 getDoc() 全文档查询，
            会给演武这边的按钮也挂上「选中主战斗玩家技能」的处理（两套 handler 同时命中）。
            前缀是本工程的铁律：跨模块的选择器必须带自己的前缀。 */
+      /* ★★★ v585：「开始战斗」—— 必须排在所有分支**最前面** ★★★
+         待命态下底栏只有一个元素，理论上别处都点不中；但把它放最前，
+         是为了让「点了开始」这件事**永远优先于任何误触分支**
+         （比如刚好点到某个同名 data 属性的元素）。
+         ⚠ `S.started` 要再判一次：按钮是上一帧渲染的，可能在连点两下时
+           第二下才进到这里 —— 那时候 timer 已经点着了，再启动一次就是两个循环
+           并行推进（表现为"出手数一次加二、血掉得飞快"）。
+           ⇒ 幂等：已 started 就直接 return，不重复点 timer。 */
+      var startBtn = (e.target && e.target.closest) ? e.target.closest('[data-jjbstart]') : null;
+      if (startBtn) {
+        e.stopPropagation();
+        beginNow();
+        return;
+      }
       /* ★ v161：技能滑轨的换组箭头（‹ ›）—— 必须排在选招之前，
          否则箭头落在底栏里会被其它分支误吃。 */
       var navBtn = (e.target && e.target.closest) ? e.target.closest('[data-jjbsknav]') : null;
@@ -27164,7 +27352,27 @@ function build() {
         return jjbSkNav(parseInt(navBtn.getAttribute('data-jjbsknav'), 10) || 1);
       }
       var skBtn = (e.target && e.target.closest) ? e.target.closest('[data-jjbsk]') : null;
-      if (skBtn) { closeSkillPop(); return pickSkill(parseInt(skBtn.getAttribute('data-jjbsk'), 10)); }
+      if (skBtn) {
+        closeSkillPop();
+        var _skI = parseInt(skBtn.getAttribute('data-jjbsk'), 10);
+        pickSkill(_skI);
+        /* ★★★ v588：选中之后**顺手把详情弹出来** ★★★
+           v479 藏掉「详」键时，注释承诺的就是这条（"点技能卡本身就会展开"），
+           但代码里从来没有实现过 —— 于是玩家点来点去只看到按钮高亮，
+           不知道这门招式的数值和落点。
+           ⚠ 用 `setTimeout 0` 延后一帧再弹：pickSkill 会重绘底栏，
+             在重绘**之前**拿到的 host 是已经被换掉的旧节点，
+             getBoundingClientRect 返回 0 ⇒ 小框会贴在左上角。
+             传新节点查一次，查不到就退回让 toggleSkillPop 自己定位（host=null）。 */
+        setTimeout(function () {
+          try {
+            var _d = d0();
+            var _host = _d.querySelector ? _d.querySelector('[data-jjbsk="' + _skI + '"]') : null;
+            toggleSkillPop(_skI, _host);
+          } catch (eSP) {}
+        }, 0);
+        return;
+      }
       /* ★ v39：「查看」按钮（只读）—— 必须在上面那条**之后**判，
          因为两个按钮是邻居，closest 会各自命中自己的属性，顺序只影响可读性。 */
       var lookBtn = (e.target && e.target.closest) ? e.target.closest('[data-jjblook]') : null;
@@ -27282,7 +27490,7 @@ function build() {
     ['weakenRounds', '虚弱', 'bad'],
     /* ★★ v237（玩家报「两手增益到了还不消失」）：真正在跑的是 v75 体系，
        但状态栏只读老字段（tempAtkBoostRounds 那批）⇒ 玩家看到的和引擎里的不是同一套。
-       ⇒ 把 v75 的增伤/减伤/提速/回血/护持/破盾/受制/破防全部接进来（数字=剩余手数/层数）。 */
+       ⇒ 把 v75 的增伤/减伤/提速/回血/护持/破盾/虚弱/破防全部接进来（数字=剩余手数/层数）。 */
     /* ★ v246：攻击破甲（穿防）—— 落点是 heartPierce，之前**没有**对应的展示条目，
        所以 v246 把穿防改成增益之后，图标**整个不见了**（用户：「攻击破甲的图标直接没有了」）。
        heartPierce 是建卡时算出来的常驻破甲，没有手数字段 ⇒ 用 9999 显示 ∞。 */
@@ -27293,7 +27501,7 @@ function build() {
     /* ★ v268：「敏捷」状态条目已删除（敏捷不许做效果，这一行永远不会亮） */
     ['v94RegenRounds', '回血', 'good', 'v94RegenPct'],
     ['_v94BreakShieldRounds', '破盾', 'good', null],
-    ['v75DebuffRounds', '受制', 'bad', 'v75DebuffPct'],
+    ['v75DebuffRounds', '虚弱', 'bad', 'v75DebuffPct'],
     ['v75VulnRounds', '易伤', 'bad', 'v75VulnPct'],
     ['tearRounds', '撕裂', 'bad'],
     ['internalWoundRounds', '内伤', 'bad'],
@@ -27301,7 +27509,7 @@ function build() {
     /* ★ v77：v75 效果集产生的三条状态也进面板 —— 以前玩家身上明明挂着灼烧/增伤，
        增益栏里一个都看不到（这几条既不在表里，也没有别的通道能显示）。 */
     ['v75BuffRounds', '招式增伤', 'good'],
-    ['v75DebuffRounds', '受制', 'bad'],
+    ['v75DebuffRounds', '虚弱', 'bad'],
     ['v75DrRounds', '护身减伤', 'good'],
     /* ★ v95：破防/提速/闪避这三条**引擎一直真在生效**（v75VulnPct 进 calcDamage 的承伤乘区、
        v75HastePct 直接改 spd、tempEvadeBoost 进 dodgeRate），只是既不在表里、
@@ -27369,7 +27577,7 @@ function build() {
       try {
         var _pp = xzPermOf(f);
         var _PERM_NM = {
-          dmg: '增伤', dmgDown: '受制', dr: '减伤', vuln: '易伤', evade: '闪避',
+          dmg: '增伤', dmgDown: '虚弱', dr: '减伤', vuln: '易伤', evade: '闪避',
           hastePct: '提速', hasteFlat: '提速', slowPct: '减速', slowFlat: '减速',
           crit: '暴击', critDmg: '暴伤', regen: '回血'
         };
@@ -27758,7 +27966,7 @@ function build() {
     mute: '<circle cx="12" cy="12" r="8.2"/><path d="M6.2 17.8 17.8 6.2"/>',
     /* 眩晕：五角星 */
     stun: '<path d="M12 3 14.5 9 20.8 9.6 15.9 13.8 17.4 20 12 16.5 6.6 20 8.1 13.8 3.2 9.6 9.5 9z"/>',
-    /* 虚弱 / 削锋 / 受制：单支粗下箭头（与增伤的上箭头成对，方向相反） */
+    /* 虚弱 / 削锋：单支粗下箭头（与增伤的上箭头成对，方向相反） */
     weak: '<path d="M12 3.6v15.6"/><path d="M5.4 12.6 12 19.2 18.6 12.6"/>',
     /* 撕裂 / 流血：三道爪痕 */
     tear: '<path d="M6.4 19.4 9.2 4.6"/><path d="M12 20.4 14.4 3.6"/><path d="M17.6 19.4 19.6 6.6"/>',
@@ -28211,6 +28419,32 @@ function build() {
      签名机制（render 里的 barsig）只在**内容真的变了**才重建 innerHTML，
      所以高亮切换不会把按钮点空 —— 但点击一律走 ov 委派，不依赖重建后的引用。 */
   function barHtml() {
+    /* ★★★ v585：**未开打时，底栏只放一颗「开始战斗」**（用户 2026-11-11）★★★
+       原话：「开始战斗的时候，底层技能栏的技能先隐藏，出现一个按钮叫开始战斗，
+         点击之后才会开打，而不是一上来就开打。」
+       ── 位置必须排在最前面 ────────────────────────────────────────────
+       后面每一条分支（战后决断 / 等待出手 / 技能栏）都以「这一局已经在打」为前提。
+       放在末尾的话，`S.waiting` 一旦被置上（虽然 started=false 时不该发生，
+       但那是"不该发生"、不是"不可能发生"）就会走到技能栏分支去 ⇒ 技能又露出来了。
+       ⇒ 待命态必须是**第一条**判据，谁也别想抢在它前面。
+       ── 为什么不只藏技能、把功能键留着 ────────────────────────────────
+       用户说的是「技能栏先隐藏」，但底栏此时整条都是**无效操作**：
+       没开打时点「杂项」「自动战斗」「逃跑」全都没有意义（点了要么报错要么无反应）。
+       留着它们只会让人反复点。⇒ 整条底栏只留这一颗按钮，语义最干净。
+       ── 为什么不干脆不渲染底栏 ───────────────────────────────────────
+       底栏高度是布局的一部分（`is-over` 那个 class 就是为高度切的），
+       突然消失会让卡片区重排一次；而"一颗按钮 + 一句说明"占的正是原本的高度，
+       界面不动、玩家一眼知道该点哪里。 */
+    if (S && !S.started && !S.over) {
+      return '<div class="' + PFX + '-startbox">'
+        + '<div class="' + PFX + '-starttip">'
+        + '对手已列阵 · 血条与行动条已就位，点下方按钮开打'
+        + '</div>'
+        + '<button type="button" class="' + PFX + '-startbtn" data-jjbstart="1">'
+        + '⚔ 开始战斗'
+        + '</button>'
+        + '</div>';
+    }
     /* ★ v45：战斗结束后**不再只说「点重开」** —— 底栏换成斗法台同款的「战后天道决断」面板：
        两行二选一（战斗描写 / 败者处置）+ 一颗「确认决策并注入正文战报」。
        用户原话：「打完之后，照抄斗法台的选择杀死或是手下留情，跳过或是推断战况，
@@ -32709,6 +32943,32 @@ function build() {
      看起来完美（1000），而真机走 step 时是 2000。**这就是「探针比引擎更会骗人」。**
      ⚠ 同上：只挂真函数引用，不许包一层「方便版」。 */
   API._testStep = step;
+  /* ★★★ v585：**「开始战斗」的白名单出口**（只给离线质检用）★★★
+     为什么必须导出：v585 把「自动推进」停在了源头 —— `startBattle()` 里
+     `if (!S.started) return;` 之后才点 timer。于是 `beginBattleFromRoster` 只负责
+     **把界面摆出来**，这一局停在待命态等玩家按键。
+     而闸里 **50 多道探针**都是 `beginBattleFromRoster → drainUntilPlayer → 出手`：
+     它们没有手指，不点这颗按钮 ⇒ 全部卡在待命态 ⇒ 一起红，
+     而红的原因跟被测机制毫无关系（这正是本项目最贵的假红形态）。
+
+     ── 为什么不给 `beginBattleFromRoster` 加个「自动开打」参数 ─────────────
+     那个函数是**玩家那条路**（嗅探 ⑪ 分支 / 悬浮球编队确认 都走它）。
+     给它加参数 = 给产品代码开一扇"可以跳过玩家确认"的门，
+     将来任何人调错一个默认值，玩家就会看到「一开界面就在打」——
+     那正是用户这次点名要改掉的东西。**门的开关不能长在玩家必经的路上。**
+     ⚠ 这里用中文写「自动开打」而不写那个英文形参名：`_v404_stale_refs`
+       会把注释里出现的英文标识符当成"引用了一个不存在的符号"，判红挡发布。
+
+     ── 为什么不叫 `startNow` 而是 `beginNowForTest` ─────────────────────
+     名字必须自己说明它是测试面。本项目已经有过「'API.startMijingBattle' 留成空壳
+     被调用方当成真失败」的先例（v472）—— 名字太像业务函数，下一个人会拿它当入口。
+
+     ⚠ 它走的是**同一个** `beginNow()`（与点按钮完全同一条路），
+       不是「另写一份只置 started 的捷径」。这一点是本函数存在的全部意义：
+       闸量的必须是玩家真按下去那一刻的代码。 */
+  API.beginNowForTest = function () {
+    try { return beginNow() === true; } catch (eBN) { return false; }
+  };
   API.skIndexOf = skIndexOf;
   API.curSkillOf = curSkillOf;
   /* ★ v65：**纯计算**入口（给 工具/qa_effect_matrix.mjs 用）——

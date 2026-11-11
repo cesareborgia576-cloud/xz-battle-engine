@@ -5013,6 +5013,89 @@ function xzStackDmgInfoOf(f) {
 }
 function xzStackDmgOf(f) { return xzStackDmgInfoOf(f).pct; }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★★ v581：八条叠层的「唯一显示出口」★★★
+   作者原话（逐字）：「x5改为五层，然后括号满层。括号来源」
+
+   ── 为什么必须收成一个出口 ────────────────────────────────────────────
+   v579 只给「叠层增伤」加了百分比＋来源，其余七条还印着「减伤 ×5」：
+     · `×5` 是倍率写法，玩家会读成「减伤 5 倍」或「减伤 5%」，其实是 5 层；
+     · 玩家自己写的「每层强度」只有第一条看得见，其余七条写了多少全靠猜；
+     · 层数被塞进 `n`（角标）⇒ 展示层印成「· 剩 5」，把层数当手数报。
+   现在面板、卡面、结算解释文字一律走 `xzV2StackTextOf`，
+   谁再就地拼 `key + ' ×' + stacks` 就是第二份口径。
+
+   ── 三条硬规矩 ────────────────────────────────────────────────────────
+   ① 层数用中文数字（「五层」），不用 `×N`；到上限才写「（满层）」。
+   ② 来源用括号，不写 `｜来源：`；没有登记来源的势种写「战斗叠层」，不编造技能名。
+   ③ 角标 `n` 只放**真实剩余手数**（常驻 9999 → 印 ∞），层数已经在文字里，
+      不许再拿层数冒充手数。
+   ══════════════════════════════════════════════════════════════════════ */
+var XZ_V2_STACK_FIELD = {
+  '增伤': 'dmg', '减伤': 'dr', '暴击': 'crit', '暴伤': 'critDmg',
+  '提速': 'hasteFlat', '治疗': 'heal', '破甲': 'vuln', '减速': 'outCut'
+};
+var XZ_CN_LAYER = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+function xzCnLayer(n) {
+  var v = Math.max(0, Math.round(Number(n) || 0));
+  return (v >= 0 && v <= 10) ? XZ_CN_LAYER[v] : String(v);
+}
+function xzV2StackInfoOf(f, key) {
+  var out = {
+    key: key, label: '', stacks: 0, max: 5, full: false,
+    per: 0, pct: 0, cap: 0, hasPer: false, unit: 'pct',
+    srcNames: [], rounds: 0, perm: false
+  };
+  var def = (typeof V2_STATES !== 'undefined' && V2_STATES[key]) ? V2_STATES[key] : null;
+  if (!def) return out;
+  out.stacks = (typeof v2StateVal === 'function') ? (Number(v2StateVal(f, key)) || 0) : 0;
+  out.max = Number(def.max) || 5;
+  out.full = out.stacks >= out.max;
+  var field = XZ_V2_STACK_FIELD[key] || '';
+  out.hasPer = !!field;
+  out.label = field ? ('叠层' + key) : key;
+  if (field) {
+    out.unit = (field === 'hasteFlat') ? 'point' : 'pct';
+    out.per = (typeof v2Per === 'function') ? (Number(v2Per(key, field, f)) || 0) : 0;
+    out.cap = (typeof v2Cap === 'function') ? (Number(v2Cap(key, field, f)) || 0) : 0;
+    out.pct = Math.min(out.cap, out.stacks * out.per);
+  }
+  /* 来源清单：同名只留一条，不编造；老档没有 srcs 就是空数组 */
+  var srcs = (typeof v2StackSrcsOf === 'function') ? v2StackSrcsOf(f, key) : [];
+  var seen = {};
+  for (var i = 0; i < srcs.length; i++) {
+    var nm = String((srcs[i] && srcs[i].name) || '').trim();
+    if (!nm || seen[nm]) continue;
+    seen[nm] = 1; out.srcNames.push(nm);
+  }
+  var sw = f && f._xzV2Stack && f._xzV2Stack[key];
+  out.perm = !!(sw && sw._perm);
+  out.rounds = sw ? (Number(sw.rounds) || 0) : 0;
+  return out;
+}
+function xzV2StackTextOf(f, key) {
+  var i = xzV2StackInfoOf(f, key);
+  var t = i.label + ' ' + xzCnLayer(i.stacks) + '层';
+  if (i.full) t += '（满层）';
+  if (i.hasPer) {
+    if (i.unit === 'point') {
+      t += '（每层 +' + (Math.round(i.per * 10) / 10) + ' 点，共 +'
+        + (Math.round(i.pct * 10) / 10) + ' 点）';
+    } else {
+      t += '（每层 +' + (Math.round(i.per * 1000) / 10) + '%，共 +'
+        + (Math.round(i.pct * 1000) / 10) + '%）';
+    }
+  }
+  t += '（来源：' + (i.srcNames.length ? i.srcNames.join('、') : '战斗叠层') + '）';
+  return t;
+}
+function xzV2StackRoundsOf(f, key) {
+  var i = xzV2StackInfoOf(f, key);
+  if (i.perm) return 9999;                 /* 常驻 → 展示层印 ∞ */
+  if (i.rounds > 0) return i.rounds;       /* 真实剩余手数 */
+  return 0;                                /* 引擎内部叠出来的层：没有手数，不补角标 */
+}
+
 // 挂层：加层 + 行动条联动 + 满层质变（每场每状态一次，由 v2FullOnce 记）
 function v2Add(f, key, n, src2) {
   if (!f || !key || !n) return 0;
@@ -5151,8 +5234,8 @@ var SKILL_SKELETON = {
   '通用式':   []
 };
 var SKELETON_DESC = {
-  '兑付全部层数': '把这一招打出来的势种**一次性全部兑付掉**：层数越多，这一击越重。',
-  '兑付每层+12%': '先把势种攒够 **3 层**才谈得上威力：兑付时每层 +12% 增伤，放完兑付掉。',
+  '兑付全部层数': '把这一招攒出来的**叠层**一次性全部兑付掉：层数越多，这一击越重。',
+  '兑付每层+12%': '先把**叠层**攒够 **3 层**才谈得上威力：兑付时每层 +12% 增伤，放完兑付掉。',
   '每层+12%': '按兑付掉的层数算，每层 +12% 增伤。',
   '每层+9%': '按兑付掉的层数算，每层 +9% 增伤。',
   '必暴': '本击必定暴击。',
@@ -11614,9 +11697,18 @@ var XZ_PASSIVE_WORDS = [
   '增伤', '穿防', '暴击率', '暴击伤害', '命中回复',
   '减伤', '闪避', '抗暴', '受击回复', '护盾', '免死',
   '气血上限', '灵力上限', '持续治疗', '持续回蓝', '提速',
-  '吸血', '回蓝', '回血', '治疗', '破盾', '反震', '净化', '拉条',
+  '吸血', '回蓝', '回血', '破盾',
   '低血增伤', '高血增伤', '低血减伤', '高血减伤', '残血减伤', '残血增伤'
 ];
+/* ★★★ v581：四个死词已从上面这张白名单剔除 —— `治疗` / `反震` / `净化` / `拉条` ★★★
+   真因（工具/_v581_effect_audit.mjs 逐词真跑）：它们是**招式通道**的机制名，
+   `SPIRIT_ROOT_EFFECT_KEYS` 的 19 组正则一条都命中不了 ⇒
+   写在玄诀／兵器／灵根上既不翻译、也不结算、零报错，而白名单还替它们背书说「合法」。
+   这是「有写无读」最坏的一种：连「要不要翻译」这一关都被白名单骗过去了。
+   ⇒ 不再收进白名单：让判定如实认为「这句不是被动的合法写法」。
+   ⚠ 不许靠往白名单里塞词来「修」一个被动机制：白名单只免翻译，不给数值。
+     要真支持，必须往 `SPIRIT_ROOT_EFFECT_KEYS` 补一条有消费点的正则。
+   ⚠ 反向判据：`_v581_effect_audit.mjs` 逐词验「白名单每个词都能命中至少一条被动正则」。 */
 
 var XZ_ATOM_RETIRED = {
   '攻击': '增伤', '防御': '减伤', '命中': '增伤', '攻速': '提速', '护甲': '减伤',
@@ -16771,8 +16863,8 @@ function applyV75Effects(attacker, target, skill) {
                ⚠ 层数仍然只有一个计数器：两个来源不会让每手叠 2 层，变的是「每层多强」。 */
             try { if (typeof v2StackAddSrc === 'function') v2StackAddSrc(attacker, _vsKey, _vsSrcName, _vsPct); } catch (eSA1) {}
             BattleState.logs.push(an + ' 续【' + esc(e.key) + '】—— 每击仍在'
-              + (_vsFoeSide ? '给被打中的对手叠' : '蓄养自身') + '势种「'
-              + esc(_vsKey) + '」' + (_isPerm ? '（整场）' : ('，' + xzDurText(dur))) + '）');
+              + (_vsFoeSide ? '给被打中的对手' : '给自己') + '叠「' + esc(e.key) + '」'
+              + (_isPerm ? '（整场）' : ('（' + xzDurText(dur) + '）')));
             break;
           }
           attacker._xzV2Stack[_vsKey] = {
@@ -16786,8 +16878,8 @@ function applyV75Effects(attacker, target, skill) {
           /* ★ v580：**不在这里给层**。挂上的这一击若真落地，命中消费点会给第 1 层；
              打空就一层不给。当场白送一层会让「每命中」在闪避/护盾吸收时失真。 */
           BattleState.logs.push(an + ' 起势【' + esc(e.key) + '】—— 此后每命中一次'
-            + (_vsFoeSide ? '给被打中的对手叠' : '蓄养自身势种') + '「'
-            + esc(_vsKey) + '」一重' + (_isPerm ? '（整场）' : ('，' + xzDurText(dur))) + '）');
+            + (_vsFoeSide ? '给被打中的对手' : '给自己') + '叠一重「' + esc(e.key) + '」'
+            + (_isPerm ? '（整场）' : ('（' + xzDurText(dur) + '）')));
           break;
         }
         case 'buff': {
@@ -27461,53 +27553,36 @@ function build() {
         for (var _sk in V2_STATES) {
           var _sv = (typeof v2StateVal === 'function') ? Number(v2StateVal(f, _sk) || 0) : 0;
           if (!(_sv > 0)) continue;
-          /* ★★★ v571：叠层增伤这一条要带「实际加了多少」与「来源是谁」★★★
-             作者原话：「buff 中，显示这个叠层增伤的来源是谁哪个玄技或玄诀就行了」。
-             为什么只给「增伤」加这一层：其余势种（减伤/暴击/暴伤/治疗/提速…）
-             走的是各自的乘区，玩家在面板上**看不到**对应那一项，加了反而又造一个新误会。
-             增伤这一个有面板对应项（`增伤值`），所以必须说清「这 N 层 = 多少 %、谁给的」。
-             ⚠ `t` 只放「名字 + 数值 + 来源」，**手数/层数交给 n 角标** ——
-               旧病是把手数拼进名字，于是卡面出现「灼烧3手 · 剩3」（v271 已修，别复活）。 */
-          if (_sk === '增伤' && typeof xzStackDmgInfoOf === 'function') {
-            var _si = xzStackDmgInfoOf(f);
-            var _srcNames = (_si.srcs || []).map(function (x) { return String(x && x.name || ''); })
-              .filter(function (x) { return !!x; });
-            var _seenSrc = {}, _srcUniq = [];
-            for (var _si2 = 0; _si2 < _srcNames.length; _si2++) {
-              if (_seenSrc[_srcNames[_si2]]) continue;
-              _seenSrc[_srcNames[_si2]] = 1; _srcUniq.push(_srcNames[_si2]);
-            }
+          /* ★★★ v581：所有势种统一走 `xzV2StackTextOf`，不再有「×N」倍率写法 ★★★
+             作者原话（逐字）：「x5改为五层，然后括号满层。括号来源」。
+             v579 只给「叠层增伤」加了百分比＋来源，其余七条还印着「减伤 ×5」——
+             `×5` 会被读成「减伤 5 倍／5%」，其实是 5 层；玩家写的每层强度也一条都看不到。
+             现在八条统一：中文层数、（满层）、每层强度、括号来源，一个出口全给。
+             ⚠ `n` 改成**真实剩余手数**（`xzV2StackRoundsOf`）：
+               旧写法把层数塞进 n ⇒ 展示层拼出「· 剩 5」，把层数当手数报。
+               层数已经在文字里，角标只许说时长。
+             ⚠ `nm` 的分键口径是 v579 修的「常驻 n=9999 吞掉叠层」那一元：
+               `增伤` 用 `'叠层增伤'`，其余用 `'势种·' + _sk`，别改回去。 */
+          if (typeof xzV2StackTextOf === 'function' && typeof xzV2StackInfoOf === 'function') {
+            var _v2i = xzV2StackInfoOf(f, _sk);
             out.push({
-              t: '叠层增伤 ×' + _sv + '（+' + (Math.round(_si.pct * 1000) / 10) + '%）'
-                + (_srcUniq.length ? ('｜来源：' + _srcUniq.join('、')) : ''),
-              /* ★★★ v579：`nm` 必须与「常驻增伤」**分开**，不能写 `_sk` ★★★
-                 作者原话（逐字）：「叠层增伤12：3，结构buff里又显示增伤x5」
-                 真因（实测 _diag_stack_dup4）：
-                   这里原来写 `nm: _sk` ⇒ `'增伤'`，而灵根/兵器/玄诀的常驻增伤
-                   在 `_xzPerm` 段也是 `nm: '增伤'`、`n: 9999`。
-                   `jjbBuffsDedup` 按 `nm` 去重、**数值大的胜** ⇒ 常驻那条 n=9999 恒胜
-                   ⇒ 叠层增伤整条被吞掉，玩家只看到一条「增伤 22%」；
-                   而未去重的原始数组里它还在（形状 `增伤 ×5`）——
-                   同一个东西两副面孔，正是玩家骂的那句「又显示增伤x5」。
-                 ⚠ 层数（×N）是**状态强度**，常驻百分比是**属性值**，两者量纲不同，
-                   按 n 比大小本身就是错的比法。⇒ 键分开，各留各的，不再互相吞。
-                 ⚠ 键名不写进 `_BUFF_SYN`：那是「同义词归一」表，叠层增伤与常驻增伤
-                   **不是同义词**，是两个各自生效的乘区入口（都进 xzDmgUpOf 同池相加）。 */
-              k: 'good', nm: '叠层增伤', n: _sv
+              t: xzV2StackTextOf(f, _sk),
+              k: (_sk === '增伤') ? 'good' : 'neutral',
+              nm: (_sk === '增伤') ? '叠层增伤' : ('势种·' + _sk),
+              n: (typeof xzV2StackRoundsOf === 'function') ? xzV2StackRoundsOf(f, _sk) : 0
             });
             continue;
           }
-          /* ★ v579：其余势种同理带上「势种」前缀再当去重键 ——
-             它们的裸名（减伤/暴击/提速/治疗）与常驻三源**同名**，会踩同一个坑。
-             ⚠ 只改去重键（nm），`t` 里显示的字一个都没动 —— 玩家看到的还是「减伤 ×3」。 */
-          out.push({ t: _sk + ' ×' + _sv, k: 'neutral', nm: '势种·' + _sk, n: _sv });
+          /* 极端兜底：显示出口没加载（部分加载）时，至少不许再印「×N」 */
+          out.push({ t: _sk + ' ' + String(_sv) + ' 层（来源：战斗叠层）',
+            k: 'neutral', nm: '势种·' + _sk, n: 0 });
         }
       } catch (eSt2) {
         /* 兜底：V2_STATES 不可用（部分加载）时退回旧口径 */
         var st = f.v2stk || null;
         if (st && typeof st === 'object') {
                     /* ★ v579：去重键与上面同口径 —— 裸势种名会与常驻三源撞键被吞。 */
-                    for (var s in st) { var v = Number(st[s] || 0); if (v > 0) out.push({ t: s + ' ×' + v, k: 'neutral', nm: '势种·' + s, n: v }); }
+                    for (var s in st) { var v = Number(st[s] || 0); if (v > 0) out.push({ t: (XZ_V2_STACK_FIELD[s] ? ('叠层' + s) : s) + ' ' + String(v) + ' 层（来源：战斗叠层）', k: 'neutral', nm: '势种·' + s, n: 0 }); }
         }
       }
       /* 常驻：玄诀（passive.effects）与大道（daoBuffs）。不带回合数 → 不带数字 */

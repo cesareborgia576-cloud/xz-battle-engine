@@ -24036,18 +24036,74 @@ var XZJJ = (function () {
     try { if (typeof _JJ_FX2 !== 'undefined' && _JJ_FX2 && _JJ_FX2.clear) _JJ_FX2.clear(); } catch (e2) {}
   }
 
+  /* ★★★ v589：**把「清场」从「结束」里拆出来** ★★★
+     ── 病 ────────────────────────────────────────────────────────────
+     `endBattle()` 过去第一句就是 `jjFxReset()`，而斩杀那一击的特效是**刚发出去的**
+     （同一次 act 里 fx 先发、checkOver 后判，这是 v88 定的正确顺序）。
+     于是画布当场被清 ⇒ 玩家看到「弹道刚起飞 → 对面还没被打到 → 画面干净了 → 胜利横幅」。
+     用户原话：「技能丢出来的一瞬间还没放完特效，就刚按下，对方就死了，
+       然后特效没了，胜利弹出来，这是完全不对的」。
+     ── 三个动作的旧顺序 vs 新顺序 ────────────────────────────────────
+       旧：结束 → **立刻清特效** → **立刻弹「胜」** → 等 1.9s → 战后决断
+       新：结束 → 等这一手特效播完 → 死亡消散 + 「胜」→ 等 1.9s → 清场 + 战后决断
+     三件事原来挤在同一瞬间，现在被拉成一条有先后的时间线。
+     ── 谁负责调度 ────────────────────────────────────────────────────
+     **`jjFinishTick()` 一个地方统管**，`endBattle()` 只负责算出一个数：
+     `S.fxLeftMs`（这一手特效还剩多少毫秒，直接问引擎 `_JJ_FX2.busyMs()`，不猜常数）。
+     清场放在那条时间线的**最后一拍**，也就是战后决断出来的那一刻 ——
+     因为决断面板要占底栏、而卡片区的死亡消散那 1.9s 里画面还在动，
+     特效层此时清掉不会有任何视觉损失（那时本来也播完了）。
+     ── 为什么不写死一个时长 ──────────────────────────────────────────
+     剑系最长约 1.7s、非剑系约 0.7s、特效关档 0s、品质高剑弧更多更久。
+     写死一个数总有某一档对不上：短了照样切断，长了玩家干等。⇒ 读真实队列。
+     ── 战败 / 逃跑为什么不享受这个延时 ────────────────────────────────
+     那边没有任何演出可看（只有结算数据）。让人干等一个看不见的特效等于罚站
+     —— v330 同一条口径：延时只给"有东西可看"的胜利。 */
+  var _fxCleanTimer = 0;
+  function _jjFxCleanCancel() {
+    if (_fxCleanTimer) { try { clearTimeout(_fxCleanTimer); } catch (e) {} _fxCleanTimer = 0; }
+  }
+  /* 只做「现在还剩多久」的测量，不碰任何状态 —— 供 endBattle 存进 S.fxLeftMs。 */
+  function _jjFxLeftMs() {
+    try {
+      if (typeof _JJ_FX2 !== 'undefined' && _JJ_FX2 && _JJ_FX2.busyMs) return Number(_JJ_FX2.busyMs()) || 0;
+    } catch (eBusy) {}
+    return 0;
+  }
   function endBattle() {
     S.over = true; S.waiting = null;
-    try { jjFxReset(); } catch (eFxR) {}   /* v150：结束即回收特效层残留 */
     if (timer) clearTimeout(timer);
     var win = !S.fighters.some(function (f) { return f.alive && f.side === 'enemy'; });
     S.result = win ? 'win' : 'lose';
+    /* ★★★ v589【用户：「斩杀对方时，特效都没放完瞬间结束战斗，弹出胜利，不能这样子，
+       要改成技能放完再说」】★★★
+       ── 病：三个动作挤在同一瞬间 ──────────────────────────────────────
+       上面原来紧跟着一句 'jjFxReset()'（v150 加的，理由是"结束即回收特效层残留"）。
+       它调 '_JJ_FX2.clear()' ⇒ 画布当场清空、帧循环 cancel。
+       而斩杀那一击的特效**刚刚才 push 进队列**（同一次 act() 里，
+       fx 在 checkOver 之前就发了，见 24015 那段 'checkOver 必须独立于特效'）：
+         · 非剑系：飞行 0.32s + 抵达爆发，最后一颗粒子活到 D+0.70
+         · 剑系：飞行 0.32s + 剑痕活到 D+1.35+（品质越高越久，最多约 1.7s）
+       再叠上紧随其后的「胜」字横幅 —— 玩家看到的是
+       「弹道刚飞出去、对面还没被打到，画面就干净了，胜利横幅弹出来」。
+       ── 新顺序 ────────────────────────────────────────────────────────
+         结束 → 等这一手特效播完 → 死亡消散 + 「胜」→ 等 XZ_FINISH_MS → 清场 + 战后决断
+       三件事原来挤在同一瞬间，现在拉成一条有先后的时间线。
+       ── 测量在这里、播放在那两处 ──────────────────────────────────────
+       这里只**量**（存进 S.fxLeftMs，读引擎真实队列，不猜常数）；
+       什么时候演由 'jjFinishTick' 按这个数起第一拍，
+       什么时候清场由它按这个数 + XZ_FINISH_MS 落最后一拍。
+       ⚠ 绝不能在函数开头清场：开头清了，后面等多久都没用（画布已经空了）。
+       ⚠ 战败/逃跑不享受延时（S.fxLeftMs 恒 0）：那边没有任何演出可看，
+         让人干等一个看不见的特效等于罚站（v330 同一条口径）。 */
+    S.fxLeftMs = win ? _jjFxLeftMs() : 0;
     /* ★★★ v330【用户：「打赢了攻击特效没看到，瞬间就赢了，感觉好突兀好生硬」】★★★
        旧流程：最后一击刚落下 → 'endBattle' 同步 → 'render()' → 底栏**当场**换成
        「战后天道决断」，敌方卡瞬间变成 '.dead'（opacity .3）。玩家什么都看不清。
        ⇒ 胜利时记一个起播时刻，由 render 分两拍演：
          第一拍（0 ~ XZ_FINISH_MS）敌卡播死亡消散 + 「胜」字收束横幅，底栏只留一行占位；
          第二拍（到点后）清掉 'finishAt' 再 render 一次，战后决断才出来。
+       ★ v589：第一拍的**起点**后移了 S.fxLeftMs —— 先让最后一击的特效把这一手播完。
        ⚠ 只对**胜利**延时。战败/逃跑延时的唯一效果是让人多等两秒看着自己的血条，
          没有任何可看的东西 —— 那叫罚站，不叫演出。 */
     S.finishAt = win ? Date.now() : 0;
@@ -24415,6 +24471,7 @@ var XZJJ = (function () {
       S.result = 'flee';
       S.fledFrom = escapers.join('、');
     } catch (eFl) {}
+    try { _jjFinishCancel(); } catch (eFCn) {}
     try { jjFxReset(); } catch (eFx) {}
     /* 与 endBattle 同一套结算数据（hpLeft / keyEvents / skillUsage），但**不判胜负**。 */
     try {
@@ -28418,6 +28475,91 @@ function build() {
      现在把招式摊开来给玩家点，选中项高亮，改选即时生效（'pickSkill'）。
      签名机制（render 里的 barsig）只在**内容真的变了**才重建 innerHTML，
      所以高亮切换不会把按钮点空 —— 但点击一律走 ov 委派，不依赖重建后的引用。 */
+
+  /* ★★★ v589：滑轨实测宽的内存缓存 ★★★
+     ── 为什么必须有它 ────────────────────────────────────────────────
+     `barHtml()` 是**在写 DOM 之前**被调用的（render 里先拼字符串、再 innerHTML）。
+     所以它读 `.xz-jjb-skrow` 时，读到的是**上一帧**留在页面上的那条滑轨。
+     首帧那条滑轨根本还不存在 ⇒ 拿不到实测宽 ⇒ 只能估 ⇒ 估大一点就多画一个，
+     下一帧实测回来又少画一个 ⇒ **技能"钻进下一栏"**（用户 2026-11-11 三条连报）。
+     ── 它怎么把两条路对齐 ────────────────────────────────────────────
+     首次渲染仍然只能按最保守的 1 个画。但**从那以后**，每一帧都先查这张表，
+     用"上一次这个窗口宽下真量到的滑轨宽"去算页容量 ⇒ 同一个窗口宽下，
+     不管重绘多少次，算出来的 PER_PAGE 恒定。
+     ── 键为什么是窗口宽 ──────────────────────────────────────────────
+     滑轨宽是窗口宽的函数（父容器宽度由视口决定）。用 _winW 当键，
+     玩家转屏 / 拉窗口时自然命中另一个槽，旧值不会污染新布局（v471「并排≠更矮」同型坑）。
+     ── 上限 ──────────────────────────────────────────────────────────
+     只增不减地攒键会让内存无界增长（拖动窗口边缘会连续产生几十个键）。
+     滑轨宽只取决于窗口宽，12 个槽足够覆盖任何真实设备；满了就整表清空重来 ——
+     清空只是让下一次首帧再保守一帧，不会算错。 */
+  var XZ_SKROW_W_CACHE = {};
+  var XZ_SKROW_W_CACHE_MAX = 12;
+
+  function xzSkRowWRecall(winW) {
+    var v = XZ_SKROW_W_CACHE[String(winW)];
+    return (typeof v === 'number' && v > 0) ? v : 0;
+  }
+  function xzSkRowWRemember(winW, rowW) {
+    if (!(rowW > 0)) return;
+    var k = String(winW);
+    if (!Object.prototype.hasOwnProperty.call(XZ_SKROW_W_CACHE, k)) {
+      if (Object.keys(XZ_SKROW_W_CACHE).length >= XZ_SKROW_W_CACHE_MAX) XZ_SKROW_W_CACHE = {};
+    }
+    XZ_SKROW_W_CACHE[k] = rowW;
+  }
+
+  /* ★ v589：一次性覆盖位 —— 校准函数量到真宽后，用它驱动同一帧内的第二次绘制。
+     必须是**模块级**（每次读完即清零），不能放进 barHtml 的闭包。 */
+  var _jjSkForcePerPage = 0;
+
+  /* ★★★ v589：**写完 DOM 之后自校准**（这是"技能钻栏"的真正治法）★★★
+     ── 缓存为什么必须再配这一步 ────────────────────────────────────────
+     `XZ_SKROW_W_CACHE` 保证"后续各帧彼此一致"，可**首帧永远是估的**
+     （那时滑轨还不在 DOM 里）。于是页容量必然跳变一次：
+       · 估小（保守 1 个）⇒ 先看 1 个，下一帧变 3 个 —— 探针实测就是这个
+       · 估大 ⇒ 先看 3 个，下一帧变 2 个 —— 用户报的正是这个形态
+     两者都错，区别只是"少一个先冒出来"还是"多一个先消失"。
+     ── 这一步怎么把跳变藏起来 ────────────────────────────────────────
+     写完 innerHTML 时，滑轨已经在 DOM 里，而**本帧还没绘制**
+     （JS 同步执行中，浏览器不会中途 paint）。所以立刻量一次真宽、重算页容量：
+       · 跟刚才一样 ⇒ 什么都不做（绝大多数情况，开销只有一次 getBoundingClientRect）
+       · 不一样 ⇒ 设 `_jjSkForcePerPage` 再调 barHtml() 重画一次
+     ⇒ 跳变发生在**同一帧内**，肉眼看不见。
+     ── 为什么不会来回振荡 ────────────────────────────────────────────
+     `.xz-jjb-skrow` 是 `flex:1 1 auto`，宽度由**父容器**决定，不由子元素撑 ——
+     画 1 个还是 3 个，滑轨宽都一样（探针实测 514 恒定）。所以量一次就收敛。
+     ⚠ 只在 render 的"重建了 innerHTML"分支里调：没重建就没有新几何可校。
+     ⚠ 返回 false 只表示"这次没校成"，绝不能让主流程抛错 ——
+       校不准最坏也就是维持保守布局（少放），不会丢技能。 */
+  function _jjSkRowCalibrate(bar) {
+    try {
+      if (!bar) return false;
+      var row = bar.querySelector('.' + PFX + '-skrow');
+      if (!row) return false;
+      var realW = Math.floor(row.getBoundingClientRect().width) || 0;
+      if (!(realW > 0)) return false;             /* 面板不可见（display:none）⇒ 量不到，保持原样 */
+      var winW = 1080;
+      try { winW = Number((window.top || window).innerWidth) || 1080; } catch (eW) {}
+      xzSkRowWRemember(winW, realW);              /* 存起来，下一帧首帧就用它 */
+      var skMin = (winW < 560) ? 56 : 156;
+      var want = Math.max(1, Math.min(3, Math.floor((realW + 8) / (skMin + 8))));
+      /* 当前这帧是按几个画的？数一下滑轨里的组数就知道（不依赖任何全局状态）。 */
+      var cur = row.querySelectorAll('.' + PFX + '-skgrp').length;
+      if (!cur || cur === want) return true;      /* 一致 或 本来就没技能 ⇒ 完事 */
+      /* 不一致 ⇒ 用真值重画一次。⚠ 先置位再调，barHtml 读完会自己清零。 */
+      _jjSkForcePerPage = want;
+      var bh2 = barHtml();
+      bar.setAttribute(PFX + '-barsig', bh2);
+      bar.innerHTML = bh2;
+      jjbSyncSkBar();
+      return true;
+    } catch (eCal) {
+      _jjSkForcePerPage = 0;
+      return false;
+    }
+  }
+
   function barHtml() {
     /* ★★★ v585：**未开打时，底栏只放一颗「开始战斗」**（用户 2026-11-11）★★★
        原话：「开始战斗的时候，底层技能栏的技能先隐藏，出现一个按钮叫开始战斗，
@@ -28593,31 +28735,73 @@ function build() {
         var _rw = d0().querySelector('.' + PFX + '-skrow');
         if (_rw) _rowW = Math.floor(_rw.getBoundingClientRect().width) || 0;
       } catch (eRW) {}
-      /* 滑轨宽取不到时按实际版式估算。
-         ★ v473：手机底栏改成**两行**后，第一行是技能区独占 100% 宽，
-           所以滑轨 = 底栏内容宽 − 2 个翻页键 − 2 个 gap，**不再扣功能键**。
-           实测 390px 屏：347 − 18×2 − 6×2 = 299px（与真 Chrome 读数一致）。 */
+      /* ★★★ v589：**首帧量与后续实测必须给同一个答案** ★★★
+         ── 病（用户 2026-11-11 连报三条）──────────────────────────────
+           「三个技能莫名其妙总是消失一个，准确来说是突然进到下一栏了，
+             第一栏就变成了两个，第二栏两个」「用着用着会少个技能，
+             然后莫名其妙切换一下分页又回来了」
+           「点击第三个，第三个会钻到第二栏去」
+         ── 根因：PER_PAGE 有两条计算路径，答案不一样 ──────────────────
+           · 首帧：`.xz-jjb-skrow` 还没进 DOM ⇒ _rowW 取不到 ⇒ 走下面的
+             **估算**分支 ⇒ 桌面算 828px ⇒ floor(836/198)=**3 个/页**
+           · 之后：滑轨已在 DOM 里 ⇒ 实测 514px ⇒ floor(522/198)=**2 个/页**
+           ⇒ 第一帧画 3 个；玩家一**点技能**触发重绘（'class="… on"' 变了，
+             barsig 就变）⇒ 第二帧按实测只画 2 个 ⇒ **第 3 个凭空"钻进第二栏"**。
+             翻页到第 2 页又看得见 ⇒ 「切换一下分页又回来了」。
+         ── 为什么不能只修估算公式 ────────────────────────────────────
+           估算永远只能逼近实测：字号缩放、滚动条、父容器内距、四宫格宽
+           任何一项变一点，两条路就会跨过某个整数边界，bug 原样复发。
+           **只要"首帧用猜的"，就一定有某个宽度让它猜错。**
+         ── 改法：首帧不猜布局，改成"先按最保守的 1 个画，下一帧用实测校正"
+           保守=少放，玩家最多多点一次「›」；**绝不许多放**（多放才会丢技能）。
+           ⚠ 不能"首帧不画、等第二帧再画"：底栏会空一拍，看起来像没渲染。
+         ── 另一半：把 PER_PAGE 锁在「上一次真正的滑轨宽」上 ────────────
+           滑轨宽在同一个面板里本来就不该变。缓存它，只有真的变了才重算 ——
+           这样"重绘"这个动作本身永远不会改变页容量。
+         ⚠ 缓存键必须带 _winW：玩家转屏 / 拉窗口时旧缓存必须失效，
+           否则会按竖屏的容量去画横屏（v471「并排≠更矮」同型）。 */
+      var _skWKey = String(_winW);
       if (!_rowW) {
-        var _navW = (_winW < 560) ? 18 : 22;
-        _rowW = (_winW < 560)
-          ? Math.max(60, _winW * 0.94 - 20 - _navW * 2 - 12)
-          : Math.max(60, _winW * 0.94 - 20 - 50 * 4 - _navW * 2 - 12 * 3);
+        /* 首帧：滑轨还不在 DOM 里。用**上一次实测过的**宽（同一窗口宽下），
+           查不到就留 0 —— 下面的 PER_PAGE 会因此落到 1（最保守）。
+           绝不猜一个偏大的值：多放才会丢技能，少放只是多点一次「›」。 */
+        _rowW = xzSkRowWRecall(_winW);
+      } else {
+        /* 实测到了 ⇒ 记下来，供下一次首帧用。这就是两条路对齐的全部机制。 */
+        xzSkRowWRemember(_winW, _rowW);
       }
-      /* ★ v473：手机 '_skMin' = **一个技能组**（键 + 详 22 + 内距）的最小可读宽。
-         实测各档（两行底栏，技能区独占整行）：
-             360px 屏滑轨 270 → 2 组各 132（键 110，名字 78px，两行放 13 字）
-             390px 屏滑轨 299 → 2 组各 146（键 124，名字 92px，两行放 16 字）
-             414px 屏滑轨 323 → 2 组各 158（键 136，名字 104px，两行放 18 字）
-         10 字名只需 115px 容量，三档都富余。桌面保持 v166 的 190（每页 3 个）。
-         ⇒ 124 是「2 组 + 1 gap 恰好塞进 270px」的临界值，360px 屏也走每页 2 个。 */
       /* ★★★ v479：手机下限 124 → 56 ★★★
          用户 2026-10-31：「一栏(页)容纳三个技能」。
          124 是 v473 按「名字两行完整显示」定的，代价是手机上每页只有 1 个 ——
-         玩家点了半天 '›' 才翻完三门。现在技能键改成**扁窄条**（去掉菱形与「详」键），
+         玩家点了半天 '›' 才翻完三门。现在技能键改成**扁窄条**，
          56 就能放下「4 个中文字 + 品阶 + 耗灵」，三个正好铺满滑轨。
-         ⚠ 桌面保持 190（那边一页本来就放得下 3 个，不需要挤）。 */
-      var _skMin = (_winW < 560) ? 56 : 190;
+         ⚠ 桌面保持 190（那边一页本来就放得下 3 个，不需要挤）。
+      /* ★★★ v589：桌面 190 → 156 ★★★
+         v479 那句「桌面一页本来就放得下 3 个」在 v588 之前是对的 —— 那时
+         「详」键还被 display:none 藏着。v588 把它恢复成 18px 宽的常驻键之后，
+         每组的真实宽度就变成 **技能键 138 + 详键 18 = 156px**，而 190 这个门槛
+         从没跟着动。
+         后果不是"稍微挤一点"，而是硬锁死：
+           桌面 1200 实测滑轨 514px，三组只需 3×156 + 2×8 = **484px —— 塞得下**，
+           可 floor((514+8)/(190+8)) = **2** ⇒ 永远只画 2 个。
+         而首帧的估算分支算出 828px ⇒ floor(836/198) = 3 ⇒ 第一帧画 3 个。
+         **两条路给出不同答案，缺口 314px，这就是"第三个技能钻进第二栏"。**
+         ⇒ 下调到 156（实测组自然宽），让"能塞下"和"敢画"用的是同一个数。
+         ⚠ 156 是 4 字技能名 + 品阶 + 耗灵时的自然宽。名字特别长时组会超过 156，
+           三个略有溢出 ⇒ 滑轨本就是 overflow-x:auto，横向滑一下即可（v166 的既有行为）。
+           宁可滑，也不能像现在这样「明明塞得下却只画 2 个、还第一帧画 3 个」。 */
+      var _skMin = (_winW < 560) ? 56 : 156;
       var PER_PAGE = Math.max(1, Math.min(3, Math.floor((_rowW + 8) / (_skMin + 8))));
+      /* ★★★ v589：**允许 render 用实测值覆盖这一帧的页容量** ★★★
+         `barHtml()` 在写 DOM 之前被调，所以它天然只能读到**上一帧**的滑轨宽。
+         `_jjSkRowCalibrate` 在写完 DOM 之后量到真宽，若是另一个答案，
+         就把真值塞进 `_jjSkForcePerPage` 再调一次本函数重画 ——
+         **同一帧内完成**，玩家看到的第一帧就已经是正确布局（见 render 里的调用点）。
+         ⚠ 用完立刻清位（下面读完就置 0），否则一次校准会污染之后所有帧。 */
+      if (_jjSkForcePerPage > 0) {
+        PER_PAGE = Math.max(1, Math.min(3, _jjSkForcePerPage));
+        _jjSkForcePerPage = 0;
+      }
       var _total = Math.max(1, Math.ceil(btns.length / PER_PAGE));
       var _page = Math.min(Math.max(0, Number(S.skPage) || 0), _total - 1);
       S.skPage = _page;
@@ -28880,6 +29064,24 @@ function build() {
         var _newRow = bar.querySelector('[data-jjbskrow]');
         if (_newRow && _sl > 0)         _newRow.scrollLeft = _sl;
         jjbSyncSkBar();      /* 新节点 ⇒ 重绑滚轮/滚动监听，并刷新箭头置灰 */
+        /* ★★★ v589：**写完立刻自校准一次** ★★★
+           ── 缓存为什么单独不够 ────────────────────────────────────────────
+           上面 XZ_SKROW_W_CACHE 能保证"后续各帧彼此一致"，但**首帧仍然是估的**
+           （滑轨那时不在 DOM 里）。于是长度必须出现一次跳变：
+             · 估小（保守 1 个/页）⇒ 玩家先看到 1 个，下一帧变 3 个（探针实测就是这个）
+             · 估大 ⇒ 先看到 3 个，下一帧变 2 个 —— 这才是用户报的那个 bug 形态
+           两种都错，区别只是"少一个先出现"还是"多一个先出现"。
+           ── 校准这一步怎么把跳变藏起来 ────────────────────────────────────
+           刚写完 innerHTML，滑轨已经在 DOM 里、且**本帧还没绘制**（JS 同步执行中，
+           浏览器不会中途 paint）。所以此刻立刻量一次真宽、重算 PER_PAGE：
+             · 算出来跟刚才一样 ⇒ 什么都不做（绝大多数情况，零开销）
+             · 算出来不一样 ⇒ 用**新数**重画一次，玩家看到的第一帧就已经是对的
+           ⇒ 跳变发生在**同一帧内**，肉眼不可能看到。
+           ⚠ 只校准一次（同一个 sig 不重复触发）：重画后滑轨几何由同一套 CSS 决定，
+             宽度不会因为内容从 1 个变 3 个而改变（skrow 是 flex:1 1 auto，
+             宽由父容器定，不由子元素撑）。所以不会来回振荡。
+           ⚠ 用 PFX+'-skcal' 记"这一帧校准过了"，别用模块级全局 —— 每帧都要能校一次。 */
+        if (!_jjSkRowCalibrate(bar)) { /* 校准失败不影响主流程：维持保守布局 */ }
       }
     }
     jjFinishTick();
@@ -28899,37 +29101,111 @@ function build() {
             用它会静默抛错，演出在真机上正常、在闸里永远"没播"（假红比漏测更贵）。
        ② 起「胜」字收束横幅（复用技能横幅那套环/粒子/暗幕，不另写 CSS）。
        ③ 到点清 'finishAt' 再 render 一次，战后决断这才出来 —— 
-          **后决断面板是被这一个 timer 放出来的**，不是被别处顺手带出来的。 */
+          **后决断面板是被这一个 timer 放出来的**，不是被别处顺手带出来的。
+     ★★★ v589：**第一拍不能再"立刻"了** ★★★
+     用户：「技能丢出来的一瞬间还没放完特效，就刚按下，对方就死了，
+       然后特效没了，胜利弹出来，这是完全不对的」。
+     `render()` 是在 `endBattle()` 里同步调用的（见函数末尾），所以本函数
+     一被调到就意味着「斩杀那一击的特效刚刚才发出去 0 毫秒」。
+     过去这里直接加 'is-dying' + 弹「胜」⇒ 死亡消散和胜利横幅**压在弹道上**，
+     玩家眼里就是"对面还没被打到就赢了"。
+     ⇒ 现在分两段：
+         · 先等 `S.fxLeftMs`（endBattle 量好的、这一手特效的真实剩余寿命），
+           这一段**什么都不做**，让弹道飞完、剑痕划完、火花散完；
+         · 到点才播死亡消散 + 「胜」，再跑原来的 XZ_FINISH_MS。
+     ⚠ `S.finishPlayed` 在**第一段之前**就置 true —— 它是"这条时间线已启动"的标记，
+       不是"第一拍已播"的标记。若等第一段到点才置位，中间任何一次 render
+       都会再起一条时间线，死亡消散叠着播、横幅弹两次。
+     ⚠ timer 必须挂 `S.finishTimers` 并可在重开时掐掉：否则上一局的
+       "播死亡消散"会在新局的卡片上执行（那时 S 已换人，卡片已重画）。
+     ⚠ `S.fxLeftMs` 缺失（老存档/异常路径）按 0 处理 ⇒ 等价于 v588 的行为，
+       不会因为读不到数就一直不播。 */
   function jjFinishTick() {
     if (!S || !S.over || !S.finishAt || S.finishPlayed) return;
     S.finishPlayed = true;
-    try {
-      var host = q('enemy');
-      if (host) {
-        var cards = host.querySelectorAll('.' + PFX + '-card');
-        var di = 0;
-        for (var i = 0; i < cards.length; i++) {
-          var c = cards[i];
-          var cn = String((c && c.className) || '');
-          if (cn.indexOf('dead') < 0) continue;
-          if (cn.indexOf('is-dying') < 0) c.className = cn + ' is-dying';
-          try { c.style.animationDelay = (di * 0.09).toFixed(2) + 's'; } catch (eD) {}
-          di++;
+    var fxLeft = Math.max(0, Number(S.fxLeftMs) || 0);
+    var finMs = (typeof XZ_FINISH_MS === 'number') ? XZ_FINISH_MS : 1900;
+    /* 第一拍：给已经倒下的敌卡加 'is-dying' + 起「胜」字横幅。 */
+    var _beat1 = function () {
+      if (!S || !S.over || !S.finishAt) return;   /* 局已被作废 / 重开 */
+      try {
+        var host = q('enemy');
+        if (host) {
+          var cards = host.querySelectorAll('.' + PFX + '-card');
+          var di = 0;
+          for (var i = 0; i < cards.length; i++) {
+            var c = cards[i];
+            var cn = String((c && c.className) || '');
+            if (cn.indexOf('dead') < 0) continue;
+            if (cn.indexOf('is-dying') < 0) c.className = cn + ' is-dying';
+            try { c.style.animationDelay = (di * 0.09).toFixed(2) + 's'; } catch (eD) {}
+            di++;
+          }
         }
+      } catch (eC) {}
+      try {
+        var oh = (typeof xzOverlayHost === 'function') ? xzOverlayHost() : null;
+        if (typeof xzFinishBanner === 'function') {
+          xzFinishBanner('胜', '斗法大捷 · 敌方尽数倒下', { host: oh, color: '#ffd76a', size: 68 });
+        }
+      } catch (eB) {}
+      /* 第二段：等死亡消散 + 「胜」字播完，然后清场 + 放战后决断。
+         ★ v589：清场原本在 endBattle 的第一句（当场清空画布，把斩杀特效切掉），
+           现在挪到这条时间线的最后一拍 —— 此时特效早播完了，清掉零视觉损失；
+           而决断面板正要占底栏、卡片区也该定下来了。 */
+      _jjFinishArm(finMs, function () {
+        if (!S) return;
+        try { jjFxReset(); } catch (eCln) {}
+        S.finishAt = 0;
+        S.fxLeftMs = 0;
+        try { render(); } catch (eR) {}
+      });
+    };
+    /* ★ v589：**没有特效要等就同步走第一拍，别塞一个 setTimeout(0)** ★★★
+       三种情况 `fxLeft` 就是 0：
+         · 特效档位是「关闭」（`playAttack` 第一句就 return，队列永远是空的）
+         · 沙箱 / 探针环境没有真画布
+         · 这一手是增益技、闪避，或根本没有命中分支
+       这三种都不该让演出白等一跳定时器 —— 那一跳会把「第一拍」推到下一个宏任务，
+       于是任何在同一帧里检查 `is-dying` / 横幅的人（探针、闸、玩家看到的初帧）
+       都会看到"还没播"。这不是为了让闸通过：**纯 DOM 操作本来就不需要等。**
+       ⚠ 同步调用的风险是若 `_beat1` 抛异常会冒到 `render()` 里 —— 所以整段
+         包在 try 里，且第一拍内部本来就是层层 try（不依赖外部兜）。
+       ⚠ 沙箱里 `setTimeout` 是被截进队列的假时间，同步分支正好让闸不用 drain 就能看到。 */
+    if (fxLeft <= 0) {
+      try { _beat1(); } catch (eB1) {
+        try { push('［收束演出异常］' + ((eB1 && eB1.message) || eB1), 'note'); } catch (eP) {}
       }
-    } catch (eC) {}
+      return;
+    }
+    _jjFinishArm(fxLeft, _beat1);
+  }
+  /* v589：胜利演出两段共用的定时器注册 —— 全部挂到 S.finishTimers，
+     重开 / 换局时一次掐干净（见 _jjFinishCancel 的调用点）。 */
+  function _jjFinishArm(ms, fn) {
+    var id = setTimeout(function () {
+      try { fn(); } catch (eArm) {
+        push('［收束演出异常］' + ((eArm && eArm.message) || eArm), 'note');
+      }
+    }, Math.max(0, ms));
     try {
-      var oh = (typeof xzOverlayHost === 'function') ? xzOverlayHost() : null;
-      if (typeof xzFinishBanner === 'function') {
-        xzFinishBanner('胜', '斗法大捷 · 敌方尽数倒下', { host: oh, color: '#ffd76a', size: 68 });
+      if (S) {
+        if (!S.finishTimers) S.finishTimers = [];
+        S.finishTimers.push(id);
       }
-    } catch (eB) {}
-    var wait = (typeof XZ_FINISH_MS === 'number') ? XZ_FINISH_MS : 1900;
-    setTimeout(function () {
-      if (!S) return;
-      S.finishAt = 0;
-      try { render(); } catch (eR) {}
-    }, wait);
+    } catch (eReg) {}
+    return id;
+  }
+  function _jjFinishCancel() {
+    try {
+      if (S && S.finishTimers) {
+        for (var i = 0; i < S.finishTimers.length; i++) {
+          try { clearTimeout(S.finishTimers[i]); } catch (eC2) {}
+        }
+        S.finishTimers = [];
+      }
+    } catch (eC3) {}
+    _jjFxCleanCancel();
   }
 
   /* ── v166：技能区改成**分页**后，滑轨不再滚动 ──
@@ -29881,8 +30157,34 @@ function build() {
     }
     /* v154：'playSword' / 'playDodge' 已删除 —— 剑效与闪避都并进 'playAttack'
        （飞行段 + 抵达段共用一条时间线）。保留两份实现迟早会漂移，这一处只留一份。 */
+    /* ★★★ v589：**这一手特效还剩多少毫秒** ★★★
+       ── 为什么要问引擎、而不是拍一个常数 ──────────────────────────────
+       用户 2026-11-11：「战斗脚本斩杀对方时，特效都没放完瞬间结束战斗，弹出胜利，
+         不能这样子，要改成技能放完再说……刚按下，对方就死了，然后特效没了，
+         胜利弹出来，这是完全不对的」。
+       斩杀那一击的时间线和普通一击是**同一条**：飞行 0.32s → 抵达爆发，
+       剑系最长的剑痕要活到 'D + 1.35 + mi*0.045'（约 1.7s）。而 'endBattle()'
+       过去第一句就是 'jjFxReset()' ⇒ 画布当场清空 ⇒ 玩家只看到弹道刚起飞就没了。
+       ── 为什么不写死 1700 ─────────────────────────────────────────────
+       剑系/非剑系、暴击与否、品质档位（剑弧 2~7 道）、特效档位（关/简/全）
+       都会改变队列里的实际寿命。写死一个数一定有某一档对不上：
+       写短了照样切断，写长了玩家干等。⇒ **直接读队列**，永远是当前这一手的真值。
+       ── 为什么取 max(life) 就是准确答案 ───────────────────────────────
+       队列里每个对象都带 'life'，帧循环每帧递减、到 0 就出队（见 boot()）。
+       所以 'life' 的单位是**秒**，且它在创建时就被保证 ≥ 'delay + dur'
+       （见剑痕那段注释：'life' 必须 ≥ 'delay + dur'，否则播到一半消失）。
+       ⇒ 取全体最大值 = 最后一帧停止绘制的时刻，不多不少。
+       ⚠ 队列为空返回 0 —— 调用方必须能接受 0（表示"现在就播完了"）。 */
+    function busyMs() {
+      var m = 0;
+      for (var i = 0; i < objs.length; i++) {
+        var L = objs[i] && objs[i].life;
+        if (typeof L === 'number' && L > m) m = L;
+      }
+      return Math.max(0, Math.round(m * 1000));
+    }
     return {
-      ensure: ensure, clear: clear, centerOf: centerOf,
+      ensure: ensure, clear: clear, centerOf: centerOf, busyMs: busyMs,
       /* v154：统一走 attack（飞行 + 抵达爆发）。旧 hit/sword/dodge 保留为兼容壳。 */
       attack: function (fromName, toName, element, opts) {
         ensure();
@@ -31571,6 +31873,10 @@ function build() {
        现在：只要 S 已结束（或没有活动局），先清空再起新局。 */
     if (S && S.over) {
       if (timer) { clearTimeout(timer); timer = null; }
+      /* ★ v589：旧局作废时必须把「胜利演出时间线」和「延后清场」一起掐掉 ——
+         否则上一局的 timer 会在新局的卡片上播死亡消散、或清掉新局的爆点
+         （病象是"新局前两手没特效" / "新局刚开打敌卡就闪白"，极难归因）。 */
+      try { _jjFinishCancel(); } catch (eFCn1) {}
       S = null;
     }
     /* ★★ v166：**战斗进行中**的重复 startJJ —— 不重开，只把界面亮出来。
@@ -32701,6 +33007,11 @@ function build() {
     try { _ownMk = (S && S.__mk) ? String(S.__mk) : ''; } catch (eOm) {}
     if (timer) clearTimeout(timer);
     timer = null;
+    /* ★ v589：关面板 = 这一局彻底作废 ⇒ 胜利演出时间线（含延后清场）必须一起掐。
+       不掐的后果：玩家在胜利演出那 1.9s 里关掉面板，timer 到点仍会
+       去 q('enemy') 找卡片、给 S（此时已是 null）清 finishAt，
+       并在下一局刚开打时把画布清空。 */
+    try { _jjFinishCancel(); } catch (eFCn2) {}
     S = null;
     /* ★ v98：关掉战斗界面时把两道战前闸一并放掉 —— 否则玩家手动关掉战斗、
        翻译闸还挂着，下一次触发会被误挡成「翻译未完成」。
@@ -32943,6 +33254,13 @@ function build() {
      看起来完美（1000），而真机走 step 时是 2000。**这就是「探针比引擎更会骗人」。**
      ⚠ 同上：只挂真函数引用，不许包一层「方便版」。 */
   API._testStep = step;
+  /* ★★★ v589：「这一手特效还剩多久」的只读测试面 ★★★
+     为什么要挂：`_JJ_FX2` 是 IIFE 私有的，探针**量不到** `busyMs()`；
+     而它是「斩杀特效会不会被切断」这条修复的**唯一数据源** ——
+     量不到它就只能在整局里靠肉眼猜"特效放完了没有"，那种判据既慢又不可靠。
+     ⚠ 只挂真函数引用（`_jjFxLeftMs` 内部就是读 `_JJ_FX2.busyMs()`），不包一层方便版 ——
+       包一层量的就是副本（本项目反复栽过的那个坑：探针比引擎更会骗人）。 */
+  API._testFxBusyMs = _jjFxLeftMs;
   /* ★★★ v585：**「开始战斗」的白名单出口**（只给离线质检用）★★★
      为什么必须导出：v585 把「自动推进」停在了源头 —— `startBattle()` 里
      `if (!S.started) return;` 之后才点 timer。于是 `beginBattleFromRoster` 只负责

@@ -5015,18 +5015,17 @@ function xzStackDmgOf(f) { return xzStackDmgInfoOf(f).pct; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    ★★★ v581：八条叠层的「唯一显示出口」★★★
-   作者原话（逐字）：「x5改为五层，然后括号满层。括号来源」
+   作者原话（逐字，最终口径）：
+     「不对，我说错了，x5保留，但是 x5(满层)(来源:xxxx)，而不是中文层数」
 
    ── 为什么必须收成一个出口 ────────────────────────────────────────────
-   v579 只给「叠层增伤」加了百分比＋来源，其余七条还印着「减伤 ×5」：
-     · `×5` 是倍率写法，玩家会读成「减伤 5 倍」或「减伤 5%」，其实是 5 层；
-     · 玩家自己写的「每层强度」只有第一条看得见，其余七条写了多少全靠猜；
-     · 层数被塞进 `n`（角标）⇒ 展示层印成「· 剩 5」，把层数当手数报。
-   现在面板、卡面、结算解释文字一律走 `xzV2StackTextOf`，
-   谁再就地拼 `key + ' ×' + stacks` 就是第二份口径。
+   v579 只给「叠层增伤」加了百分比＋来源，其余七条还是光秃秃的「减伤 ×5」。
+   现在八条统一形状：`叠层增伤 ×5（满层）（来源：某某玄技）`。
+   ⚠ **×N 是作者点名保留的层数写法**，不许改成中文「五层」，也不许再挂
+     「每层 +5%」这类额外括号 —— 形状就是「×N ＋ 满层括号 ＋ 来源括号」三段。
 
    ── 三条硬规矩 ────────────────────────────────────────────────────────
-   ① 层数用中文数字（「五层」），不用 `×N`；到上限才写「（满层）」。
+   ① 层数一律 `×N`；到上限才写「（满层）」。
    ② 来源用括号，不写 `｜来源：`；没有登记来源的势种写「战斗叠层」，不编造技能名。
    ③ 角标 `n` 只放**真实剩余手数**（常驻 9999 → 印 ∞），层数已经在文字里，
       不许再拿层数冒充手数。
@@ -5035,31 +5034,18 @@ var XZ_V2_STACK_FIELD = {
   '增伤': 'dmg', '减伤': 'dr', '暴击': 'crit', '暴伤': 'critDmg',
   '提速': 'hasteFlat', '治疗': 'heal', '破甲': 'vuln', '减速': 'outCut'
 };
-var XZ_CN_LAYER = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-function xzCnLayer(n) {
-  var v = Math.max(0, Math.round(Number(n) || 0));
-  return (v >= 0 && v <= 10) ? XZ_CN_LAYER[v] : String(v);
-}
 function xzV2StackInfoOf(f, key) {
   var out = {
     key: key, label: '', stacks: 0, max: 5, full: false,
-    per: 0, pct: 0, cap: 0, hasPer: false, unit: 'pct',
-    srcNames: [], rounds: 0, perm: false
+    isStack: false, srcNames: [], rounds: 0, perm: false
   };
   var def = (typeof V2_STATES !== 'undefined' && V2_STATES[key]) ? V2_STATES[key] : null;
   if (!def) return out;
   out.stacks = (typeof v2StateVal === 'function') ? (Number(v2StateVal(f, key)) || 0) : 0;
   out.max = Number(def.max) || 5;
   out.full = out.stacks >= out.max;
-  var field = XZ_V2_STACK_FIELD[key] || '';
-  out.hasPer = !!field;
-  out.label = field ? ('叠层' + key) : key;
-  if (field) {
-    out.unit = (field === 'hasteFlat') ? 'point' : 'pct';
-    out.per = (typeof v2Per === 'function') ? (Number(v2Per(key, field, f)) || 0) : 0;
-    out.cap = (typeof v2Cap === 'function') ? (Number(v2Cap(key, field, f)) || 0) : 0;
-    out.pct = Math.min(out.cap, out.stacks * out.per);
-  }
+  out.isStack = !!XZ_V2_STACK_FIELD[key];
+  out.label = out.isStack ? ('叠层' + key) : key;
   /* 来源清单：同名只留一条，不编造；老档没有 srcs 就是空数组 */
   var srcs = (typeof v2StackSrcsOf === 'function') ? v2StackSrcsOf(f, key) : [];
   var seen = {};
@@ -5075,17 +5061,8 @@ function xzV2StackInfoOf(f, key) {
 }
 function xzV2StackTextOf(f, key) {
   var i = xzV2StackInfoOf(f, key);
-  var t = i.label + ' ' + xzCnLayer(i.stacks) + '层';
+  var t = i.label + ' ×' + i.stacks;
   if (i.full) t += '（满层）';
-  if (i.hasPer) {
-    if (i.unit === 'point') {
-      t += '（每层 +' + (Math.round(i.per * 10) / 10) + ' 点，共 +'
-        + (Math.round(i.pct * 10) / 10) + ' 点）';
-    } else {
-      t += '（每层 +' + (Math.round(i.per * 1000) / 10) + '%，共 +'
-        + (Math.round(i.pct * 1000) / 10) + '%）';
-    }
-  }
   t += '（来源：' + (i.srcNames.length ? i.srcNames.join('、') : '战斗叠层') + '）';
   return t;
 }
@@ -27553,18 +27530,16 @@ function build() {
         for (var _sk in V2_STATES) {
           var _sv = (typeof v2StateVal === 'function') ? Number(v2StateVal(f, _sk) || 0) : 0;
           if (!(_sv > 0)) continue;
-          /* ★★★ v581：所有势种统一走 `xzV2StackTextOf`，不再有「×N」倍率写法 ★★★
-             作者原话（逐字）：「x5改为五层，然后括号满层。括号来源」。
-             v579 只给「叠层增伤」加了百分比＋来源，其余七条还印着「减伤 ×5」——
-             `×5` 会被读成「减伤 5 倍／5%」，其实是 5 层；玩家写的每层强度也一条都看不到。
-             现在八条统一：中文层数、（满层）、每层强度、括号来源，一个出口全给。
+          /* ★★★ v581：所有势种统一走 `xzV2StackTextOf` ★★★
+             作者最终口径（逐字）：「x5保留，但是 x5(满层)(来源:xxxx)，而不是中文层数」。
+             ⇒ `×N` **保留**；满层加「（满层）」；一律加「（来源：…）」。
+             不许改成中文层数，也不许再挂「每层 +5%」这类额外括号。
              ⚠ `n` 改成**真实剩余手数**（`xzV2StackRoundsOf`）：
                旧写法把层数塞进 n ⇒ 展示层拼出「· 剩 5」，把层数当手数报。
                层数已经在文字里，角标只许说时长。
              ⚠ `nm` 的分键口径是 v579 修的「常驻 n=9999 吞掉叠层」那一元：
                `增伤` 用 `'叠层增伤'`，其余用 `'势种·' + _sk`，别改回去。 */
           if (typeof xzV2StackTextOf === 'function' && typeof xzV2StackInfoOf === 'function') {
-            var _v2i = xzV2StackInfoOf(f, _sk);
             out.push({
               t: xzV2StackTextOf(f, _sk),
               k: (_sk === '增伤') ? 'good' : 'neutral',
@@ -27573,8 +27548,8 @@ function build() {
             });
             continue;
           }
-          /* 极端兜底：显示出口没加载（部分加载）时，至少不许再印「×N」 */
-          out.push({ t: _sk + ' ' + String(_sv) + ' 层（来源：战斗叠层）',
+          /* 极端兜底：显示出口没加载（部分加载）时，形状也要一致 */
+          out.push({ t: _sk + ' ×' + String(_sv) + '（来源：战斗叠层）',
             k: 'neutral', nm: '势种·' + _sk, n: 0 });
         }
       } catch (eSt2) {
@@ -27582,7 +27557,7 @@ function build() {
         var st = f.v2stk || null;
         if (st && typeof st === 'object') {
                     /* ★ v579：去重键与上面同口径 —— 裸势种名会与常驻三源撞键被吞。 */
-                    for (var s in st) { var v = Number(st[s] || 0); if (v > 0) out.push({ t: (XZ_V2_STACK_FIELD[s] ? ('叠层' + s) : s) + ' ' + String(v) + ' 层（来源：战斗叠层）', k: 'neutral', nm: '势种·' + s, n: 0 }); }
+                    for (var s in st) { var v = Number(st[s] || 0); if (v > 0) out.push({ t: (XZ_V2_STACK_FIELD[s] ? ('叠层' + s) : s) + ' ×' + String(v) + '（来源：战斗叠层）', k: 'neutral', nm: '势种·' + s, n: 0 }); }
         }
       }
       /* 常驻：玄诀（passive.effects）与大道（daoBuffs）。不带回合数 → 不带数字 */

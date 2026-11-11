@@ -26483,7 +26483,17 @@ var XZ_JJB_SKIN = `
 /* ★ v494：「align-self:center」 —— 底栏是 「align-items:stretch」，
    技能键会被拉成和四宫格一样高（66px），两行字的本事却只占 36px
    ⇒ 用户看到的是一块「又高又空的大方块」。改成按内容高、垂直居中。 */
-.xz-jjb-skgrp{display:flex;flex:0 0 auto;min-width:0;align-self:center;}
+/* ★★★ v590：加 position:relative —— 「详」从此**盖在技能卡右缘内部** ★★★
+   作者原话：「你他妈把详塞进技能里不就能省下来一些空间了吗，为什么非要把按钮弄在外面」。
+   改前是「技能键 + 详键」两个 flex 兄弟并排，详键独占 18px 宽 + 自己一条左边框，
+   手机上一页三个时这 18px 就是压垮名字的最后一根稻草。
+   ⇒ 详改成绝对定位贴在组内右侧（见 .xz-jjb-see 那条），**组宽 = 技能键宽**。
+   ⚠ 页容量算法的唯一出口是 xzSkPerPageOf()；桌面那个 156 的门槛是按
+     「技能键 138 + 详 18」算的，改后组自然宽约 138 —— 156 只会更宽松（仍 3 个/页）。
+     **别顺手把它调小**：v589 刚为「第三个技能钻第二栏」把它从 190 调到 156。
+   ⚠⚠ 本段在**模板字符串里**：注释中**绝不许出现反引号**，
+     写一个就会把模板串提前截断 ⇒ 整个引擎 SyntaxError（本轮亲手栽过）。 */
+.xz-jjb-skgrp{display:flex;flex:0 0 auto;min-width:0;align-self:center;position:relative;}
 
 /* 技能键：菱形图标 + 名字 + 品阶·目标 + 耗灵 */
 .xz-jjb-sk{
@@ -26498,7 +26508,10 @@ var XZ_JJB_SKIN = `
      名字两字 + 三枚小标签撑不起这个宽度 ⇒ 一大片空白。
      ⇒ 加 「max-width:154px」：一枚时就是一枚的宽，三枚时照旧等分。
        宽度上限按"最长的目标标签（敌方单体 4 字）+ 耗灵 + 菱形"实测算出来。 */
-  min-width:0;flex:1 1 0;max-width:154px;padding:5px 7px;text-align:left;
+  /* ★ v590：padding-right 20px = 给绝对定位的「详」让位（16 宽 + 4 呼吸）。
+     改前详键是并排的 flex 兄弟、不占本键内距；现在它盖在本键右缘上，
+     不让位就会被压在文字上面。 */
+  min-width:0;flex:1 1 0;max-width:154px;padding:5px 20px 5px 7px;text-align:left;
   appearance:none;cursor:pointer;font-family:var(--xz-font);color:var(--xz-ink);
   background:var(--xz-panel);border:1px solid var(--xz-line);border-radius:9px;
   transition:border-color .16s,background .16s,transform .16s;
@@ -26578,14 +26591,24 @@ var XZ_JJB_SKIN = `
      一门招式的效果，只能靠猜。（这正是 v39 骂过一遍的同一个病。）
      现在两件事一起做：① 这枚键恢复显示；② pickSkill 之后自动弹详情
         （见 27345 的点击分支），点卡也能看到。
-     宽度压到 18px，不再吃掉三分之一个技能格。 */
-  flex:none;width:18px;appearance:none;cursor:pointer;font-family:var(--xz-font);font-size:10px;
+     ★★★ v590：**从"并排"改成"盖在技能卡右缘内部"**（作者 2026-11-12：
+     「你他妈把详塞进技能里不就能省下来一些空间了吗，为什么非要把按钮弄在外面」）。
+     并排时它占 18px 宽 + 一条独立左边框，手机上一页三个时这 18px 直接把名字挤没。
+     ⇒ 绝对定位贴在 .xz-jjb-skgrp 右缘，**不再占横向空间**；
+        技能键自己用 padding-right 让出这一条（见 .xz-jjb-sk）。
+     ⚠ 它是 .xz-jjb-skgrp 的子元素、不在 .xz-jjb-sk 里 ——
+       所以不会被技能键的 overflow:hidden + border-radius 裁掉，
+       也**不能**塞进 button 内部：button 里套 button 是非法 DOM，浏览器会拆开。
+     ⚠ z-index 必须给：它要盖在技能键之上，否则点下去命中的是 'data-jjbsk'
+       ⇒ 变成"点了详却出了手"（那个后果比看不到详情严重得多）。 */
+  position:absolute;right:0;top:0;bottom:0;z-index:2;
+  width:16px;appearance:none;cursor:pointer;font-family:var(--xz-font);font-size:10px;
   color:var(--xz-ink-3);background:transparent;
   border:1px solid var(--xz-line);border-left:0;border-radius:0 9px 9px 0;
-  transition:color .15s,border-color .15s;
+  transition:color .15s,border-color .15s,background .15s;
   padding:0;line-height:1;
 }
-.xz-jjb-see:hover{color:var(--xz-gold-2);border-color:rgba(201,168,106,.4);}
+.xz-jjb-see:hover{color:var(--xz-gold-2);border-color:rgba(201,168,106,.4);background:rgba(201,168,106,.08);}
 .xz-jjb-sknav{
   flex:none;width:22px;appearance:none;cursor:pointer;
   font-family:var(--xz-font);font-size:15px;line-height:1;color:var(--xz-ink-3);
@@ -26782,7 +26805,13 @@ var XZ_JJB_SKIN = `
   .xz-jjb-fn{flex:0 0 112px;width:112px;}
   /* 提示行（「时序推进中…」）占满剩下的宽度，但**不许换行** */
   .xz-jjb-hint{flex:1 1 auto;justify-content:center;padding:0;align-self:center;min-width:0;}
-  .xz-jjb-sk{min-width:0;max-width:146px;padding:4px 5px;gap:4px;}
+  /* ★★★ v590：max-width 从 146px 改成 none ★★★
+     146 是 v473「一页三个、每个等分」时定的上限。现在手机**一页一个**，
+     这条上限会把技能卡硬锁在 146px，滑轨剩下的 60px 全空着 ——
+     名字明明能写 13 个字，却只在 146px 里挤 9 个。⇒ 放开，让它铺满滑轨。 */
+  /* ★ v590：右侧 20px 同样必须让位（这条 padding 简写会覆盖桌面那条）。
+     一页一个时技能卡本来就宽，这 4px 让它收窄到「铺满但不顶边」正好。 */
+  .xz-jjb-sk{min-width:0;max-width:none;padding:4px 20px 4px 5px;gap:4px;}
   .xz-jjb-skname{font-size:10.5px;}
   /* ★ v494：小框回来了，手机上把内距再压 1px，两枚并排仍放得下「地阶 + 敌方单体」 */
   .xz-jjb-pill{font-size:8px;padding:1.5px 3px;border-radius:3px;}
@@ -26872,7 +26901,9 @@ var XZ_JJB_SKIN = `
      ⚠ 组数由 JS 的 PER_PAGE 算（按最小可读宽 132），本档只负责"等分且不溢出"。
      ⚠ 不要改回 flex:0 0 auto，也不要给组写固定 width（铁律：宽高不用魔数）。 */
   .xz-jjb-skgrp{flex:1 1 0;min-width:0;}
-  .xz-jjb-sk{flex:1 1 auto;min-width:0;padding:6px 6px 6px 8px;gap:6px;}
+  /* ★ v590：padding-right 也必须让位（手机档的 padding 简写会覆盖桌面那条，
+     不在这里再写一次 = 手机上「详」压在名字尾巴上）。16 宽 + 4 呼吸。 */
+  .xz-jjb-sk{flex:1 1 auto;min-width:0;padding:6px 20px 6px 8px;gap:6px;}
   /* ★★ v473：**技能名换两行** ★★
      键宽被压实后名字可用约 75px（390px 屏），11.5px 字只放 6 字；
      玩家自己起的技能名动辄 8~10 字（「九天玄雷·万钧破灭诀」10 字 ≈ 115px）。
@@ -26881,10 +26912,17 @@ var XZ_JJB_SKIN = `
      ⚠ 用 -webkit-line-clamp 而不是 max-height：行数由字体行高决定，
        写死高度在换字号/换字族时必破（本项目铁律第 13 条）。
      ⚠ 按钮高度够不够：名字 2 行 × 14 + pills 12 + gap 4 ≈ 58px < 按钮 74px，够。 */
+  /* ★★★ v590：手机改成**一页一个**之后，这条 clamp 从「救命的」降级成「兜底」★★★
+     原文案（v473，一页三个、键宽 75px）：「名字允许换行、最多两行：75px × 2 行
+     ≈ 12 字」。现在一页一个、键宽 ~300px，10 字名一行就放得下，clamp 只在
+     超长名/大字号时兜一下，不再承担"让 10 字名可见"的职责。
+     ⚠ 同时把 word-break:break-all 改回 normal —— break-all 会连英文、数字、符号
+       一起硬拆（「九天玄雷·万钧破灭诀」的「·」会被甩到行首）。
+       中文在 normal 下本来就是逐字断行的，去掉 break-all 不会影响中文表现。 */
   .xz-jjb-skname{
     white-space:normal;overflow:hidden;text-overflow:clip;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
-    line-height:1.22;word-break:break-all;
+    line-height:1.22;word-break:normal;overflow-wrap:anywhere;
   }
   /* 品阶/目标/耗灵三枚小标签同理：111px 也塞不进 75px，允许折行 */
   .xz-jjb-skpills{flex-wrap:wrap;row-gap:2px;}
@@ -28713,6 +28751,25 @@ function build() {
      ⚠ 只在 render 的"重建了 innerHTML"分支里调：没重建就没有新几何可校。
      ⚠ 返回 false 只表示"这次没校成"，绝不能让主流程抛错 ——
        校不准最坏也就是维持保守布局（少放），不会丢技能。 */
+  /* ★★★ v590：**一页几个技能，只许有这一个出口** ★★★
+     病历（v589 与本轮各栽一次，同一个病）：
+       · v589：`barHtml` 首帧用估算、后续用实测 ⇒ 两条路给出 3 和 2 ⇒
+               「第三个技能钻进第二栏」，作者连报三条。
+       · v590：我在 `barHtml` 里加了「手机恒为 1」，却没动 `_jjSkRowCalibrate`
+               里那份**手抄的**算法 ⇒ 校准算出 3、当前画的是 1 ⇒ 它立刻重画成 3
+               ⇒ 手机又回到三个/页，白改。
+     ⇒ 根子是「同一条口径写了两遍」。现在收成一个纯函数，两处都调它；
+       以后要改页容量（比如平板中间档），只有这一个地方。
+     ⚠ `winW < 560` 是手机档（与 CSS 的 `@media (max-width:560px)` 同一个断点，
+       两边必须一起动 —— 只改一边会出现"JS 想放 1 个、CSS 按 3 个排版"）。
+     ⚠ 桌面 `skMin = 156`：v589 实测「技能键 138 + 详 18」的自然宽。
+       v590 把「详」改成绝对定位后组宽约 138，156 只会更宽松（仍 3 个/页），不要调小。 */
+  function xzSkPerPageOf(winW, rowW) {
+    if (Number(winW) < 560) return 1;                    /* 手机：一页一个（作者拍板） */
+    var skMin = 156;
+    return Math.max(1, Math.min(3, Math.floor((Number(rowW) + 8) / (skMin + 8))));
+  }
+
   function _jjSkRowCalibrate(bar) {
     try {
       if (!bar) return false;
@@ -28723,8 +28780,10 @@ function build() {
       var winW = 1080;
       try { winW = Number((window.top || window).innerWidth) || 1080; } catch (eW) {}
       xzSkRowWRemember(winW, realW);              /* 存起来，下一帧首帧就用它 */
-      var skMin = (winW < 560) ? 56 : 156;
-      var want = Math.max(1, Math.min(3, Math.floor((realW + 8) / (skMin + 8))));
+      /* ★ v590：这里原来**又抄了一份** `skMin = (winW<560)?56:156` 的算法，
+         与 barHtml 那份各算各的 ⇒ 手机上一页一个会被它当场改回三个。
+         ⇒ 统一走 `xzSkPerPageOf`（唯一出口，理由见那个函数的注释）。 */
+      var want = xzSkPerPageOf(winW, realW);
       /* 当前这帧是按几个画的？数一下滑轨里的组数就知道（不依赖任何全局状态）。 */
       var cur = row.querySelectorAll('.' + PFX + '-skgrp').length;
       if (!cur || cur === want) return true;      /* 一致 或 本来就没技能 ⇒ 完事 */
@@ -28971,8 +29030,33 @@ function build() {
          ⚠ 156 是 4 字技能名 + 品阶 + 耗灵时的自然宽。名字特别长时组会超过 156，
            三个略有溢出 ⇒ 滑轨本就是 overflow-x:auto，横向滑一下即可（v166 的既有行为）。
            宁可滑，也不能像现在这样「明明塞得下却只画 2 个、还第一帧画 3 个」。 */
-      var _skMin = (_winW < 560) ? 56 : 156;
-      var PER_PAGE = Math.max(1, Math.min(3, Math.floor((_rowW + 8) / (_skMin + 8))));
+      /* ★ v590：`_skMin` 这个局部变量**已删除** —— 页容量的算法收进了
+         `xzSkPerPageOf(winW, rowW)` 一个出口（下面 29020 那段注释里的
+         `_skMin = 56 / 156` 是**病史**，不是现役代码，别照着它改回去）。 */
+      var PER_PAGE = xzSkPerPageOf(_winW, _rowW);
+      /* ★★★ v590：**手机端一页就一个**（作者 2026-11-12 拍板改口）★★★
+         作者原话：「你看看手机端的技能栏的技能，搞成啥了，而且都显示不全，
+                   这个不怪你，手机端就是这样，所以，手机端改成一页一个技能刚刚好」。
+         ── 改前（截图实测，390px 屏）──────────────────────────────────
+           `_skMin = 56` 是 v479 为「一栏塞三个」定的 ⇒ PER_PAGE 算成 **3**
+           ⇒ `.xz-jjb-skgrp{flex:1 1 0}` 把滑轨三等分 ⇒ 每个技能键只剩 ~75px。
+           而技能名那行是 `word-break:break-all` + `-webkit-line-clamp:2`
+           （v473 为「10 字名两行放得下」定的）⇒ 75px 里 11px 的字**一行只放 2 个字**
+           ⇒ 「雷鳴掌」变成「雷鳴 / 掌」竖着堆，再长一点的招名直接被截。
+           这两条规则单看都对，**凑在 3 个/页的宽度上就互相打脸**。
+         ── 为什么是"一页一个"而不是"把 56 调大"────────────────────────
+           调大 _skMin 只是让 PER_PAGE 落到 2，两个各占一半 ≈112px，
+           仍要在「名字 / 品阶 / 目标 / 耗灵」里挤 —— 治不了"显示不全"。
+           手机屏就这么宽，一个招式铺满一整条滑轨（~207px）才能把名字写全。
+           作者自己也说了「一页一个技能刚刚好」，这是他的判断，不是折中。
+         ── 代价（明说）──────────────────────────────────────────────
+           12 门招式 = 12 页，翻页键要多点几下。所以下一件事是把「详」收进
+           技能卡内部（省 18px + 一条边框），让那一页的宽度全部给名字。
+         ⚠ 桌面档（≥560）**一个字都不动**：那边三个一排是真的塞得下
+           （v589 刚把 _skMin 从 190 调到 156 修好"第三个技能钻第二栏"）。
+         ⚠ 不许改回去：v479 的「一栏三个」是当年为"名字只显示一个字"找的**反向**解，
+           现在宽度够了才发现根子是"不该塞三个"。 */
+      if (_winW < 560) PER_PAGE = 1;
       /* ★★★ v589：**允许 render 用实测值覆盖这一帧的页容量** ★★★
          `barHtml()` 在写 DOM 之前被调，所以它天然只能读到**上一帧**的滑轨宽。
          `_jjSkRowCalibrate` 在写完 DOM 之后量到真宽，若是另一个答案，

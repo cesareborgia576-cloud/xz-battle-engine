@@ -25946,6 +25946,77 @@ var XZ_JJB_SKIN = `
   overflow-y:auto;overscroll-behavior:contain;
 }
 #xz-jjb-overlay *{box-sizing:border-box;}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ★★★ v593：日光 · 宣纸铜边（战斗界面）★★★
+   与 05 的日光层同一套色：纸 #f7f0df / 铜 #8a5f14 / 墨 #241d12 /
+   朱砂只给敌方与危险、青碧只给我方与灵力。
+   ⚠ 必须带 #xz-jjb-overlay —— 光靠 :root 的属性选择器压不过 ID 选择器。
+   ⚠ 只换令牌与材质（背景/描边/阴影），不动任何布局与尺寸。
+   ══════════════════════════════════════════════════════════════════════ */
+:root[data-xz-theme="day"] #xz-jjb-overlay{
+  /* 日光＝原夜墨设计的浅色版，色相不动（暖金 + 朱 + 青），只翻明度。
+     值取自 05 已打磨三轮的 day 令牌，三套界面共用一套真源。 */
+  --xz-bg:#efe9dc;
+  --xz-panel:#f7f4ec;
+  --xz-panel-2:#fffdf8;
+  --xz-ink:#1a1408;
+  --xz-ink-2:#2e2415;
+  --xz-ink-3:#4a4133;
+  --xz-gold:#7a5510;
+  --xz-gold-2:#8a5f14;
+  --xz-gold-dim:rgba(160,111,18,.16);
+  --xz-line:rgba(138,95,20,.24);
+  --xz-line-2:rgba(138,95,20,.56);
+  --xz-me:#1a6d5c;
+  --xz-foe:#9b1c33;
+  --xz-hp-a:#c2402f;--xz-hp-b:#7d1a12;
+  --xz-mp-a:#3f7fa8;--xz-mp-b:#1d4a6b;
+  background:rgba(239,233,220,.94);
+  --xz-card:linear-gradient(180deg,#fffdf8 0%,#f8f1e4 100%);
+  --xz-card-hover:linear-gradient(180deg,#fffefb 0%,#fff8ec 100%);
+  --dhl-header:linear-gradient(90deg,#f4efe2 0%,#fbf8f0 56%,#f7f0e3 100%);
+  --dhl-button-active:linear-gradient(180deg,rgba(160,111,18,.16),rgba(255,255,255,.55));
+  --dhl-shadow:0 2px 6px rgba(96,74,28,.10);
+  --dhl-glow:0 0 8px rgba(160,111,18,.10);
+}
+/* 演武台/编队层：它挂在 body 上、不在 overlay 内，令牌取不到，且有一处
+   background:rgba(3,6,10,.82)!important 压着 —— 必须单独覆盖并同样用 !important。 */
+:root[data-xz-theme="day"] #xz-jjb-overlay,
+:root[data-xz-theme="day"] .xz-jjb-teamwrap{
+  background:rgba(239,233,220,.96)!important;
+  --xz-void:#efe9dc;--xz-bg:#efe9dc;
+  --xz-panel:#f7f4ec;--xz-panel-2:#fffdf8;
+  --xz-ink:#1a1408;--xz-ink-2:#2e2415;--xz-ink-3:#4a4133;
+  --xz-gold:#7a5510;--xz-gold-2:#8a5f14;--xz-gold-dim:rgba(160,111,18,.16);
+  --xz-line:rgba(138,95,20,.24);--xz-line-2:rgba(138,95,20,.56);
+  --xz-border:rgba(138,95,20,.24);--xz-border-strong:rgba(138,95,20,.56);
+  --xz-text:#1a1408;--xz-text-2:#2e2415;--xz-muted:#4a4133;
+  --xz-card:#fffdf8;--xz-card-hover:#fffaf0;
+  --dhl-stage:linear-gradient(180deg,#f9f6ee 0%,#f2ecdd 100%);
+  --dhl-reading:linear-gradient(180deg,#fffdf8,#f8f3e7);
+  --dhl-header:linear-gradient(90deg,#f4efe2,#fbf8f0 50%,#f6eee1);
+  --dhl-button-active:linear-gradient(180deg,rgba(160,111,18,.15),rgba(255,255,255,.55));
+  --dhl-shadow:0 2px 6px rgba(96,74,28,.10);
+  --dhl-glow:0 0 8px rgba(160,111,18,.10);
+  font-family:var(--xz-font);
+}
+
+/* 角色卡：纸片厚度；敌方朱砂侧条、我方青碧侧条在原有规则里已按 var 走 */
+:root[data-xz-theme="day"] #xz-jjb-overlay .xz-jjb-card{
+  background:linear-gradient(180deg,#fffdf7 0%,#faf2df 100%)!important;
+  border-bottom-width:2px!important;
+  box-shadow:inset 0 1px 0 #ffffff,0 1px 2px rgba(96,74,28,.10)!important;
+}
+:root[data-xz-theme="day"] #xz-jjb-overlay .xz-jjb-card:hover{
+  border-color:rgba(120,86,32,.62)!important;
+}
+/* 血/灵力条：挖出来的槽 + 顶部高光，同 05 的数据条 */
+:root[data-xz-theme="day"] #xz-jjb-overlay .xz-jjb-hpf,
+:root[data-xz-theme="day"] #xz-jjb-overlay .xz-jjb-mpf{
+  box-shadow:inset 0 1px 2px rgba(96,74,28,.35),0 1px 0 #fffdf7!important;
+}
+
 #xz-jjb-overlay ::selection{background:rgba(201,168,106,.28);}
 
 /* ── 外框 ─────────────────────────────────────────────────────────────── */

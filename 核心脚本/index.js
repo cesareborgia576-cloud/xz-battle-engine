@@ -10066,6 +10066,7 @@ function executeBuffSkill(actor, skill, shownAs, forUnit) {
   }
   /* 这一手真正接招的单位：群体展开时是队友，其余情况就是施术者自己 */
   var _holderRoot = forUnit || actor;
+  var _buffVfxLanded = false;   /* v1.3.71：只有效果真正落地，才给受术卡片播蔓延强化光 */
   /* ★ v255：增益技也是「一次出手」，手级结算同样要走一次（与 executeAttack 对称）。 */
   try { if (typeof processHandBuffs === 'function') processHandBuffs(actor); } catch (eHbb) {}
   showSkillBannerFx(skill.name, skill.品质 || skill.quality, actor.side === 'ally',
@@ -10147,13 +10148,14 @@ function executeBuffSkill(actor, skill, shownAs, forUnit) {
         /* ★ v297：治疗也吃升级区间 —— **这条才是玩家放奶技真正走的路**，
            只封 applyV75Effects 那一处的话，这条路径上的 99999 照样原样回满。 */
         _hv = xzClampHealShield(_hv, skill, actor, 'heal');
-        if (_hv > 0) { xzHeal(_holder, _hv); logText += '<br>回复 <b>' + _hv + '</b> 点气血'; }
+        if (_hv > 0) { xzHeal(_holder, _hv); _buffVfxLanded = true; logText += '<br>回复 <b>' + _hv + '</b> 点气血'; }
         return;
       }
       if (_p.beh === 'shield') {
         var _sv = Math.max(1, Math.round(_p.dmgFlat || (_holder.defVal || 1) * 0.5));
         _sv = xzClampHealShield(_sv, skill, actor, 'shield');
         xzShieldSet(_holder, _sv);
+        _buffVfxLanded = true;
         logText += '<br>罩下护盾 <b>' + _sv + '</b> 点';
         return;
       }
@@ -10171,7 +10173,7 @@ function executeBuffSkill(actor, skill, shownAs, forUnit) {
         var _lgN = (BattleState && BattleState.logs) ? BattleState.logs.length : 0;
         applyV75Effects(actor, _holder, _tmp);
         var _lg2 = (BattleState && BattleState.logs) ? BattleState.logs.length : 0;
-        if (_lg2 > _lgN) logText += '<br>' + BattleState.logs[_lg2 - 1];
+        if (_lg2 > _lgN) { _buffVfxLanded = true; logText += '<br>' + BattleState.logs[_lg2 - 1]; }
       }
     } catch (ePlainEff) {}
   });
@@ -10320,7 +10322,7 @@ function executeBuffSkill(actor, skill, shownAs, forUnit) {
              比在这里猜 sub 类型可靠：applyV75Effects 内部每个 sub 分支都自己留痕。 */
           var _lgN = (BattleState && BattleState.logs) ? BattleState.logs.length : 0;
           applyV75Effects(actor, holder, _tmp);
-          if (((BattleState && BattleState.logs) ? BattleState.logs.length : 0) > _lgN) _applied++;
+          if (((BattleState && BattleState.logs) ? BattleState.logs.length : 0) > _lgN) { _applied++; _buffVfxLanded = true; }
         } else if (p.beh === 'dot' || p.beh === 'control' || p.beh === 'debuff') {
           /* ⚠ 增益技里混进来的负效果：**只对敌方目标成立**。
              没有敌方目标（落点是队友/自己）时**如实不生效并留痕**，绝不悄悄打自己人。 */
@@ -10346,7 +10348,37 @@ function executeBuffSkill(actor, skill, shownAs, forUnit) {
     } catch (eEL) {}
   }
 
+  /* v1.3.71：成功的自身/友军增益给目标卡播一圈扩散强化层；失败/空效果不做假演出。 */
+  if (_buffVfxLanded) { try { triggerSelfSkillAura(_holderRoot, skill); } catch (eBuffFx) {} }
   BattleState.logs.push(logText);
+}
+
+function triggerSelfSkillAura(unit, skill) {
+  try {
+    if (!unit || (typeof fxOff === 'function' && fxOff())) return;
+    var d = null;
+    try { d = (typeof getDoc === 'function') ? getDoc() : ((typeof document !== 'undefined') ? document : null); } catch (eDocAura) {}
+    if (!d) return;
+    var nodes = d.querySelectorAll('.xz-jjb-card[data-name],[data-fighter-id]');
+    var card = null;
+    var uid = String(unit.id == null ? '' : unit.id);
+    var uname = String(unit.name || unit.姓名 || '');
+    for (var i = 0; i < nodes.length; i++) {
+      var nId = String(nodes[i].getAttribute('data-fighter-id') || '');
+      var nName = String(nodes[i].getAttribute('data-name') || '');
+      if ((uid && nId === uid) || (uname && nName === uname)) { card = nodes[i]; break; }
+    }
+    if (!card) return;
+    var old = card.querySelector('.xz-jjb-buff-surge');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var wave = d.createElement('span');
+    wave.className = 'xz-jjb-buff-surge';
+    wave.setAttribute('aria-hidden', 'true');
+    wave.style.setProperty('--buff-wave-color', unit.side === 'enemy' ? '239,123,112' : '107,208,189');
+    wave.style.setProperty('--buff-wave-alpha', (typeof fxMin === 'function' && fxMin()) ? '.16' : ((typeof fxLite === 'function' && fxLite()) ? '.25' : '.38'));
+    card.appendChild(wave);
+    setTimeout(function () { try { if (wave.parentNode) wave.parentNode.removeChild(wave); } catch (eRm) {} }, 1450);
+  } catch (eAura) {}
 }
 
 function afterTurnExecuted(actor) {
@@ -20169,7 +20201,7 @@ var styles = '<style id="' + P + '-styles">' +
 '.' + P + '-card-main { flex: 1; min-width: 0; }' +
 '.' + P + '-bar-row { font-weight: 400; display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; font-size:calc(13.5px * var(--xz-fs, 1)); }' +
 '.' + P + '-bar-track { flex: 1; height: 7px; background: rgba(2,12,18,0.6); border: 1px solid rgba(201,168,106,0.14); border-radius: 4px; margin: 0 6px; overflow: hidden; }' +
-'.' + P + '-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }' +
+'.' + P + '-bar-fill { height: 100%; border-radius: 2px; transition: width 1.08s cubic-bezier(.18,.72,.22,1), filter .42s ease; }' +
 '.' + P + '-badge { display: inline-flex; align-items: center; padding: 0.5px 3px; border-radius: 2px; font-size:calc(13.5px * var(--xz-fs, 1)); font-weight: 700; margin-right: 2px; }' +
 
 '.' + P + '-stat-line { font-weight: 400; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px; font-size:calc(11.5px * var(--xz-fs, 1)); color: var(--text-muted, #b7b8b3); margin-top: 4px; background: rgba(201,168,106,0.10); border: 1px solid rgba(201,168,106,0.22); padding: 2px 4px; border-radius: 4px; letter-spacing: 0; }' +
@@ -20244,7 +20276,7 @@ var styles = '<style id="' + P + '-styles">' +
    ⇒ 幅度拉到 ±7px（首帧最大），时长 0.46s，帧数从 5 段加到 7 段（衰减更自然、不机械）。
    同时把 'hit-flash' 的清除超时从 420ms 提到 520ms ——
    否则动画还没播完类就被摘掉，后面的帧等于白写（这是「加强了还是看不出来」的常见原因）。 */
-'.' + P + '-hit-flash { animation: ' + P + '-shake 0.46s cubic-bezier(.36,.07,.19,.97), ' + P + '-red-flash 0.4s ease-out !important; }' +
+'.' + P + '-hit-flash { animation: ' + P + '-shake 0.60s cubic-bezier(.2,.72,.24,1), ' + P + '-red-flash 0.58s cubic-bezier(.18,.72,.22,1) !important; }' +
 '@keyframes ' + P + '-red-flash { 0% { box-shadow: inset 0 0 22px rgba(239,68,68,0.88); border-color: #ef4444; } 100% { box-shadow: none; } }' +
 /* ⚠ 抖动幅度与时长的**唯一改点**在下面 15647 那条 '@keyframes -shake'（同名后定义覆盖前定义），
    这里不再重复定义一份 —— 两份同名关键帧正是「改了没生效」的经典来源。 */ +
@@ -20293,7 +20325,7 @@ var styles = '<style id="' + P + '-styles">' +
    同时把类清除超时从 420ms 提到 520ms（见 playHitFlashOnly）——
    否则动画还没播完类就被摘掉，后面的帧等于白写，这就是「加强了还是看不出来」的常见原因。
    ⚠ 这是 '-shake' 关键帧的**唯一**定义处。 */
-'@keyframes ' + P + '-shake { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 8% { transform: translate(-7px, 4px) rotate(-1.1deg); } 20% { transform: translate(7px, -4px) rotate(1.1deg); } 34% { transform: translate(-5px, -2px) rotate(-0.8deg); } 48% { transform: translate(4px, 3px) rotate(0.6deg); } 64% { transform: translate(-3px, 1px) rotate(-0.4deg); } 80% { transform: translate(2px, -1px) rotate(0.2deg); } }' +
+'@keyframes ' + P + '-shake { 0%,100%{transform:translate(0,0) rotate(0deg)} 12%{transform:translate(-4px,2px) rotate(-.55deg)} 27%{transform:translate(3px,-1.5px) rotate(.42deg)} 43%{transform:translate(-2.4px,-.6px) rotate(-.28deg)} 61%{transform:translate(1.6px,1px) rotate(.18deg)} 79%{transform:translate(-.8px,0) rotate(-.08deg)} }' +
 '@keyframes ' + P + '-dmg-float { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.7); } 25% { opacity: 1; transform: translate(-50%, -8px) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -24px) scale(0.85); } }' +
 /* ★ v232i：属性命中统一为「粒子爆炸 + 单圈粒子波纹」——
    波纹的每一颗粒子自己从 R0 走到 R1（--x0/--y0 → --x1/--y1），
@@ -20381,8 +20413,13 @@ function renderUI() {
     } catch (e1) {}
     var lb = qs('#' + P + '-log-box');
     if (lb) {
-      if (scrollCache.log === undefined || logWasAtBottom) lb.scrollTop = lb.scrollHeight;
-      else lb.scrollTop = scrollCache.log;
+      if (scrollCache.log === undefined || logWasAtBottom) {
+        /* v1.3.71：战报新内容柔和跟底；玩家手动上翻时保留原位置，不抢滚轮。 */
+        var _reducedLogMotion = false;
+        try { _reducedLogMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (eReducedLog) {}
+        try { lb.scrollTo({ top: lb.scrollHeight, behavior: _reducedLogMotion ? 'auto' : 'smooth' }); }
+        catch (eLogScroll) { lb.scrollTop = lb.scrollHeight; }
+      } else lb.scrollTop = scrollCache.log;
     }
   }
 
@@ -20902,7 +20939,51 @@ function renderUI() {
   if (_perf.last) {
     h = '<div style="font-size:calc(13.5px * var(--xz-fs, 1));line-height:1.35;color:var(--text-muted);padding:2px 4px;border-bottom:1px solid rgba(148,163,184,0.10);">〔性能〕' + esc(_perf.last) + '</div>' + h;
   }
+  /* v1.3.71：快照旧血/灵条宽；下一帧重建 DOM 后从旧宽度过渡到新值。 */
+  var _prevResourceBars = {};
+  try {
+    var _oldFighterCards = ct.querySelectorAll('.' + P + '-fighter-card[data-fighter-id]');
+    for (var _oi = 0; _oi < _oldFighterCards.length; _oi++) {
+      var _oldCard = _oldFighterCards[_oi], _oid = String(_oldCard.getAttribute('data-fighter-id') || '');
+      if (!_oid) continue;
+      var _oldFills = _oldCard.querySelectorAll('.' + P + '-bar-fill');
+      _prevResourceBars[_oid] = [_oldFills[0] ? parseFloat(_oldFills[0].style.width) : NaN,
+        _oldFills[1] ? parseFloat(_oldFills[1].style.width) : NaN];
+    }
+  } catch (ePrevBars) {}
   ct.innerHTML = h;
+  try {
+    var _reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    var _newFighterCards = ct.querySelectorAll('.' + P + '-fighter-card[data-fighter-id]');
+    for (var _ni = 0; _ni < _newFighterCards.length; _ni++) {
+      var _newCard = _newFighterCards[_ni], _nid = String(_newCard.getAttribute('data-fighter-id') || ''), _oldPair = _prevResourceBars[_nid];
+      if (!_oldPair) continue;
+      var _newFills = _newCard.querySelectorAll('.' + P + '-bar-fill');
+      for (var _bi = 0; _bi < 2; _bi++) {
+        var _fill = _newFills[_bi], _oldPct = Number(_oldPair[_bi]), _newPct = _fill ? parseFloat(_fill.style.width) : NaN;
+        if (!_fill || !isFinite(_oldPct) || !isFinite(_newPct) || Math.abs(_newPct - _oldPct) < .15) continue;
+        var _track = _fill.parentNode;
+        if (_newPct < _oldPct && _track) {
+          var _losses = _track.querySelectorAll('.' + P + '-bar-loss');
+          for (var _li = 0; _li < _losses.length; _li++) if (_losses[_li].parentNode) _losses[_li].parentNode.removeChild(_losses[_li]);
+          var _loss = _fill.ownerDocument.createElement('span');
+          _loss.className = P + '-bar-loss ' + (_bi === 0 ? 'hp' : 'mp');
+          _loss.style.left = _newPct + '%'; _loss.style.width = (_oldPct - _newPct) + '%';
+          _track.appendChild(_loss);
+          setTimeout(function (el) { return function () { try { if (el.parentNode) el.parentNode.removeChild(el); } catch (eRm) {} }; }(_loss), 1200);
+        }
+        if (!_reducedMotion) {
+          _fill.style.transition = 'none'; _fill.style.width = _oldPct + '%';
+          void _fill.offsetWidth;
+          _fill.style.removeProperty('transition');
+          (function (el, targetPct) {
+            var go = function () { try { el.style.width = targetPct + '%'; } catch (eGo) {} };
+            if (window.requestAnimationFrame) window.requestAnimationFrame(go); else setTimeout(go, 16);
+          })(_fill, _newPct);
+        }
+      }
+    }
+  } catch (eSmoothBars) {}
   /* ★ v473：轨道 DOM 被整块重建了 ⇒ 位置缓存必须作废。
      不作废的话新节点会拿**上一轮的宽度**算 translateX；换屏宽（手机转横屏、
      侧栏展开）后位置会整体偏，而且因为 '_xzTx' 去重，看着像"卡住不动"。
@@ -26806,10 +26887,12 @@ var XZ_JJB_SKIN = `
 }
 .xz-jjb-lbl::before{width:20px;height:2px;opacity:.85;background:currentColor;}
 .xz-jjb-side.foe .xz-jjb-lbl{color:#c9958d;}
-.xz-jjb-row{flex:1 1 0;min-height:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,245px),1fr));grid-auto-rows:minmax(0,1fr);align-content:stretch;gap:12px;}
-.xz-jjb-row.is-solo{grid-template-columns:minmax(0,1fr);}
-.xz-jjb-row.is-multi{overflow-y:auto;overscroll-behavior:contain;padding:0 4px 4px 0;}
-.xz-jjb-row.is-multi .xz-jjb-card{min-height:210px;}
+.xz-jjb-row{flex:1 1 0;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);grid-auto-rows:calc((100% - 12px)/2);align-content:stretch;gap:12px;}
+/* 一名出战：这张卡铺满整侧；两名：每张各占 1/2；第三名起保持相同半高，在阵营列内滚动。 */
+.xz-jjb-row.is-solo{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);grid-auto-rows:minmax(0,1fr);overflow:hidden;}
+.xz-jjb-row.is-solo .xz-jjb-card{flex:none;height:100%;min-height:0;}
+.xz-jjb-row.is-multi{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-rows:calc((100% - 12px)/2);align-content:start;overflow-y:auto;overscroll-behavior:contain;padding:0 4px 4px 0;}
+.xz-jjb-row.is-multi .xz-jjb-card{flex:none;height:100%;min-height:0;}
 .xz-jjb-card{
   min-width:0;min-height:0;display:grid;grid-template-columns:minmax(150px,36%) minmax(0,1fr);grid-template-rows:minmax(0,1fr);
   border:1px solid rgba(218,222,211,.20);border-radius:14px;overflow:hidden;cursor:pointer;
@@ -26904,7 +26987,7 @@ var XZ_JJB_SKIN = `
 .xz-jjb-pill-tgt{color:#c1cfca;}
 .xz-jjb-pill-cost{color:#8ed9d3;border-color:rgba(100,198,191,.28);background:rgba(100,198,191,.075);}
 .xz-jjb-pill-cd{color:#ffb5a6;border-color:rgba(239,123,112,.38);background:rgba(133,48,45,.25);font-weight:700;}
-.xz-jjb-see{right:4px;top:50%;transform:translateY(-50%);font-size:10px;color:#d6c48e;border-color:rgba(218,190,127,.30);background:rgba(218,190,127,.075);}
+.xz-jjb-see{right:4px;top:50%;transform:translateY(-50%);font-size:10px;color:#d6c48e;border-color:rgba(218,190,127,.42);border-left:1px solid rgba(218,190,127,.42);background:rgba(218,190,127,.075);}
 .xz-jjb-fn{flex:0 0 176px;width:176px;gap:6px;}
 .xz-jjb-fn>.xz-jjb-mb,.xz-jjb-fn>#xz-jjb-endturn,.xz-jjb-fn>#xz-jjb-flee{
   min-height:34px;border-radius:8px;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.035);
@@ -26942,9 +27025,24 @@ var XZ_JJB_SKIN = `
   .xz-jjb-lbl{margin:0 0 5px;padding:0 0 4px;font-size:8px;letter-spacing:.16em;}
   .xz-jjb-lbl::before{width:12px;}
   .xz-jjb-row{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:minmax(0,1fr);gap:5px;}
-  .xz-jjb-row.is-solo{grid-template-columns:minmax(0,1fr);}
-  .xz-jjb-row.is-multi{grid-auto-flow:column;grid-auto-columns:minmax(min(88vw,350px),88%);grid-template-rows:minmax(0,1fr);overflow-x:auto;overflow-y:hidden;padding:0 2px 3px;scroll-snap-type:x mandatory;}
-  .xz-jjb-row.is-multi .xz-jjb-card{min-height:0;scroll-snap-align:start;}
+  .xz-jjb-row.is-solo{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);grid-auto-rows:minmax(0,1fr);overflow:hidden;}
+  .xz-jjb-row.is-multi{grid-auto-flow:row;grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-rows:calc((100% - 5px)/2);align-content:start;overflow-y:auto;overflow-x:hidden;padding:0 2px 3px;scroll-snap-type:y mandatory;}
+  .xz-jjb-row.is-multi .xz-jjb-card{min-height:0;height:100%;scroll-snap-align:start;grid-template-columns:minmax(58px,22%) minmax(0,1fr);}
+  /* 手机多人半高卡：压成一行身份 + 两条短状态条 + 一栏图标；信息全部留在卡内。 */
+  .xz-jjb-row.is-multi .xz-jjb-u-info{padding:2px 5px;justify-content:center;overflow:hidden;}
+  .xz-jjb-row.is-multi .xz-jjb-top{flex-wrap:nowrap;gap:1px 3px;margin:0 0 2px;overflow:hidden;}
+  .xz-jjb-row.is-multi .xz-jjb-nm{flex:1 1 auto;min-width:0;font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .xz-jjb-row.is-multi .xz-jjb-rlm{min-width:0;max-width:54px;font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .xz-jjb-row.is-multi .xz-jjb-spd{font-size:7px;}
+  .xz-jjb-row.is-multi .xz-jjb-ebadge{font-size:7px;padding:1px 3px;}
+  .xz-jjb-row.is-multi .xz-jjb-look{font-size:7px;padding:3px 5px;}
+  .xz-jjb-row.is-multi .xz-jjb-hprow,.xz-jjb-row.is-multi .xz-jjb-mprow{gap:3px;margin-bottom:2px;}
+  .xz-jjb-row.is-multi .xz-jjb-bar-lbl{width:10px;font-size:7px;}
+  .xz-jjb-row.is-multi .xz-jjb-hp,.xz-jjb-row.is-multi .xz-jjb-mp{height:8px;}
+  .xz-jjb-row.is-multi .xz-jjb-bar-txt{font-size:7px;right:3px;}
+  .xz-jjb-row.is-multi .xz-jjb-bfs{height:15px;min-height:15px;max-height:15px;gap:2px;margin-top:1px;}
+  .xz-jjb-row.is-multi .xz-jjb-bf{width:13px;height:13px;border-radius:4px;font-size:7px;}
+  .xz-jjb-row.is-multi .xz-jjb-bf svg{width:8px;height:8px;}
   .xz-jjb-card,.xz-jjb-row.is-solo .xz-jjb-card,.xz-jjb-row.is-multi .xz-jjb-card{
     display:grid;grid-template-columns:minmax(88px,28%) minmax(0,1fr);grid-template-rows:minmax(0,1fr);
     min-height:0;height:100%;border-radius:10px;
@@ -26974,13 +27072,13 @@ var XZ_JJB_SKIN = `
   }
   .xz-jjb-skwrap{grid-row:1;grid-column:1;gap:5px;min-height:0;}
   .xz-jjb-sknav{width:24px;height:100%;min-height:44px;border-radius:8px;font-size:17px;}
-  .xz-jjb-skrow{min-height:0;gap:0;}
-  .xz-jjb-skgrp{min-height:0;width:100%;}
-  .xz-jjb-sk{min-height:54px;height:100%;max-width:none;padding:6px 24px 6px 8px;gap:7px;border-radius:9px;}
+  .xz-jjb-skrow{min-height:0;gap:6px;}
+  .xz-jjb-skgrp{align-self:stretch;flex:1 1 0;min-width:0;width:auto;}
+  .xz-jjb-sk{min-width:0;min-height:54px;height:100%;max-width:none;padding:6px 22px 6px 7px;gap:5px;border-radius:9px;}
   .xz-jjb-skname{font-size:11px;line-height:1.2;}
   .xz-jjb-skpills{gap:3px;}
   .xz-jjb-pill{font-size:8px;padding:2px 4px;}
-  .xz-jjb-see{right:3px;min-height:32px;min-width:30px;}
+  .xz-jjb-see{right:3px;width:20px;min-width:20px;min-height:32px;border-left:1px solid rgba(218,190,127,.42);border-radius:0 9px 9px 0;}
   .xz-jjb-fn{grid-row:2;grid-column:1;width:100%;flex:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:1fr;gap:5px;}
   .xz-jjb-fn>.xz-jjb-mb,.xz-jjb-fn>#xz-jjb-endturn,.xz-jjb-fn>#xz-jjb-flee{min-height:44px;height:44px;font-size:9px;white-space:nowrap;}
   .xz-jjb-hint{grid-row:1;grid-column:1;font-size:10px;}
@@ -26999,8 +27097,39 @@ var XZ_JJB_SKIN = `
   .xz-jjb-fn>.xz-jjb-mb,.xz-jjb-fn>#xz-jjb-endturn,.xz-jjb-fn>#xz-jjb-flee{min-height:40px;height:40px;}
 }
 
+/* ══ v1.3.71 · 柔和战斗动效：进场、命中、受击、蓄势、翻页、弹层 ══ */
+/* 只让最新战报入场，历史行不反复播放；滚动由 render 的 auto-follow 平滑推进。 */
+#xz-jjb-log .xz-jjb-lg,#xiuxian_timeline_atb-log-box .xiuxian_timeline_atb-log-item{animation:none;}
+#xz-jjb-log .xz-jjb-lg:last-child,#xiuxian_timeline_atb-log-box .xiuxian_timeline_atb-log-item:last-child{animation:xz-jjb-report-drop .46s cubic-bezier(.18,.78,.2,1) both;transform-origin:top center;}
+@keyframes xz-jjb-report-drop{0%{opacity:0;transform:translateY(-10px) scale(.992);filter:blur(1px)}68%{opacity:1;transform:translateY(1px) scale(1)}100%{opacity:1;transform:none;filter:none}}
+/* 生命/灵力条走更长的舒缓过渡；loss 片保留上一刻的宽度，向后退并消散。 */
+.xz-jjb-hpf,.xz-jjb-mpf,.xiuxian_timeline_atb-hpf,.xiuxian_timeline_atb-mpf{transition:width 1.08s cubic-bezier(.18,.72,.22,1),filter .42s ease;}
+.xz-jjb-bar-loss,.xiuxian_timeline_atb-bar-loss{position:absolute;top:0;bottom:0;z-index:1;display:block;border-radius:inherit;pointer-events:none;animation:xz-jjb-bar-evaporate 1.08s cubic-bezier(.18,.72,.22,1) both;}
+.xz-jjb-bar-loss.hp,.xiuxian_timeline_atb-bar-loss.hp{background:linear-gradient(90deg,rgba(248,215,180,.62),rgba(222,108,103,.36));box-shadow:0 0 9px rgba(222,108,103,.28);}
+.xz-jjb-bar-loss.mp,.xiuxian_timeline_atb-bar-loss.mp{background:linear-gradient(90deg,rgba(198,246,235,.62),rgba(97,199,189,.34));box-shadow:0 0 9px rgba(97,199,189,.26);}
+@keyframes xz-jjb-bar-evaporate{0%{opacity:.85;filter:brightness(1.35);transform:scaleX(1);transform-origin:left center}55%{opacity:.55;filter:brightness(1.12)}100%{opacity:0;filter:brightness(.8);transform:scaleX(.80)}}
+/* 受击：一次轻促的多段回弹，避免整框突然横飞。 */
+.xz-jjb-card.hit{animation:xz-jjb-impact-soft .52s cubic-bezier(.2,.72,.24,1);}
+@keyframes xz-jjb-impact-soft{0%,100%{transform:translate3d(0,0,0)}14%{transform:translate3d(-4px,1px,0)}29%{transform:translate3d(3px,-1px,0)}46%{transform:translate3d(-2px,0,0)}64%{transform:translate3d(1px,0,0)}82%{transform:translate3d(-.5px,0,0)}}
+/* 自身/友军增益：能量从卡心向边缘铺开，再逐步散去；它是独立覆盖层，不遮操作。 */
+.xz-jjb-buff-surge{position:absolute;inset:0;z-index:6;border-radius:inherit;pointer-events:none;overflow:hidden;opacity:0;clip-path:circle(0% at 50% 50%);background:radial-gradient(circle at 50% 50%,rgba(var(--buff-wave-color,107,208,189),var(--buff-wave-alpha,.38)) 0,rgba(var(--buff-wave-color,107,208,189),.15) 45%,transparent 78%);animation:xz-jjb-buff-spread 1.24s cubic-bezier(.16,.72,.22,1) both;}
+.xz-jjb-buff-surge::after{content:"";position:absolute;inset:6px;border:1px solid rgba(var(--buff-wave-color,107,208,189),.55);border-radius:inherit;box-shadow:inset 0 0 22px rgba(var(--buff-wave-color,107,208,189),.16);animation:xz-jjb-buff-ring 1.24s ease-out both;}
+@keyframes xz-jjb-buff-spread{0%{opacity:0;clip-path:circle(0% at 50% 50%)}18%{opacity:1}72%{opacity:.38;clip-path:circle(112% at 50% 50%)}100%{opacity:0;clip-path:circle(145% at 50% 50%)}}
+@keyframes xz-jjb-buff-ring{0%{transform:scale(.82);opacity:0}24%{opacity:.85}100%{transform:scale(1.035);opacity:0}}
+/* 技能分页：方向感轻推入，不缩放整个底栏，也不重新播其它组件动画。 */
+.xz-jjb-skrow.page-enter-next .xz-jjb-skgrp,.xiuxian_timeline_atb-skrow.page-enter-next .xiuxian_timeline_atb-skgrp{animation:xz-jjb-skill-next .30s cubic-bezier(.18,.75,.25,1) both;}
+.xz-jjb-skrow.page-enter-prev .xz-jjb-skgrp,.xiuxian_timeline_atb-skrow.page-enter-prev .xiuxian_timeline_atb-skgrp{animation:xz-jjb-skill-prev .30s cubic-bezier(.18,.75,.25,1) both;}
+.xz-jjb-skrow.page-enter-next .xz-jjb-skgrp:nth-child(2),.xiuxian_timeline_atb-skrow.page-enter-next .xiuxian_timeline_atb-skgrp:nth-child(2){animation-delay:.035s;}
+.xz-jjb-skrow.page-enter-prev .xz-jjb-skgrp:nth-child(2),.xiuxian_timeline_atb-skrow.page-enter-prev .xiuxian_timeline_atb-skgrp:nth-child(2){animation-delay:.035s;}
+@keyframes xz-jjb-skill-next{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
+@keyframes xz-jjb-skill-prev{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:translateX(0)}}
+/* 详情/原子说明弹层：暗幕淡入、面板从轻微下沉弹起。 */
+#xz-jjb-skill-dialog-overlay,#xz-jjb-atom-dialog-overlay,#xiuxian_timeline_atb-skill-dialog-overlay,#xiuxian_timeline_atb-atom-dialog-overlay{animation:xz-jjb-modal-veil .24s ease-out both;}
+#xz-jjb-skill-dialog-overlay>div,#xz-jjb-atom-dialog-overlay>div,#xiuxian_timeline_atb-skill-dialog-overlay>div,#xiuxian_timeline_atb-atom-dialog-overlay>div{animation:xz-jjb-modal-card .34s cubic-bezier(.18,.78,.2,1) both;transform-origin:50% 56%;}
+@keyframes xz-jjb-modal-veil{from{opacity:0}to{opacity:1}}
+@keyframes xz-jjb-modal-card{0%{opacity:0;transform:translateY(14px) scale(.975)}72%{opacity:1;transform:translateY(-1px) scale(1.005)}100%{opacity:1;transform:translateY(0) scale(1)}}
 @media (prefers-reduced-motion:reduce){
-  #xz-jjb-overlay *{animation:none !important;transition:none !important;}
+  #xz-jjb-overlay *{animation:none !important;transition:none !important;scroll-behavior:auto!important;}
 }
 `;
 
@@ -28628,15 +28757,33 @@ function build() {
     if (!node) return;
     var cls = cardCls(f);
     if (node.className !== cls) node.className = cls;
+    /* v1.3.71：受损条保留一段短暂的「旧值残影」，主体慢退到新值。 */
+    var moveResourceBar = function (fill, rawPct, kind) {
+      if (!fill) return;
+      var nextPct = Math.max(0, Math.min(100, Number(rawPct) || 0));
+      var oldPct = parseFloat(fill.style.width);
+      if (isFinite(oldPct) && nextPct < oldPct - .1 && fill.parentNode) {
+        var track = fill.parentNode, doc = track.ownerDocument;
+        var prev = track.querySelectorAll('.' + PFX + '-bar-loss');
+        for (var li = 0; li < prev.length; li++) if (prev[li].parentNode) prev[li].parentNode.removeChild(prev[li]);
+        var loss = doc.createElement('span');
+        loss.className = PFX + '-bar-loss ' + kind;
+        loss.style.left = nextPct + '%';
+        loss.style.width = (oldPct - nextPct) + '%';
+        track.appendChild(loss);
+        setTimeout(function () { try { if (loss.parentNode) loss.parentNode.removeChild(loss); } catch (eLoss) {} }, 1200);
+      }
+      fill.style.width = nextPct.toFixed(1) + '%';
+    };
     var hpf = node.querySelector('.' + PFX + '-hpf');
-    if (hpf) hpf.style.width = (f.hp / f.maxHp * 100).toFixed(1) + '%';
+    moveResourceBar(hpf, Number(f.hp) / Math.max(1, Number(f.maxHp) || 1) * 100, 'hp');
     /* ★ v64：卡内小时序条已删（用户点名），这里对应的就地更新一并摘掉 ——
        不摘的话每息都要白查一个不存在的节点；顶部时间轴仍由 renderRail/updateRail 走。 */
     /* ★ v59：灵力条就地更新（与血条同一套规则，避免只建卡时有、更新时没有） */
     var mpf = node.querySelector('.' + PFX + '-mpf');
     if (mpf) {
       var _mMax = (f.maxMp || 0);
-      mpf.style.width = (_mMax > 0 ? Math.min(100, Math.max(0, ((f.mp || 0) / _mMax) * 100)).toFixed(1) : '0') + '%';
+      moveResourceBar(mpf, (_mMax > 0 ? ((f.mp || 0) / _mMax) * 100 : 0), 'mp');
     }
     var setTxt = function (c, v) {
       var e2 = node.querySelector('.' + PFX + '-' + c);
@@ -28757,7 +28904,11 @@ function build() {
      ⚠ 桌面 `skMin = 156`：v589 实测「技能键 138 + 详 18」的自然宽。
        v590 把「详」改成绝对定位后组宽约 138，156 只会更宽松（仍 3 个/页），不要调小。 */
   function xzSkPerPageOf(winW, rowW) {
-    if (Number(winW) < 560) return 1;                    /* 手机：一页一个（作者拍板） */
+    if (Number(winW) < 560) {
+      /* v1.3.71：以真滑轨宽决定手机页容量；正常手机并排两门，极窄屏安全退回一门。 */
+      var phoneMin = 112;
+      return Math.max(1, Math.min(2, Math.floor((Number(rowW) + 8) / (phoneMin + 8))));
+    }
     var skMin = 156;
     return Math.max(1, Math.min(3, Math.floor((Number(rowW) + 8) / (skMin + 8))));
   }
@@ -29054,7 +29205,7 @@ function build() {
            （v589 刚把 _skMin 从 190 调到 156 修好"第三个技能钻第二栏"）。
          ⚠ 不许改回去：v479 的「一栏三个」是当年为"名字只显示一个字"找的**反向**解，
            现在宽度够了才发现根子是"不该塞三个"。 */
-      if (_winW < 560) PER_PAGE = 1;
+      /* 手机容量也走 xzSkPerPageOf 的唯一出口，不在渲染层再覆盖一遍。 */
       /* ★★★ v589：**允许 render 用实测值覆盖这一帧的页容量** ★★★
          `barHtml()` 在写 DOM 之前被调，所以它天然只能读到**上一帧**的滑轨宽。
          `_jjSkRowCalibrate` 在写完 DOM 之后量到真宽，若是另一个答案，
@@ -29311,7 +29462,13 @@ function build() {
             + (_hasD ? (' data-jjblg="1" role="button" title="点击展开 / 收起本行细节"') : '')
             + '><div class="' + PFX + '-l-' + x.k + '">' + head + '</div>' + dHtml + '</div>';
         }).join('');
-        if (_atBottom) lg.scrollTop = lg.scrollHeight;   /* ★ v108：不抢用户的滚轮 */
+        if (_atBottom) {
+          /* v1.3.71：只在读者原本贴底时平滑跟随新战报；手动往上翻时仍不抢滚轮。 */
+          var _reduceScroll = false;
+          try { _reduceScroll = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (eRm) {}
+          try { lg.scrollTo({ top: lg.scrollHeight, behavior: _reduceScroll ? 'auto' : 'smooth' }); }
+          catch (eScroll) { lg.scrollTop = lg.scrollHeight; }
+        }
       }
     }
     /* 底栏同理：它里面是**可点的「让过一手」按钮**，每息重建同样会让点击落空。 */
@@ -29515,6 +29672,16 @@ function build() {
     if (next === (Number(S.skPage) || 0)) return;   /* 到头/尾：不重绘，也不闪 */
     S.skPage = next;
     render();
+    /* v1.3.71：翻页后只给新页技能组播放轻推入；不整条底栏闪烁。 */
+    try {
+      var row = q('bar') && q('bar').querySelector('.' + PFX + '-skrow');
+      if (row) {
+        row.classList.remove('page-enter-next','page-enter-prev');
+        void row.offsetWidth;
+        row.classList.add(dir < 0 ? 'page-enter-prev' : 'page-enter-next');
+        setTimeout(function () { try { row.classList.remove('page-enter-next','page-enter-prev'); } catch (ePg) {} }, 360);
+      }
+    } catch (ePageFx) {}
   }
 
   /* ── 时序条渲染 ──

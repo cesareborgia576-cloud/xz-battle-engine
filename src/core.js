@@ -398,7 +398,7 @@ var V2_STATES = {
        ② `暴伤` 是**加法**叠加（`critMult = 1.5 + 各项`），每条来源各自封顶
           **+0.50**（见 calcDamage 那四行 `Math.min(0.50, …)`）。
           48% 是「叠层这一条自己」的贡献，不是总和 —— 它没顶到 0.50，
-          但加上灵根/玄诀/机制名的暴伤后总和会超 1.5 倍，那是既有上限的事。
+          但加上灵根/心法/机制名的暴伤后总和会超 1.5 倍，那是既有上限的事。
        ③ `track` / `slow`（行动条节奏）**永远不吃这套倍数** ——
           它们各有 B2/B3 两道闸按点数量纲钉着（20 点 / −50），
           拿伤害百分比去乘行动条 = 写个增伤顺手改了出手顺序。
@@ -451,10 +451,10 @@ var V2_STATES = {
   '敌多增伤': { side: 'self', max: 5,  full: '军威' }                
   // ★ v7：原来这里挂了 foeAmp:0.05 / foeCut:0.015（「敌越多越强/越硬」），
   //   但这两个字段全项目**没有任何读取点**，等于永远不生效。
-  //   「敌方越多越强」现由【枪玄技自带的机制名】结算（如「枪出如龙」foeAmpK）；
+  //   「敌方越多越强」现由【枪法术自带的机制名】结算（如「枪出如龙」foeAmpK）；
   //   ★ v108：「敌方越多减伤/增伤」整条已在 v94 废除（见 11361、11593），XINFA_TABLE 里的
   //   「敌多减伤」效果项名也一并删掉 —— 纸上写着、引擎不算，是 bug ③「规则只在纸面」的同款。
-  //   流派核心机制一律归流派玄诀，不留在状态表里当摆设，也不挂在玄技上。
+  //   流派核心机制一律归流派心法，不留在状态表里当摆设，也不挂在法术上。
 };
 
 var SPIRIT_ROOT_EFFECT_KEYS = [
@@ -499,7 +499,7 @@ var SPIRIT_ROOT_EFFECT_KEYS = [
           一场架只结算一次；而《数值表》给它 40% 的封顶，写满了也就抢 120 点，
           在「起手先机 +300」面前几乎看不出来 —— 挂了等于没挂。
        ② 它有两个入口：招式机制名表 + 这条效果项正则。只删机制名表的话，
-          同一个名字在玄诀/兵器上还生效、在玄技上不生效 ——
+          同一个名字在心法/兵器上还生效、在法术上不生效 ——
           **同一条口径两种态度**，正是本项目反复踩的老形状（见 XZ_AUTO_UNSUPPORTED 的注释）。
        ⇒ 两个入口一起清。'trackOnStart' 这个**内部键仍然保留**（下面还有三处在消费它），
           只是再也不会有中文效果项把它生成出来；旧卡里已经躺着的数据照旧能跑，不炸。
@@ -511,11 +511,11 @@ var SPIRIT_ROOT_EFFECT_KEYS = [
     { re: /(增伤|伤害提高|造成伤害增加|输出提高)/,                        key: 'amp',             cap: 0.25, txt: '造成的伤害提高' },
     { re: /(减伤|承伤|伤害降低|受到伤害减少|所受伤害)/,                    key: 'dr',              cap: 0.30, txt: '受到的伤害降低' },
     /* ★★★ v300：'回血' —— 四源统一格式里**唯一真正漏读**的机制名 ★★★
-       v296 定「玄技/玄诀/兵器/灵根 同一个格式：机制:数值[:手数]｜描写」，
+       v296 定「法术/心法/兵器/灵根 同一个格式：机制:数值[:手数]｜描写」，
        上面这张表却是按**中文关键词**认的：'增伤' '减伤' '穿防' '暴击' '回蓝'
        '闪避' ~~'抢先手'~~ '气血上限' '灵力上限' '吸血' 十个名字刚好同时是关键词，
        所以写成 '增伤:18' 也能认出来 —— 只有 '回血' 不在任何一条正则里。
-       后果（实测 工具/_tmp_diag_regen）：玄诀写 '回血:6｜…' ⇒ heartBuffs 恒 '[]'、
+       后果（实测 工具/_tmp_diag_regen）：心法写 '回血:6｜…' ⇒ heartBuffs 恒 '[]'、
        一滴不回，而**零报错、零警告**，面板还写着这条效果。这就是本项目最高频的
        「算了没人乘」，只是这次连"算"都没算。
        ⇒ 补一条关键词，并让它排在 '受击回血' / '命中回血' / '吸血' **之后**
@@ -559,6 +559,7 @@ var XZ_ATOM_TYPES = {
          · 'beh'  回答「怎么算」（原来的 12 个值全在这儿）
      ═══════════════════════════════════════════════════════════════════ */
   /* ── 伤害类（本击/持续，都是对目标造成伤害）── */
+  '禁疗': { kind: '常驻减益', beh: 'healBlock' },   /* v632：封疗，消费点在 xzHeal */
   '伤害': { kind: '伤害', beh: 'damage' },
   '治疗': { kind: '常驻增益', beh: 'heal' },   '回复': { kind: '常驻增益', beh: 'heal' },
   '护盾': { kind: '常驻增益', beh: 'shield' },
@@ -1220,7 +1221,7 @@ function mechBuffsOf(f) {
      而这个函数**只读了 f.atoms 与 f.daoBuffs，压根没读 spiritRootBuffs**
      ⇒ 12 个键解析出来、面板还显示、引擎从不消费，
      而世界书《灵根规则》第四节**明文承诺它们进公式**（玩家填了却没反应，且零报错）。
-     根因就是上方那段注释自称「由 mechBuffsOf() 与机制名、玄诀机制名、大道特性走同一条通道」
+     根因就是上方那段注释自称「由 mechBuffsOf() 与机制名、心法机制名、大道特性走同一条通道」
      —— 大道特性那条真接了，灵根这条漏了。
      修法：把 spiritRootBuffs 并进来。'_fromSpiritRoot' 标记保留，供「只认机制名」的地方过滤。 */
   try {
@@ -1236,7 +1237,7 @@ function mechBuffsOf(f) {
     }
   } catch (eBB) {}
   /* ★ v281：武器 '效果' 的翻译结果（artifactBuffs）也并入这条通道。
-     世界书《数值表》§效果封顶：「灵根 / 玄诀 / 武器 **共用一份**表，不要再给它们各写一套」。
+     世界书《数值表》§效果封顶：「灵根 / 心法 / 武器 **共用一份**表，不要再给它们各写一套」。
      灵根这条早在 v94 就接进来了（上面那段），**武器这条一直没接** ——
      武器 '效果' 写「穿防 20%」只解析进 artifactParsed，没有任何消费点读它。
      接法与灵根完全一致：同一个 parseSpiritRootEffect → 同一个 buildSpiritRootBuffs → 同一个 mechBuffsOf，
@@ -1256,9 +1257,9 @@ function mechBuffsOf(f) {
       }
     }
   } catch (eAB) {}
-  /* ★★★ v284：玄诀 '效果' 的翻译结果（heartBuffs）也并入这条通道 ★★★
-     世界书《数值表》§效果封顶：「灵根 / 玄诀 / 武器 **共用一份**表」。
-     灵根 v94 接了、武器 v281 接了，**玄诀这一档一直没接** ——
+  /* ★★★ v284：心法 '效果' 的翻译结果（heartBuffs）也并入这条通道 ★★★
+     世界书《数值表》§效果封顶：「灵根 / 心法 / 武器 **共用一份**表」。
+     灵根 v94 接了、武器 v281 接了，**心法这一档一直没接** ——
      它只走 7 条 'indexOf' 白名单，写「减伤 15%，穿防 20%」这种规范话术一条都不认。
      接法与上面两段逐字同构（同一个 buildSpiritRootBuffs 产物、同样的克隆、同样的 name 标签），
      所以 mechVal / mechSumField / calcDamage 全都自动吃到，不存在第二份结算实现。 */
@@ -1269,11 +1270,39 @@ function mechBuffsOf(f) {
         if (!hb || !hb.buff || typeof hb.buff !== 'object') continue;
         var hcb = {};
         for (var hbk in hb.buff) hcb[hbk] = hb.buff[hbk];
-        hcb.name = hb.name || '玄诀·效果';
+        hcb.name = hb.name || '心法·效果';
         out.push(hcb);
       }
     }
   } catch (eHB) {}
+  /* ★ 2026-11-18：先天气运（≤3 条）与装备三槽（法宝/防具/饰品，≤4 件）。
+     与上面三段**逐字同构** —— 同一个 buildSpiritRootBuffs 产物、同样的克隆、同样的 name 标签。
+     ⚠ 这里必须真的并进来：只解析不并入是本工程最贵的一类伤（「算了却没乘」），
+       v94 / v281 / v284 三次都是同一形状（灵根、法宝、心法各漏一次）。 */
+  try {
+    if (f.destinyBuffs && f.destinyBuffs.length) {
+      for (var dbi = 0; dbi < f.destinyBuffs.length; dbi++) {
+        var db = f.destinyBuffs[dbi];
+        if (!db || !db.buff || typeof db.buff !== 'object') continue;
+        var dcb = {};
+        for (var dbk in db.buff) dcb[dbk] = db.buff[dbk];
+        dcb.name = db.name || '先天气运·效果';
+        out.push(dcb);
+      }
+    }
+  } catch (eDB) {}
+  try {
+    if (f.equipBuffs && f.equipBuffs.length) {
+      for (var ebi = 0; ebi < f.equipBuffs.length; ebi++) {
+        var eb = f.equipBuffs[ebi];
+        if (!eb || !eb.buff || typeof eb.buff !== 'object') continue;
+        var ecb = {};
+        for (var ebk in eb.buff) ecb[ebk] = eb.buff[ebk];
+        ecb.name = eb.name || '装备·效果';
+        out.push(ecb);
+      }
+    }
+  } catch (eEB) {}
   return out;
 }
 
@@ -1581,7 +1610,7 @@ function _v75ParseEffect(text) {
     if ((r.beh === 'buff' || r.beh === 'debuff') && !r.dur) r.dur = 2;   /* 修饰类默认 2 手 */
     /* ★ v448：条件机制名也必须补默认手数，否则 applyV75Effects 里
        'dur = e.dur > 0 ? e.dur : 1' 会把它当成 1 手，写「低血增伤:30」只持续一手。
-       口径与 buff 一致：修饰类默认 2 手（用户定过「玄技非即时效果最低 2 手」）。 */
+       口径与 buff 一致：修饰类默认 2 手（用户定过「法术非即时效果最低 2 手」）。 */
     if (r.beh === 'cond' && !r.dur) r.dur = 2;
     /* ★ v448：溅射同理 —— 「接下来几次攻击」不写次数就没法算，默认 2 手。 */
     if (r.beh === 'splash' && !r.dur) r.dur = 2;
@@ -1780,7 +1809,13 @@ function xzSkillKey(map, skillName) {
   var direct = xzNameKey(map, skillName);
   if (direct) return direct;
   var strip = function (s) {
-    return String(s).replace(/^\s*(?:玄技|玄诀|神通|功法|本领|技能)\s*[·•\-—_\/:：]?\s*/, '')
+    /* ★ 2026-11-18：前缀表补上旧名 `玄技 / 玄诀`。
+       招式改名（玄技→法术、玄诀→心法）之后，翻译缓存里**已经存着的键**
+       仍然是「玄技·青锋直递」（缓存按指纹校验的是效果原文，键名不在指纹里）。
+       只认新名 ⇒ 老玩家的缓存**整体失效**，表现是"翻译好了却一点用没有"，
+       而引擎一行报错都没有 —— 正是 v208 那次事故的同款。
+       ⚠ 这是「同一档的两个写法」，不是"兼容废弃字段"：键名不进任何 schema。 */
+    return String(s).replace(/^\s*(?:法术|心法|神通|功法|本领|技能|玄技|玄诀)\s*[·•\-—_\/:：]?\s*/, '')
       .replace(/[·•\-—_\/:：]/g, '').replace(/\s+/g, '');
   };
   var want = strip(skillName);
@@ -1826,7 +1861,7 @@ function xzEvadeValueOf(u) {
        灵根 / 大道 存的全是 0.12 这种），v570 之前乘 20 折点数，现在直接相加。 */
     var pts = 0;                                   /* 单位：百分点 */
     try { pts += (Number(u && u.tempEvadeBoost) || 0) * 100; } catch (e1) {}
-    /* ★ v270：常驻闪避（武器/玄诀/灵根被动）—— 以前它写在 tempEvadeBoost 上，
+    /* ★ v270：常驻闪避（武器/心法/灵根被动）—— 以前它写在 tempEvadeBoost 上，
        手数 9999 永不递减，还会把招式临时闪避顶成永久。现在独立进 _xzPerm。 */
     try { pts += xzPermOf(u).evade * 100; } catch (ePerm) {}
     try {
@@ -1978,8 +2013,8 @@ function xzCritRateOf(f, defender, opt) {
   try {
     if ((Number(f.tempCritRounds) || 0) > 0) r += Number(f.tempCritBoost) || 0.25;
     r += xzPermOf(f).crit;
-    /* 「暴击提升」三个落点：招式 effects / 玄诀·灵根 passive / 武器 artifact。
-       ★ 全覆盖探针 2026-10-14：旧口径只读 skill.effects，挂玄诀/武器的那条整条死亡。
+    /* 「暴击提升」三个落点：招式 effects / 心法·灵根 passive / 武器 artifact。
+       ★ 全覆盖探针 2026-10-14：旧口径只读 skill.effects，挂心法/武器的那条整条死亡。
          现在三处并检，0.45 只加一次（与 calcDamage 的 if/else-if 结构同义）。 */
     var _hit = false;
     if (isSkill && sk && sk.effects && sk.effects.indexOf('暴击提升') !== -1) { r += 0.45; _hit = true; }
@@ -2011,7 +2046,7 @@ function xzDrOf(f, ctx) {
   if (!f) return 0;
   var v = 0;
   try {
-    /* ★★★ v484：**必须读常驻三源**（灵根 / 玄诀 / 武器）★★★
+    /* ★★★ v484：**必须读常驻三源**（灵根 / 心法 / 武器）★★★
        用户 2026-10-31：「没挂上，因为里面减伤值什么的没变化，都是 0」
                 「战报里说 0，然后面板里减伤值等也确实没变化」。
 

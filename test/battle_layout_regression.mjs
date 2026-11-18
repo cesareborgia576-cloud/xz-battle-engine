@@ -100,6 +100,33 @@ for (const vp of [{name:'desktop',width:1280,height:800},{name:'phone',width:390
   check(src.includes("moveResourceBar(hpf,")&&src.includes("moveResourceBar(mpf,"),'真实战斗血/灵条使用旧值残影缓退');
   check(src.includes("row.classList.add(dir < 0 ? 'page-enter-prev' : 'page-enter-next')"),'真实技能翻页接入方向入场动画');
   check(src.includes('#xiuxian_timeline_atb-skill-dialog-overlay'),'主战斗详情弹层也覆盖入场动画');
+  /* v1.3.72：三套战报版式 + 表头切换 + 查看 */
+  check(src.includes('function jjbLogStyleOf')&&src.includes('function jjbParseLogEntry'),'三版式共用一份结构化解析入口');
+  check(src.includes("function jjbLogRowA")&&src.includes("function jjbLogRowB")&&src.includes("function jjbLogRowC"),'A/B/C 三套渲染器齐备');
+  check(src.includes("data-jjblogstyle")&&src.includes("localStorage.setItem('xz_jjb_log_style'"),'版式切换入口与跨局持久化在位');
+  check(src.includes('.xz-jjb-loghead{')&&src.includes('.xz-jjb-lga{')&&src.includes('.xz-jjb-lgb{')&&src.includes('.xz-jjb-lgc{'),'三版式与表头样式齐备');
+  check(src.includes('var _ma = String(x.t).match(')&&src.includes('var _mb = _ma ? null : String(x.t).match('),'v403 锚点语句形状保持（渲染正则可被闸抠出）');
+  check(src.includes('>查看</button>')&&!src.includes('>详</button>'),'查看按钮文案落位');
+  const styleDom = await page.evaluate(() => {
+    const log=document.getElementById('xz-jjb-log');
+    log.innerHTML='<div class="xz-jjb-loghead"><b>战况记录</b><span class="xz-jjb-logtabs"><button class="xz-jjb-logtab" aria-selected="true">⏱ 时间轴</button><button class="xz-jjb-logtab" aria-selected="false">⚔ 交锋卡</button><button class="xz-jjb-logtab" aria-selected="false">📜 战场纪事</button></span></div>'
+      +'<div class="xz-jjb-logstream">'
+      +'<article class="xz-jjb-lg xz-jjb-lga ally" id="rowA"><div class="xz-jjb-lga-turn"><span>1</span><small>我方</small></div><div class="xz-jjb-lga-main"><div class="xz-jjb-lga-line"><b>测试</b><i>施展</i><strong>雷鸣掌</strong><em>→ 敌</em></div></div><div class="xz-jjb-lga-dmg"><b>−120</b><small>气血</small></div></article>'
+      +'<article class="xz-jjb-lg xz-jjb-lgb enemy" id="rowB"><header><span class="xz-jjb-lgb-idx">2</span><b class="foe-name">敌</b><span class="xz-jjb-lgb-arrow">对</span><b class="ally-name">测试</b><time>敌方行动</time></header><div class="xz-jjb-lgb-skill"><span class="xz-jjb-lgb-sigil foe-sigil">剑</span><div><strong>青锋直递</strong></div><span class="xz-jjb-lgb-result hit">命中</span></div><footer><span class="xz-jjb-lgb-desc"></span><span class="xz-jjb-lgb-impact enemy-impact"><b>−80</b><small>气血</small></span></footer></article>'
+      +'<article class="xz-jjb-lg xz-jjb-lgc ally" id="rowC"><div class="xz-jjb-lgc-rail"><span>3</span></div><div class="xz-jjb-lgc-body"><div class="xz-jjb-lgc-kicker"><span>我方出手</span><small></small></div><div class="xz-jjb-lgc-title">雷鸣掌<span>命中 敌</span></div><div class="xz-jjb-lgc-foot"><span class="xz-jjb-lgc-impact">🩸 <b>120</b> 气血</span></div></div></article>'
+      +'</div>';
+    const read=id=>{const e=document.getElementById(id);const cs=getComputedStyle(e);return{display:cs.display,borderLeft:cs.borderLeftWidth,visible:cs.display!=='none'&&e.getBoundingClientRect().width>0};};
+    const tabSel=[...document.querySelectorAll('.xz-jjb-logtab')].map(b=>getComputedStyle(b).color);
+    const see=document.createElement('button');see.className='xz-jjb-see';document.body.appendChild(see);
+    const seeCS=getComputedStyle(see);
+    return {a:read('rowA'),b:read('rowB'),c:read('rowC'),tabSel,seeTop:seeCS.top,seeBorder:seeCS.borderLeftWidth,headSticky:getComputedStyle(document.querySelector('.xz-jjb-loghead')).position};
+  });
+  check(styleDom.a.display==='grid'&&styleDom.a.visible,'A 时间轴行为网格布局且可见',styleDom.a.display);
+  check(styleDom.b.visible&&styleDom.b.borderLeft==='2px','B 交锋卡带阵营侧边条',styleDom.b.borderLeft);
+  check(styleDom.c.visible,'C 战场纪事行可见',styleDom.c.display);
+  check(styleDom.headSticky==='sticky','战报表头吸顶',styleDom.headSticky);
+  check(styleDom.tabSel.length===3&&styleDom.tabSel[0]!==styleDom.tabSel[1],'三个版式页签选中态有区分',styleDom.tabSel.join(','));
+  check(styleDom.seeTop==='2px'&&styleDom.seeBorder==='1px','查看键位于卡内顶部且四边有框',styleDom.seeTop+'/'+styleDom.seeBorder);
   await page.close();
 }
 await browser.close();

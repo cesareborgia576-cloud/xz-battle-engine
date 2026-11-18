@@ -26973,7 +26973,7 @@ var XZ_JJB_SKIN = `
 .xz-jjb-skrow{gap:8px;align-items:center;}
 .xz-jjb-skgrp{align-self:stretch;}
 .xz-jjb-sk{
-  min-height:60px;max-width:none;padding:8px 12px 8px 13px;gap:10px;border-radius:10px;
+  min-height:60px;max-width:none;padding:17px 10px 6px 11px;gap:10px;border-radius:10px;
   background:linear-gradient(145deg,rgba(35,55,59,.92),rgba(14,27,32,.96));border-color:rgba(222,210,174,.18);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.065),0 5px 12px rgba(0,0,0,.2);
 }
@@ -26987,7 +26987,8 @@ var XZ_JJB_SKIN = `
 .xz-jjb-pill-tgt{color:#c1cfca;}
 .xz-jjb-pill-cost{color:#8ed9d3;border-color:rgba(100,198,191,.28);background:rgba(100,198,191,.075);}
 .xz-jjb-pill-cd{color:#ffb5a6;border-color:rgba(239,123,112,.38);background:rgba(133,48,45,.25);font-weight:700;}
-.xz-jjb-see{right:4px;top:50%;transform:translateY(-50%);font-size:10px;color:#d6c48e;border-color:rgba(218,190,127,.42);border-left:1px solid rgba(218,190,127,.42);background:rgba(218,190,127,.075);}
+/* v1.3.72：查看键移入技能卡顶部留白带（不再贴右缘竖条）；底部让位给内容 */
+.xz-jjb-see{top:2px;right:4px;bottom:auto;transform:none;width:auto;min-width:0;height:15px;min-height:15px;padding:0 7px;font-size:9px;line-height:13px;color:#d6c48e;border:1px solid rgba(218,190,127,.42);border-radius:6px;background:rgba(218,190,127,.075);}
 .xz-jjb-fn{flex:0 0 176px;width:176px;gap:6px;}
 .xz-jjb-fn>.xz-jjb-mb,.xz-jjb-fn>#xz-jjb-endturn,.xz-jjb-fn>#xz-jjb-flee{
   min-height:34px;border-radius:8px;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.035);
@@ -27074,11 +27075,11 @@ var XZ_JJB_SKIN = `
   .xz-jjb-sknav{width:24px;height:100%;min-height:44px;border-radius:8px;font-size:17px;}
   .xz-jjb-skrow{min-height:0;gap:6px;}
   .xz-jjb-skgrp{align-self:stretch;flex:1 1 0;min-width:0;width:auto;}
-  .xz-jjb-sk{min-width:0;min-height:54px;height:100%;max-width:none;padding:6px 22px 6px 7px;gap:5px;border-radius:9px;}
+  .xz-jjb-sk{min-width:0;min-height:54px;height:100%;max-width:none;padding:16px 8px 4px 7px;gap:5px;border-radius:9px;}
   .xz-jjb-skname{font-size:11px;line-height:1.2;}
   .xz-jjb-skpills{gap:3px;}
   .xz-jjb-pill{font-size:8px;padding:2px 4px;}
-  .xz-jjb-see{right:3px;width:20px;min-width:20px;min-height:32px;border-left:1px solid rgba(218,190,127,.42);border-radius:0 9px 9px 0;}
+  .xz-jjb-see{top:1px;right:3px;bottom:auto;transform:none;width:auto;min-width:0;height:14px;min-height:14px;padding:0 6px;font-size:8.5px;line-height:12px;border:1px solid rgba(218,190,127,.42);border-radius:5px;}
   .xz-jjb-fn{grid-row:2;grid-column:1;width:100%;flex:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:1fr;gap:5px;}
   .xz-jjb-fn>.xz-jjb-mb,.xz-jjb-fn>#xz-jjb-endturn,.xz-jjb-fn>#xz-jjb-flee{min-height:44px;height:44px;font-size:9px;white-space:nowrap;}
   .xz-jjb-hint{grid-row:1;grid-column:1;font-size:10px;}
@@ -27128,6 +27129,119 @@ var XZ_JJB_SKIN = `
 #xz-jjb-skill-dialog-overlay>div,#xz-jjb-atom-dialog-overlay>div,#xiuxian_timeline_atb-skill-dialog-overlay>div,#xiuxian_timeline_atb-atom-dialog-overlay>div{animation:xz-jjb-modal-card .34s cubic-bezier(.18,.78,.2,1) both;transform-origin:50% 56%;}
 @keyframes xz-jjb-modal-veil{from{opacity:0}to{opacity:1}}
 @keyframes xz-jjb-modal-card{0%{opacity:0;transform:translateY(14px) scale(.975)}72%{opacity:1;transform:translateY(-1px) scale(1.005)}100%{opacity:1;transform:translateY(0) scale(1)}}
+/* ══ v1.3.72 · 战报三版式：A 时间轴 / B 交锋卡 / C 战场纪事（表头随时切换）══ */
+#xz-jjb-log{padding:0 12px 8px;}
+#xz-jjb-log::before{display:none !important;}
+.xz-jjb-loghead{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;margin:0 -2px 6px;padding:4px 2px;background:linear-gradient(180deg,#0b171c 80%,rgba(11,23,28,.94));border-bottom:1px solid rgba(255,255,255,.09);}
+.xz-jjb-loghead b{font-size:10px;letter-spacing:.14em;color:#d7dfd8;white-space:nowrap;}
+.xz-jjb-logtabs{display:flex;gap:4px;min-width:0;}
+.xz-jjb-logtab{appearance:none;font-family:var(--xz-font);border:1px solid rgba(255,255,255,.12);border-radius:7px;background:rgba(255,255,255,.035);color:#9eafaa;padding:4px 8px;font-size:9.5px;line-height:1.2;white-space:nowrap;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:color .15s,border-color .15s,background .15s;}
+.xz-jjb-logtab:hover{color:#cfe0da;border-color:rgba(255,255,255,.2);}
+.xz-jjb-logtab[aria-selected="true"]{color:#e7d49a;border-color:rgba(218,190,127,.48);background:rgba(218,190,127,.10);box-shadow:inset 0 1px 0 rgba(255,255,255,.06);}
+.xz-jjb-logstream{display:flex;flex-direction:column;gap:6px;padding:0 1px 6px;}
+/* 三版式共用：撤掉旧圆点行基线，行内自排；入场动画沿用 last-child 那条 */
+#xz-jjb-log .xz-jjb-lg.xz-jjb-lga,#xz-jjb-log .xz-jjb-lg.xz-jjb-lgb,#xz-jjb-log .xz-jjb-lg.xz-jjb-lgc{padding:0;font-size:inherit;line-height:1.4;}
+#xz-jjb-log .xz-jjb-lg.xz-jjb-lga::before,#xz-jjb-log .xz-jjb-lg.xz-jjb-lgb::before,#xz-jjb-log .xz-jjb-lg.xz-jjb-lgc::before{display:none;}
+/* A · 战术时间轴 */
+.xz-jjb-lga{display:grid;grid-template-columns:34px minmax(0,1fr) 62px;gap:8px;align-items:center;min-height:44px;padding:6px 8px;border:1px solid rgba(255,255,255,.085);border-left:2px solid #6dc5b1;border-radius:7px;background:linear-gradient(90deg,rgba(73,137,121,.10),rgba(13,25,29,.82) 24%);}
+.xz-jjb-lga.enemy{border-left-color:#ce7169;background:linear-gradient(90deg,rgba(143,72,67,.11),rgba(17,22,25,.86) 24%);}
+.xz-jjb-lga.system{border-left-color:#c5ab6d;background:rgba(23,28,27,.76);}
+.xz-jjb-lga-turn{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.xz-jjb-lga-turn span{font-family:var(--xz-num);font-weight:700;font-size:12px;color:#d4c58e;line-height:1;font-variant-numeric:tabular-nums;}
+.xz-jjb-lga-turn small{font-size:8px;color:#7d938c;letter-spacing:.07em;line-height:1;}
+.xz-jjb-lga-main{min-width:0;}
+.xz-jjb-lga-line{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap;font-size:11px;line-height:1.4;min-width:0;}
+.xz-jjb-lga-line b{font-weight:700;color:#8fd8c5;}
+.xz-jjb-lga.enemy .xz-jjb-lga-line b{color:#e8a098;}
+.xz-jjb-lga.system .xz-jjb-lga-line b{color:#dfc984;}
+.xz-jjb-lga-line i{font-style:normal;color:#7e918b;font-size:10px;}
+.xz-jjb-lga-line strong{color:#e5d29a;font-size:11.5px;font-weight:700;}
+.xz-jjb-lga-line em{font-style:normal;color:#a9bab3;font-size:10px;}
+.xz-jjb-lga-tags{display:inline-flex;gap:4px;flex-wrap:wrap;margin-top:3px;}
+.xz-jjb-lga-tags .xz-jjb-stbox{font-size:9px;}
+.xz-jjb-lga-raw{font-size:11px;color:#a9b6b0;line-height:1.5;word-break:break-word;}
+.xz-jjb-lga-dmg{text-align:right;border-left:1px solid rgba(255,255,255,.09);padding-left:7px;}
+.xz-jjb-lga-dmg b{display:block;font-family:var(--xz-num);font-weight:700;font-size:14px;color:#ef9d8e;line-height:1.1;font-variant-numeric:tabular-nums;}
+.xz-jjb-lga-dmg small{display:block;color:#83938d;font-size:8.5px;margin-top:2px;line-height:1;}
+.xz-jjb-lga-dmg.enemy-dmg b{color:#83d2c0;}
+.xz-jjb-lga-dmg.no-dmg b{color:#c8b577;}
+/* B · 交锋结算卡 */
+.xz-jjb-lgb{padding:7px 9px 6px;border:1px solid rgba(255,255,255,.10);border-radius:9px;background:linear-gradient(145deg,rgba(27,45,49,.92),rgba(9,19,23,.95));box-shadow:inset 0 1px 0 rgba(255,255,255,.045);}
+.xz-jjb-lgb.ally{border-left:2px solid rgba(106,193,171,.78);}
+.xz-jjb-lgb.enemy{border-left:2px solid rgba(205,110,102,.75);}
+.xz-jjb-lgb header{display:flex;align-items:center;gap:5px;min-width:0;}
+.xz-jjb-lgb-idx{width:20px;height:20px;flex:none;display:grid;place-items:center;border-radius:6px;background:rgba(218,190,127,.11);color:#d8c58a;font-family:var(--xz-num);font-size:9px;}
+.xz-jjb-lgb header b{font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.xz-jjb-lgb header b.ally-name{color:#a2dccd;}
+.xz-jjb-lgb header b.foe-name{color:#e6a29a;}
+.xz-jjb-lgb header b.neutral-name{color:#dfc984;}
+.xz-jjb-lgb-arrow{font-size:9px;color:#6f8580;flex:none;}
+.xz-jjb-lgb header time{margin-left:auto;font-size:8.5px;color:#768984;white-space:nowrap;flex:none;}
+.xz-jjb-lgb-skill{display:flex;align-items:center;gap:8px;margin:6px 0 5px;padding:5px 8px;border-radius:7px;background:rgba(3,10,13,.42);border:1px solid rgba(255,255,255,.045);}
+.xz-jjb-lgb-sigil{width:22px;height:22px;flex:none;display:grid;place-items:center;border-radius:7px;color:#9cddce;background:rgba(82,161,142,.15);border:1px solid rgba(112,197,177,.24);font-size:11px;font-weight:700;}
+.xz-jjb-lgb-sigil.foe-sigil{color:#e79c94;background:rgba(168,76,68,.16);border-color:rgba(206,111,102,.26);}
+.xz-jjb-lgb-skill strong{display:block;font-size:11.5px;color:#e3d29e;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.xz-jjb-lgb-result{margin-left:auto;padding:2px 7px;border-radius:999px;font-size:8.5px;line-height:1.4;white-space:nowrap;color:#a7decf;background:rgba(78,147,124,.13);border:1px solid rgba(105,190,163,.24);flex:none;}
+.xz-jjb-lgb-result.miss{color:#e4bc8a;background:rgba(151,102,49,.12);border-color:rgba(210,165,101,.23);}
+.xz-jjb-lgb-result.buff-res{color:#d9c584;background:rgba(160,128,60,.12);border-color:rgba(218,190,127,.24);}
+.xz-jjb-lgb footer{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;}
+.xz-jjb-lgb-desc{min-width:0;color:#9aa9a3;font-size:9.5px;line-height:1.4;word-break:break-word;}
+.xz-jjb-lgb-impact{text-align:right;white-space:nowrap;flex:none;}
+.xz-jjb-lgb-impact b{font-family:var(--xz-num);font-weight:700;font-size:13px;color:#ed9e90;font-variant-numeric:tabular-nums;}
+.xz-jjb-lgb-impact small{margin-left:4px;font-size:8.5px;color:#80918a;}
+.xz-jjb-lgb-impact.enemy-impact b{color:#85d2c1;}
+.xz-jjb-lgb-impact.no-impact b{color:#d6bf7c;font-size:10px;}
+.xz-jjb-lgb-effects{display:flex;gap:4px;flex-wrap:wrap;min-width:0;}
+.xz-jjb-lgb-effects .xz-jjb-stbox{font-size:9px;}
+/* C · 战场纪事 */
+.xz-jjb-lgc{display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;padding:0 0 8px;position:relative;}
+.xz-jjb-lgc::after{content:"";position:absolute;left:13px;top:24px;bottom:0;width:1px;background:linear-gradient(180deg,rgba(118,193,174,.38),rgba(255,255,255,.04));}
+.xz-jjb-lgc.enemy::after{background:linear-gradient(180deg,rgba(203,112,103,.42),rgba(255,255,255,.04));}
+.xz-jjb-logstream .xz-jjb-lgc:last-child::after{display:none;}
+.xz-jjb-lgc-rail{position:relative;z-index:1;display:flex;justify-content:center;}
+.xz-jjb-lgc-rail span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;border:1px solid rgba(110,195,174,.42);background:#102126;color:#9bdacb;font-family:var(--xz-num);font-size:9px;box-shadow:0 0 0 4px rgba(8,17,21,.65);}
+.xz-jjb-lgc.enemy .xz-jjb-lgc-rail span{border-color:rgba(203,112,103,.48);color:#e3a098;background:#271719;}
+.xz-jjb-lgc.system .xz-jjb-lgc-rail span{border-color:rgba(218,190,127,.4);color:#dfc984;background:#20201a;}
+.xz-jjb-lgc-body{min-width:0;padding-top:1px;}
+.xz-jjb-lgc-kicker{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#8dcdbb;font-size:8.5px;letter-spacing:.12em;}
+.xz-jjb-lgc.enemy .xz-jjb-lgc-kicker{color:#d9958d;}
+.xz-jjb-lgc-kicker small{color:#71847e;letter-spacing:.03em;font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.xz-jjb-lgc-title{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:3px;color:#e3d29b;font-size:12.5px;font-weight:700;}
+.xz-jjb-lgc-title span{font-size:9.5px;font-weight:500;color:#a8bbb4;}
+.xz-jjb-lgc-body p{margin:4px 0 5px;color:#b0beb8;font-size:10.5px;line-height:1.55;}
+.xz-jjb-lgc-foot{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
+.xz-jjb-lgc-foot>span{font-size:9px;color:#83938d;}
+.xz-jjb-lgc-impact{padding:3px 6px;border:1px solid rgba(205,111,102,.25);border-radius:5px;background:rgba(151,58,54,.12);color:#ef9f91;}
+.xz-jjb-lgc-impact b{font-family:var(--xz-num);font-weight:700;font-size:11px;}
+.xz-jjb-lgc-impact.foe-impact{border-color:rgba(105,190,163,.24);background:rgba(65,135,113,.11);color:#91d8c5;}
+.xz-jjb-lgc-impact.none-impact{color:#d8c788;border-color:rgba(218,190,127,.22);background:rgba(148,117,50,.11);}
+.xz-jjb-lgc-chips{display:flex;gap:4px;flex-wrap:wrap;}
+.xz-jjb-lgc-chips .xz-jjb-stbox{font-size:9px;}
+@media (max-width:700px){
+  #xz-jjb-log{padding:0 10px 6px;}
+  .xz-jjb-loghead{min-height:30px;margin-bottom:5px;gap:5px;}
+  .xz-jjb-loghead b{font-size:8.5px;}
+  .xz-jjb-logtab{padding:4px 6px;font-size:8px;}
+  .xz-jjb-logstream{gap:4px;}
+  .xz-jjb-lga{grid-template-columns:28px minmax(0,1fr) 50px;gap:5px;min-height:42px;padding:5px 6px;}
+  .xz-jjb-lga-line{font-size:10px;gap:4px;}
+  .xz-jjb-lga-line strong{font-size:10.5px;}
+  .xz-jjb-lga-dmg{padding-left:5px;}
+  .xz-jjb-lga-dmg b{font-size:12px;}
+  .xz-jjb-lgb{padding:5px 7px;}
+  .xz-jjb-lgb-idx{width:18px;height:18px;}
+  .xz-jjb-lgb header b{font-size:9px;}
+  .xz-jjb-lgb-skill{margin:4px 0 3px;padding:4px 6px;}
+  .xz-jjb-lgb-desc{font-size:8.5px;}
+  .xz-jjb-lgc{grid-template-columns:22px minmax(0,1fr);gap:6px;padding-bottom:6px;}
+  .xz-jjb-lgc-rail span{width:22px;height:22px;font-size:8px;}
+  .xz-jjb-lgc::after{left:11px;top:20px;}
+  .xz-jjb-lgc-title{font-size:11px;gap:6px;}
+  .xz-jjb-lgc-title span{font-size:8.5px;}
+  .xz-jjb-lgc-body p{font-size:9.5px;line-height:1.45;margin:3px 0 4px;}
+  .xz-jjb-lgc-kicker,.xz-jjb-lgc-kicker small{font-size:7.5px;}
+}
+
 @media (prefers-reduced-motion:reduce){
   #xz-jjb-overlay *{animation:none !important;transition:none !important;scroll-behavior:auto!important;}
 }
@@ -27814,6 +27928,20 @@ function build() {
       }
       /* ★ v161：技能滑轨的换组箭头（‹ ›）—— 必须排在选招之前，
          否则箭头落在底栏里会被其它分支误吃。 */
+      /* ★ v1.3.72：战报版式切换（A/B/C）—— 排在技能导航之前，避免被其它分支误吃。
+         切换后清掉日志签名并重绘，表头 aria-selected 与列表一起更新。 */
+      var _logTab = (e.target && e.target.closest) ? e.target.closest('[data-jjblogstyle]') : null;
+      if (_logTab) {
+        e.stopPropagation();
+        var _st = String(_logTab.getAttribute('data-jjblogstyle') || '').toLowerCase();
+        if (XZ_LOG_STYLES.indexOf(_st) >= 0) {
+          if (S) S.logStyle = _st;
+          try { localStorage.setItem('xz_jjb_log_style', _st); } catch (eLSt) {}
+          try { var _lgEl = q('log'); if (_lgEl) _lgEl.setAttribute(PFX + '-logsig', ''); } catch (eLgClr) {}
+          render();
+        }
+        return;
+      }
       var navBtn = (e.target && e.target.closest) ? e.target.closest('[data-jjbsknav]') : null;
       if (navBtn) {
         if (navBtn.disabled) return;
@@ -29071,7 +29199,7 @@ function build() {
           + (isCooling ? pill('cd', '冷却 ' + cdLeft) : '')
           + '</span>'
           + '</span></button>'
-          + '<button type="button" class="' + PFX + '-see" data-jjblook="' + i + '" title="查看这门法术的效果">详</button>'
+          + '<button type="button" class="' + PFX + '-see" data-jjblook="' + i + '" title="查看这门法术的效果">查看</button>'
           + '</span>';
       });
       /* ★★ v234（用户）：「普通攻击在杂项里了，但是却在技能栏又显示了一次，
@@ -29309,6 +29437,176 @@ function build() {
     } catch (eB) {}
   }
 
+  /* ══════════ v1.3.72 · 战报三版式（A 时间轴 / B 交锋卡 / C 战场纪事）══════════
+     用户 2026-11-19：「都要把，界面内随时切换」。
+     · 结构化解析只有一份（jjbParseLogEntry）；_ma / _mb 两条正则的字面量被
+       工具/_v403_log_format.mjs 抠出来与拼装方成对验，语句形状不许改写
+       （病历：v401/v403/v633 三次「句式改了一边、正则没跟」都是这里红）。
+     · 三套渲染器只管排版；旧的单行经典版式由三版式取代，不再保留第四入口。
+     · 选择持久化：S.logStyle（本局）+ localStorage（跨局）；非法值一律回 A。 */
+  var XZ_LOG_STYLES = ['a', 'b', 'c'];
+  function jjbLogStyleOf() {
+    var v = String((S && S.logStyle) || '').toLowerCase();
+    if (XZ_LOG_STYLES.indexOf(v) < 0) {
+      try { v = String(localStorage.getItem('xz_jjb_log_style') || '').toLowerCase(); } catch (eLS) { v = ''; }
+      if (XZ_LOG_STYLES.indexOf(v) < 0) v = 'a';
+      if (S) S.logStyle = v;
+    }
+    return v;
+  }
+  function jjbLogHeadHtml(style) {
+    var tab = function (key, label) {
+      return '<button type="button" class="' + PFX + '-logtab" data-jjblogstyle="' + key + '"'
+        + ' aria-selected="' + (style === key ? 'true' : 'false') + '">' + label + '</button>';
+    };
+    return '<div class="' + PFX + '-loghead"><b>战况记录</b>'
+      + '<span class="' + PFX + '-logtabs" role="tablist">'
+      + tab('a', '⏱ 时间轴') + tab('b', '⚔ 交锋卡') + tab('c', '📜 战场纪事')
+      + '</span></div>';
+  }
+  function jjbParseLogEntry(x) {
+    var t = String(x.t == null ? '' : x.t);
+    var pd = { kind: 'raw', raw: t, side: (x.side || x.k), who: '', skill: '', target: '', dmg: '', missed: false, status: '', add: true };
+    if (x.k === 'ally' || x.k === 'enemy') {
+      pd.side = x.k;
+      var _tk = (x.k === 'ally') ? 'enemy' : 'ally';
+      var _ma = String(x.t).match(/^(.+?) 用 (.+?) 攻击了 ([^，]+)，(?:被闪避，?|造成\s*(?:<[^>]+>)*\s*(\d+)\s*(?:<[^>]+>)*\s*(?:伤害)?\s*(?:🩸)?)(?:（[^（）]*退出战局）)?$/);
+      var _mb = _ma ? null : String(x.t).match(/^(.+?) (对自己使用|对 [^，]+? 使用) ([^，]+?)(?:，获得了 ([\s\S]*?) 状态)?$/);
+      if (_ma) {
+        pd.kind = 'atk'; pd.who = _ma[1]; pd.skill = _ma[2]; pd.target = _ma[3];
+        pd.dmg = _ma[4] || ''; pd.missed = !_ma[4]; pd.targetSide = _tk;
+      } else if (_mb) {
+        pd.kind = 'buff-cast'; pd.who = _mb[1]; pd.skill = _mb[3]; pd.status = _mb[4] || '';
+        pd.target = (String(_mb[2]) === '对自己使用') ? _mb[1]
+          : String(_mb[2]).replace(/^对\s*/, '').replace(/\s*使用$/, '');
+        pd.targetSide = (pd.target === pd.who) ? x.k : _tk;
+      }
+    } else if (x.k === 'buff') {
+      pd.kind = 'state'; pd.who = String(x.who || ''); pd.status = String(x.buff || ''); pd.add = !!x.add;
+    } else if (x.k === 'note') {
+      pd.kind = 'note';
+    }
+    return pd;
+  }
+  function jjbLogRowA(pd, no, dHtml) {
+    var isAct = (pd.kind === 'atk' || pd.kind === 'buff-cast');
+    var turnNo = isAct ? String(no) : (pd.kind === 'state' ? '✦' : '·');
+    var turnLabel = isAct ? (pd.side === 'ally' ? '我方' : '敌方') : (pd.kind === 'state' ? '状态' : '战报');
+    var line = '';
+    if (pd.kind === 'atk') {
+      line = '<b>' + esc(pd.who) + '</b><i>施展</i><strong>' + esc(pd.skill) + '</strong><em>→ ' + esc(pd.target) + '</em>';
+    } else if (pd.kind === 'buff-cast') {
+      line = '<b>' + esc(pd.who) + '</b><i>运转</i><strong>' + esc(pd.skill) + '</strong><em>→ ' + esc(pd.target) + '</em>';
+    } else if (pd.kind === 'state') {
+      line = '<b>' + esc(pd.who) + '</b><i>' + (pd.add ? '获得' : '失去') + '</i><strong>' + esc(pd.status) + '</strong>';
+    } else {
+      line = '<span class="' + PFX + '-lga-raw">' + jjbLogRest(pd.raw) + '</span>';
+    }
+    var tags = (pd.kind === 'buff-cast' && pd.status) ? ('<span class="' + PFX + '-lga-tags">' + jjbStatusBox(pd.status) + '</span>') : '';
+    var dmgB = '—', dmgS = '战报', dmgCls = ' no-dmg';
+    if (pd.kind === 'atk') {
+      if (pd.dmg) { dmgB = '−' + pd.dmg; dmgS = '气血'; dmgCls = (pd.side === 'enemy' ? ' enemy-dmg' : ''); }
+      else { dmgB = '—'; dmgS = '闪避'; }
+    } else if (pd.kind === 'buff-cast') { dmgB = '＋'; dmgS = '增益'; }
+    else if (pd.kind === 'state') { dmgB = pd.add ? '＋' : '−'; dmgS = '状态'; }
+    return '<div class="' + PFX + '-lga-turn"><span>' + turnNo + '</span><small>' + turnLabel + '</small></div>'
+      + '<div class="' + PFX + '-lga-main"><div class="' + PFX + '-lga-line">' + line + '</div>' + tags + dHtml + '</div>'
+      + '<div class="' + PFX + '-lga-dmg' + dmgCls + '"><b>' + dmgB + '</b><small>' + dmgS + '</small></div>';
+  }
+  function jjbLogRowB(pd, no, dHtml) {
+    var isAct = (pd.kind === 'atk' || pd.kind === 'buff-cast');
+    var idx = isAct ? String(no) : (pd.kind === 'state' ? '✦' : '·');
+    var head = '', skillRow = '', footL = '', footR = '';
+    if (pd.kind === 'atk') {
+      head = '<span class="' + PFX + '-lgb-idx">' + idx + '</span>'
+        + '<b class="' + (pd.side === 'ally' ? 'ally-name' : 'foe-name') + '">' + esc(pd.who) + '</b>'
+        + '<span class="' + PFX + '-lgb-arrow">对</span>'
+        + '<b class="' + (pd.side === 'ally' ? 'foe-name' : 'ally-name') + '">' + esc(pd.target) + '</b>'
+        + '<time>' + (pd.side === 'ally' ? '我方行动' : '敌方行动') + '</time>';
+      skillRow = '<div class="' + PFX + '-lgb-skill">'
+        + '<span class="' + PFX + '-lgb-sigil' + (pd.side === 'enemy' ? ' foe-sigil' : '') + '">' + esc(String(pd.skill || '·').substr(0, 1)) + '</span>'
+        + '<div><strong>' + esc(pd.skill) + '</strong></div>'
+        + '<span class="' + PFX + '-lgb-result' + (pd.dmg ? '' : ' miss') + '">' + (pd.dmg ? '命中' : '闪避') + '</span>'
+        + '</div>';
+      footR = '<span class="' + PFX + '-lgb-impact' + (pd.dmg ? (pd.side === 'enemy' ? ' enemy-impact' : '') : ' no-impact') + '">'
+        + '<b>' + (pd.dmg ? ('−' + pd.dmg) : '闪避') + '</b>'
+        + '<small>' + (pd.dmg ? '气血' : '落空') + '</small></span>';
+    } else if (pd.kind === 'buff-cast') {
+      head = '<span class="' + PFX + '-lgb-idx">' + idx + '</span>'
+        + '<b class="ally-name">' + esc(pd.who) + '</b>'
+        + '<span class="' + PFX + '-lgb-arrow">作用于</span>'
+        + '<b class="' + (pd.targetSide === 'enemy' ? 'foe-name' : 'ally-name') + '">' + esc(pd.target) + '</b>'
+        + '<time>增益施放</time>';
+      skillRow = '<div class="' + PFX + '-lgb-skill">'
+        + '<span class="' + PFX + '-lgb-sigil">' + esc(String(pd.skill || '·').substr(0, 1)) + '</span>'
+        + '<div><strong>' + esc(pd.skill) + '</strong></div>'
+        + '<span class="' + PFX + '-lgb-result buff-res">增益</span>'
+        + '</div>';
+      footL = pd.status ? ('<span class="' + PFX + '-lgb-effects">' + jjbStatusBox(pd.status) + '</span>') : '';
+    } else if (pd.kind === 'state') {
+      head = '<span class="' + PFX + '-lgb-idx">' + idx + '</span>'
+        + '<b class="' + (pd.side === 'enemy' ? 'foe-name' : 'ally-name') + '">' + esc(pd.who) + '</b>'
+        + '<span class="' + PFX + '-lgb-arrow">' + (pd.add ? '获得' : '失去') + '</span>'
+        + '<b class="neutral-name">' + esc(pd.status) + '</b>'
+        + '<time>状态变化</time>';
+      footL = '<span class="' + PFX + '-lgb-effects">' + jjbStatusBox(pd.status) + '</span>';
+    } else {
+      head = '<span class="' + PFX + '-lgb-idx">' + idx + '</span><b class="neutral-name">战报</b><time>播报</time>';
+      footL = '<span class="' + PFX + '-lgb-desc">' + jjbLogRest(pd.raw) + '</span>';
+    }
+    if (!footL) footL = '<span class="' + PFX + '-lgb-desc"></span>';
+    if (!footR) footR = '';
+    return '<header>' + head + '</header>'
+      + skillRow
+      + '<footer>' + footL + footR + '</footer>'
+      + dHtml;
+  }
+  function jjbLogRowC(pd, no, dHtml) {
+    var isAct = (pd.kind === 'atk' || pd.kind === 'buff-cast');
+    var railNo = isAct ? String(no) : (pd.kind === 'state' ? '✦' : '·');
+    var kicker = '', titleMain = '', titleSub = '', body = '', foot = '';
+    if (pd.kind === 'atk') {
+      kicker = (pd.side === 'ally' ? '我方出手' : '敌方出手');
+      titleMain = esc(pd.skill);
+      titleSub = (pd.dmg ? '命中 ' : '被闪避 · ') + esc(pd.target);
+      foot = pd.dmg
+        ? ('<span class="' + PFX + '-lgc-impact' + (pd.side === 'enemy' ? ' foe-impact' : '') + '">🩸 <b>' + pd.dmg + '</b> 气血</span>')
+        : '<span class="' + PFX + '-lgc-impact none-impact">判定落空</span>';
+    } else if (pd.kind === 'buff-cast') {
+      kicker = '增益施放';
+      titleMain = esc(pd.skill);
+      titleSub = '作用于 ' + esc(pd.target);
+      foot = pd.status ? ('<span class="' + PFX + '-lgc-chips">' + jjbStatusBox(pd.status) + '</span>') : '';
+    } else if (pd.kind === 'state') {
+      kicker = pd.add ? '获得状态' : '失去状态';
+      titleMain = esc(pd.status);
+      titleSub = esc(pd.who);
+      foot = '<span class="' + PFX + '-lgc-chips">' + jjbStatusBox(pd.status) + '</span>';
+    } else {
+      kicker = '战报播报';
+      body = '<p>' + jjbLogRest(pd.raw) + '</p>';
+    }
+    return '<div class="' + PFX + '-lgc-rail"><span>' + railNo + '</span></div>'
+      + '<div class="' + PFX + '-lgc-body">'
+      + '<div class="' + PFX + '-lgc-kicker"><span>' + kicker + '</span><small></small></div>'
+      + (titleMain ? ('<div class="' + PFX + '-lgc-title">' + titleMain + '<span>' + titleSub + '</span></div>') : '')
+      + body
+      + (foot ? ('<div class="' + PFX + '-lgc-foot">' + foot + '</div>') : '')
+      + dHtml
+      + '</div>';
+  }
+  function jjbRenderLogRow(pd, x, style, actionNo, dHtml, hasD) {
+    var rowCls = PFX + '-lg xz-jjb-lg' + style;
+    if (pd.kind === 'atk' || pd.kind === 'buff-cast') rowCls += (pd.side === 'ally' ? ' ally' : ' enemy');
+    else if (pd.kind === 'state') rowCls += (pd.side === 'enemy' ? ' enemy' : ' ally');
+    else rowCls += ' system';
+    if (hasD) rowCls += ' ' + PFX + '-lghas';
+    var attrs = hasD ? ' data-jjblg="1" role="button" title="点击展开 / 收起本行细节"' : '';
+    var body = (style === 'a') ? jjbLogRowA(pd, actionNo, dHtml)
+      : (style === 'b') ? jjbLogRowB(pd, actionNo, dHtml)
+        : jjbLogRowC(pd, actionNo, dHtml);
+    return '<article class="' + rowCls + '"' + attrs + '>' + body + '</article>';
+  }
   function render() {
     if (!S) return;
     diffBuffs();                 /* ★ v433：状态增减写进战报（放在重建日志之前，当帧就能看到） */
@@ -29343,125 +29641,30 @@ function build() {
           if (x.k === 'note' && _items.length) _items[_items.length - 1].notes.push(x);
           else _items.push({ main: x, notes: [] });
         });
-        lg.innerHTML = _items.map(function (it) {
-          var x = it.main;
-          var head;
-          if (x.k === 'ally' || x.k === 'enemy') {
-            var _tk = (x.k === 'ally') ? 'enemy' : 'ally';
-            /* ★★★ v168：新句式（用户：「xx 用 xx 攻击了 xx，血量变化，xx 获得了 xx 状态，
-               然后人名和状态都要用美化小框」）
-                 攻击：'A 用 招式 攻击了 B，B 气血 X → Y（-N），获得了 状态 状态'
-                 增益：'A 对自己使用 招式，获得了 状态 状态'
-               ⚠ 招式名用小框时类名必须是 '-skn'（skill name），**不能用 '-sk'** ——
-                 '-sk' 是技能键（'width:190px;height:44px'），战报里套上会变成一个巨大的方块。
-                 这是 v163 埋下的坑，这次一并修掉。 */
-            /* ★★ v236（严重 bug）：玩家报「战报把 <b class=... 源码露出来了」。
-               ① 句式在 v234 改成「造成 N 伤害，当前剩余 M 气血」，这里正则还在等「气血 A → B」
-                  ⇒ 每条攻击行都掉进兜底分支；
-               ② 兜底写的是 jjbLogRest(esc(x.t)) —— 把正文里的小框标签整段转义。
-               ⇒ 正则同时认新旧句式；数字从捕获组重新生成标签（不回读原文 HTML）；
-                 兜底不再转义（push 侧已对名字/招式名 esc）。 */
-            /* ⚠ 正文里的数字被 -nb 小框包着（<b class="xz-nb">36</b>），
-               所以正则必须允许「标签夹在中间」，否则匹配不上又会掉回兜底。
-               ★★★ v324：句式再次变动（用户：「战报区域的剩余血量不要显示了，只显示造成多少伤害，
-               加个血滴的 emoj」）⇒ 现在是 '…造成 [36] 伤害 🩸'，**不再有「当前剩余 M 气血」**。
-               ★ v325 自检修正：原来这里写着「老日志还在存档里」——**那句是错的**。
-                 'S.log' 是纯内存数组（push 时超过 120 条就 shift，从不写变量、不写 localStorage），
-                 刷新即没了 ⇒ 旧句式**根本不可能出现**，'_maHp' / '_maOld' 两条分支是死代码。
-                 更要紧的是：'_maHp' 那条**会印出「当前剩余 N 气血」** —— 正是用户点名要删的东西。
-                 留着它等于给自己留一条「复活」的路（本工程铁律：删掉的东西不许复活）。
-                 ⇒ 三条正则仍全部保留（旧文本万一从别处来，也不至于掉进裸文本兜底），
-                   但**输出口径统一成新句式**：任何分支都不再印剩余血量。 */
-            /* ★ v401：正则里「伤害」改成**可选**。
-               用户要求战报写「造成 52 🩸」之后，旧的 '…(\d+)\s*伤害' 匹配不上
-               ⇒ '_ma' 为 null ⇒ 整行落到兜底裸文本 ⇒ **界面美化全没了**
-                 （'-lghp' 红字小框、名字框、技能名全丢）。
-               这正是 '_v298_report_plain' ③ 抓到的那条：
-                 渲染结果里没有 -lghp：'<div class="xz-jjb-lg"><div class="xz-jjb-l-note">…'
-               ⇒ 正则和渲染必须**成对改**：少改一边，正文对了、界面就废了。 */
-            /* ★★★ v403：两种合法的行尾以前匹配不上，整行掉进兜底（人名框/技能名框全丢）：
-                 ① 被闪避  → 拼装出来是 '…，被闪避，'（'_hpPart' 前面还带一个逗号，末尾也多一个）
-                 ② 击杀    → 拼装出来是 '…，造成 <b>45</b> 🩸（剑修·萧决 退出战局）'
-                 实测（2026-10-26）用真实拼装串喂旧正则：命中 ✓ / 闪避 ✗ / 击杀 ✗ / 旧句式 ✓。
-                 症状正是 v247/v255 反复报过的那个「只有血数字有颜色，名字和招式名没框」。
-               ⇒ 只放宽**行尾允许的尾巴**，主体句式的严格性一点没松：
-                 闪避后面那个多余逗号可有可无；击杀那对括号可有可无。
-               ⚠ 改这里必须同时跑 工具/_v403_log_format.mjs —— 它把 04 的战报拼装
-                 与界面渲染的正则当成一对来验，少改一边就红。 */
-            /* ★★★ v633（真 bug，用户 2026-10-29 报「战报里的双方名字颜色美化又掉了」的
-               最后一个真凶）★★★
-               `_mb` 原来**强制要求**行尾是「，获得了 … 状态」。
-               而 v255 为了修「获得了 无 状态」那段废话，明确改成「没有状态就什么都不拼」
-               （`_buffPart` 为空）—— 两件事合起来就是：
-                 · 增益技**没获得任何状态**时（`_bfs` 为空：常驻项全被 `n>=999` 跳过、
-                   或本来就只是摆个架势），拼出来是「A 对自己使用 招式」，
-                   **没有尾巴** ⇒ `_mb` 匹配不上 ⇒ 整行掉进 `jjbLogRest` 兜底
-                   ⇒ 名字没有小框、没有阵营色、招式名也不是金框。
-               ⇒ 这正是玩家说的「名字颜色美化掉了」，且**只在增益行出现**，
-                 攻击行完全正常 —— 所以历次排查都只盯着 CSS，看不出是正则。
-               ⚠ 修法是**把尾巴整体变成可选**，不是把「获得了 无 状态」加回去：
-                 那句废话是用户点名要删的，加回去等于为了迁就判据复活一个已下架的写法。
-               ⚠ 尾巴可选之后，`_mb[4]` 可能是空 ⇒ 下面的渲染必须跟着分支，
-                 否则会印出「获得了  状态」这种两个空格的残句。 */
-            var _ma = String(x.t).match(/^(.+?) 用 (.+?) 攻击了 ([^，]+)，(?:被闪避，?|造成\s*(?:<[^>]+>)*\s*(\d+)\s*(?:<[^>]+>)*\s*(?:伤害)?\s*(?:🩸)?)(?:（[^（）]*退出战局）)?$/);
-            var _mb = _ma ? null : String(x.t).match(/^(.+?) (对自己使用|对 [^，]+? 使用) ([^，]+?)(?:，获得了 ([\s\S]*?) 状态)?$/);
-            if (_ma) {
-              /* v324：闪避那一手没有伤害数字（_ma[4] 为空）⇒ 只写「被闪避」，
-                 不补「当前剩余」—— 那一栏整个下架了。 */
-              head = '<span class="' + PFX + '-nmbox ' + x.k + '">' + esc(_ma[1]) + '</span>'
-                   + '<span class="' + PFX + '-lgkw">用</span>'
-                   + '<span class="' + PFX + '-skn">' + esc(_ma[2]) + '</span>'
-                   + '<span class="' + PFX + '-lgkw">攻击了</span>'
-                   + '<span class="' + PFX + '-nmbox ' + _tk + '">' + esc(_ma[3]) + '</span>'
-                   + (_ma[4]
-                       ? ('<span class="' + PFX + '-lgkw">，造成</span>'
-                          + '<span class="' + PFX + '-lghp">' + esc(_ma[4]) + '</span>'
-                          /* ★ v401：不再印「伤害」两个字 —— 与正文那句同口径。
-                             数字本身红字加粗 + 🩸，语境已经够清楚。 */
-                          + '<span class="' + PFX + '-lgkw"> 🩸</span>')
-                       : '<span class="' + PFX + '-lgkw">，被闪避</span>');
-            } else if (_mb) {
-              /* ★ v633：尾巴可能不存在（增益技没获得任何状态）——
-                 这时**不拼**「，获得了 / 状态」两截，否则会印出「获得了  状态」。 */
-              head = '<span class="' + PFX + '-nmbox ' + x.k + '">' + esc(_mb[1]) + '</span>'
-                   + '<span class="' + PFX + '-lgkw">' + esc(_mb[2]) + '</span>'
-                   + '<span class="' + PFX + '-skn">' + esc(_mb[3]) + '</span>'
-                   + (_mb[4] ? ('<span class="' + PFX + '-lgkw">，获得了</span>'
-                      + jjbStatusBox(_mb[4])
-                      + '<span class="' + PFX + '-lgkw">状态</span>') : '');
-            } else head = jjbLogRest(String(x.t));
-          } else if (x.k === 'buff') {
-            /* ★ v433：状态增减**单独成一条**，不塞进攻击行的折叠区 ——
-               玩家要的是"什么时候掉的、掉的是什么"，藏进细节里等于没说。 */
-            head = '<span class="' + PFX + '-nmbox ' + (x.side === 'enemy' ? 'enemy' : 'ally') + '">' + esc(x.who) + '</span>'
-              + '<span class="' + PFX + '-lgkw">' + (x.add ? '获得' : '失去') + '</span>'
-              + jjbStatusBox(x.buff)
-              + '<span class="' + PFX + '-lgkw">状态</span>';
-          } else if (x.k === 'note') {
-            /* note 行是引擎播报（含 span style 上色），同样不能再转义 */
-            head = '<span class="' + PFX + '-note">（' + String(x.t) + '）</span>';
-          } else {
-            /* ★ v247（用户第 5 次报「战报美化没生效」）：
-               除了上面两条精确句式，其余行（sys / turn / 任何 k）原来是**裸文本** 'String(x.t)'
-               —— 只要句式对不上正则，整行就是白字，玩家自然觉得「美化全没了」。
-               ⇒ 兜底也过一遍 jjbLogRest：伤害、气血、状态该染色照样染色。 */
-            head = jjbLogRest(String(x.t));
-          }
-          /* 行尾长括号（施展…耗灵…第 N 息…）也进折叠区，不再常显 */
-          var _details = it.notes.map(function (nt) { return nt.t; });
-          if (x.n) _details.unshift(x.n);
-          var _hasD = _details.length > 0;
-          var dHtml = _hasD
-            ? ('<div class="' + PFX + '-lgd">'
-                + _details.map(function (t2) {
-                    return '<div class="' + PFX + '-lgdline">' + esc(t2) + '</div>';
-                  }).join('')
-                + '</div>')
-            : '';
-          return '<div class="' + PFX + '-lg' + (x.k === 'ally' ? ' a' : (x.k === 'enemy' ? ' e' : '')) + (_hasD ? (' ' + PFX + '-lghas') : '') + '"'
-            + (_hasD ? (' data-jjblg="1" role="button" title="点击展开 / 收起本行细节"') : '')
-            + '><div class="' + PFX + '-l-' + x.k + '">' + head + '</div>' + dHtml + '</div>';
-        }).join('');
+        /* v1.3.72：三版式渲染。结构化解析一次（jjbParseLogEntry），渲染器只管排版；
+           签名机制、折叠细节（data-jjblg）与贴底平滑跟随全部保留。 */
+        var _logStyle = jjbLogStyleOf();
+        lg.setAttribute('data-logstyle', _logStyle);
+        var _actionNo = 0;
+        lg.innerHTML = jjbLogHeadHtml(_logStyle)
+          + '<div class="' + PFX + '-logstream">'
+          + _items.map(function (it) {
+              var x = it.main;
+              var _pd = jjbParseLogEntry(x);
+              if (_pd.kind === 'atk' || _pd.kind === 'buff-cast') _actionNo++;
+              var _details = it.notes.map(function (nt) { return nt.t; });
+              if (x.n) _details.unshift(x.n);
+              var _hasD = _details.length > 0;
+              var dHtml = _hasD
+                ? ('<div class="' + PFX + '-lgd">'
+                    + _details.map(function (t2) {
+                        return '<div class="' + PFX + '-lgdline">' + esc(t2) + '</div>';
+                      }).join('')
+                    + '</div>')
+                : '';
+              return jjbRenderLogRow(_pd, x, _logStyle, _actionNo, dHtml, _hasD);
+            }).join('')
+          + '</div>';
         if (_atBottom) {
           /* v1.3.71：只在读者原本贴底时平滑跟随新战报；手动往上翻时仍不抢滚轮。 */
           var _reduceScroll = false;

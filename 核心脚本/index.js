@@ -6113,12 +6113,16 @@ function xzCdOf(f, sk) {
 }
 /* 本手打完，给这一招上冷却；同一手内其它招各减 1（冷却按"手"走）。
    ⚠ 顺序不能反：**先减后记**，否则刚放的那一招会被自己这一手减掉 1（少 1 手冷却）。 */
-function xzCdSettle(f, usedSk) {
+function xzCdSettle(f, usedSk, advanceHand) {
   if (!f) return;
   if (!f.cdMap || typeof f.cdMap !== 'object') f.cdMap = {};
-  for (var k in f.cdMap) {
-    var v = Number(f.cdMap[k]) || 0;
-    if (v > 0) f.cdMap[k] = v - 1;
+  /* 每名角色每消耗一手，所有正在转的 CD 各减 1。
+     advanceHand=false 只用于不占手的神通「额外动作」：给本招上 CD，但不推进其它招的 CD。 */
+  if (advanceHand !== false) {
+    for (var k in f.cdMap) {
+      var v = Number(f.cdMap[k]) || 0;
+      if (v > 0) f.cdMap[k] = v - 1;
+    }
   }
   var key = xzCdKeyOf(usedSk);
   if (!key) return;
@@ -10760,7 +10764,8 @@ function executeDivine(actor, target) {
   actor.dv.gauge = 0;
   /* ★ 2026-11-18：上冷却走统一状态机（6 手），不再写 f.dv.cd。
      两套冷却同时存在的话，"这个能不能放"会有两个答案，而 UI 只显示其中一个。 */
-  try { if (typeof xzCdSettle === 'function') xzCdSettle(actor, sk); } catch (eCdD) {}
+  /* 神通是额外动作，不消耗常规手序：只给神通自身上 CD，不帮其它招减 CD。 */
+  try { if (typeof xzCdSettle === 'function') xzCdSettle(actor, sk, false); } catch (eCdD) {}
   actor.dv.used++;
   if (actor.isPlayer) BattleState.dvReadyNotified = false;
   /* ★★★ v282：这里原来在记录「本场绽放过的招式名 + 所属路」——
@@ -23150,7 +23155,13 @@ var XZJJ = (function () {
        能点亮却放不出来 = 假按钮。点了就说清"还要几手"。 */
     var _cblk = xzCdOf(me, (me.skills && me.skills[i]) || null);
     if (_cblk > 0) {
+      /* ★★★ CD 回归修复：清掉旧选择，不能留下上一手的 S.skPick ★★★
+         病根：冷却挡住「选择技能」时只 toast 然后 return；上一手的技能索引仍留在 S.skPick。
+         随后点目标，onCardClick 会把这个旧索引交给 act() —— action 入口又没再验 CD，
+         于是玩家看到冷却却仍能放，或者看着技能亮着反复放。 */
+      S.skPick = -1;
       try { toast(xzCdBlockMsg(me, me.skills && me.skills[i]), 'warn'); } catch (eB3) {}
+      try { render(); } catch (eCdPick) {}
       return;
     }
     S.skPick = i;
@@ -23280,6 +23291,19 @@ var XZJJ = (function () {
       if (!S.over) timer = setTimeout(step, GAP_AI);
       return;
     }
+    /* ★★★ v651：最后一道冷却闸必须在 waiting/track/handTotal 改动前 ★★★
+       目标点击会复用 S.skPick；旧版只在 pickSkill() 检查，过期的选择索引仍可能
+       被目标点击送进 act()。检查晚于核销 = toast 了却已经偷走一手。 */
+    if (forcedSk && xzCdOf(actor, forcedSk) > 0) {
+      var _cdMsgAct = xzCdBlockMsg(actor, forcedSk);
+      if (actor.isPlayer) {
+        if (S) S.skPick = -1;
+        try { toast(_cdMsgAct, 'warn'); } catch (eCdToast) {}
+        try { render(); } catch (eCdRender) {}
+        return;
+      }
+      forcedSk = null;
+    }
     /* ★ v64：灵力不够的招**放不出来**。
        · 玩家路径（forcedSk 已指定）：直接拒绝，并把「差多少」说清，这一手不消耗；
        · AI 路径（forcedSk === undefined）：自动退回普通攻击（普攻不耗灵），不让它空挥。 */
@@ -23346,6 +23370,9 @@ var XZJJ = (function () {
        ⚠ 位置：必须在 sk 定下来之后、召唤之前 —— 召唤是"这招的效果"，
          先记账再结算效果，即使效果抛错，这一手的冷却也算数（不记就变成能无限连放）。 */
     try { xzCdSettle(actor, sk); } catch (eCdS) {}
+    /* ★ v651：出手后立刻清选招索引。下一次行动必须重新明确选技能；
+       不能把上一手的 index 带进下一回合，再由目标点击隐式复用。 */
+    if (actor.isPlayer && S) S.skPick = -1;
     /* ★★★ v364：**召唤**的消费点就在这儿 ★★★
        招式效果里写了 '召唤:…' ⇒ 本手把这个单位叫出来。
        为什么放这里、而不是塞进 calcDamage / applyV75Effects：
@@ -26697,6 +26724,281 @@ var XZ_JJB_SKIN = `
 @media (max-width:560px) and (max-height:700px){
   /* v567：矮屏也不再给 solo 单独压立绘 */
 }
+/* ══════════════════════════════════════════════════════════════════════════
+   v651 · 玄门战阵 HUD：实战布局重做
+   方向：游戏战斗场景 / 可读状态 / 触控优先，不动任何伤害与结算机制。
+   结构沿用真实 shell：顶栏 → 先手轨道 → 双阵卡 → 战报 → 固定技能坞。
+   ══════════════════════════════════════════════════════════════════════════ */
+#xz-jjb-overlay{
+  padding:12px;
+  background:radial-gradient(ellipse at 50% 0%,rgba(36,71,81,.56),transparent 48%),rgba(2,7,10,.90);
+  backdrop-filter:blur(8px) saturate(1.12);
+}
+#xz-jjb-frame{
+  left:50%;top:12px;width:min(1180px,calc(100vw - 32px));
+  height:calc(100dvh - 24px);max-height:calc(100dvh - 24px);
+  transform:translateX(-50%);
+  border:1px solid rgba(199,164,99,.52);border-radius:18px;
+  background:linear-gradient(180deg,#101c23 0%,#071117 100%);
+  box-shadow:0 30px 100px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.025);
+}
+#xz-jjb-atmo{opacity:.72;}
+#xz-jjb-atmo::before{
+  height:54%;filter:blur(1px);
+  background:radial-gradient(70% 120% at 22% 110%,rgba(60,119,126,.17),transparent 65%),
+    radial-gradient(55% 90% at 78% 110%,rgba(137,88,50,.13),transparent 62%),
+    linear-gradient(180deg,transparent,rgba(1,5,8,.78));
+}
+#xz-jjb-head{
+  flex:none;min-height:58px;padding:10px 18px;gap:12px;
+  background:linear-gradient(180deg,rgba(25,42,49,.98),rgba(12,25,31,.96));
+  border-bottom:1px solid rgba(202,171,112,.28);
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
+}
+#xz-jjb-seal{
+  width:36px;height:36px;border-radius:10px;
+  background:linear-gradient(145deg,#d0aa63,#80612f);
+  border:1px solid rgba(255,230,174,.72);color:#10171a;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 4px 14px rgba(0,0,0,.32);
+}
+#xz-jjb-title{font-size:15px;letter-spacing:.18em;color:#f2eee5;}
+#xz-jjb-caption::after{
+  content:"天元 · 战术演武";font-size:10px;letter-spacing:.12em;color:#93a8a8;
+  padding-left:9px;border-left:1px solid rgba(255,255,255,.12);
+}
+#xz-jjb-head > button{min-height:36px;padding:0 13px;border-radius:8px;background:rgba(255,255,255,.035);}
+#xz-jjb-head > button:hover{background:rgba(255,255,255,.09);}
+#xz-jjb-restart{margin-left:auto;}
+#xz-jjb-close{border-color:rgba(255,255,255,.12);}
+#xz-jjb-rail{
+  flex:none;height:44px;margin:0 18px;padding:0 2px;
+  border-bottom:1px solid rgba(255,255,255,.10);
+}
+#xz-jjb-rail::before{content:"行动序列";font-size:10px;letter-spacing:.12em;color:#91a6a7;margin-right:15px;}
+#xz-jjb-railline{left:76px;right:86px;height:3px;background:linear-gradient(90deg,rgba(105,209,188,.28),rgba(203,217,207,.15) 52%,rgba(239,123,112,.28));}
+#xz-jjb-railfill{left:76px;height:3px;background:linear-gradient(90deg,#70cfbd,#d7c28c);box-shadow:0 0 10px rgba(112,207,189,.3);}
+#xz-jjb-railgrid{left:76px;right:86px;opacity:.55;}
+#xz-jjb-nodes{left:76px;right:86px;}
+.xz-jjb-node{width:23px;height:23px;margin:-11.5px 0 0 -11.5px;border-radius:7px;background:#17272e;border-color:rgba(227,230,217,.35);font-size:10px;box-shadow:0 2px 5px rgba(0,0,0,.4);}
+.xz-jjb-node.ally{color:#a5e2d8;border-color:rgba(117,213,194,.52);}
+.xz-jjb-node.enemy{color:#f0b2ac;border-color:rgba(239,123,112,.56);}
+.xz-jjb-node.now{background:#6bd0bd;color:#08211f;border-color:#c4fff0;box-shadow:0 0 0 3px rgba(107,208,189,.18),0 0 18px rgba(107,208,189,.64);}
+.xz-jjb-node.enemy.now{background:#ef7b70;color:#250d0b;border-color:#ffd0c8;box-shadow:0 0 0 3px rgba(239,123,112,.18),0 0 18px rgba(239,123,112,.58);}
+#xz-jjb-railtag{color:#d5dfda;border-color:rgba(255,255,255,.18);background:rgba(4,12,16,.76);}
+#xz-jjb-sides{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;
+  flex:1 1 0;min-height:0;position:relative;z-index:2;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 45%,rgba(178,149,92,.075),transparent 52%);
+}
+#xz-jjb-sides::before{
+  content:"VS";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;
+  width:34px;height:34px;display:grid;place-items:center;border-radius:50%;
+  color:#d9c28b;background:#111e23;border:1px solid rgba(218,190,127,.34);
+  font:700 10px var(--xz-num);letter-spacing:.06em;box-shadow:0 0 0 6px rgba(8,17,21,.55),0 6px 18px rgba(0,0,0,.4);
+  pointer-events:none;
+}
+.xz-jjb-side{flex:none;min-width:0;min-height:0;padding:12px 20px 14px;display:flex;flex-direction:column;}
+.xz-jjb-side.mate{background:linear-gradient(135deg,rgba(37,87,80,.20),rgba(11,25,29,.12) 60%);}
+.xz-jjb-side.foe{background:linear-gradient(225deg,rgba(105,47,48,.20),rgba(23,17,21,.12) 60%);border-left:1px solid rgba(222,205,169,.20);}
+.xz-jjb-lbl{
+  flex:none;margin:0 0 10px;padding:0 0 8px;border-bottom:1px solid rgba(255,255,255,.11);
+  font-size:10px;letter-spacing:.22em;color:#9bb2ad;text-transform:uppercase;
+}
+.xz-jjb-lbl::before{width:20px;height:2px;opacity:.85;background:currentColor;}
+.xz-jjb-side.foe .xz-jjb-lbl{color:#c9958d;}
+.xz-jjb-row{flex:1 1 0;min-height:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,245px),1fr));grid-auto-rows:minmax(0,1fr);align-content:stretch;gap:12px;}
+.xz-jjb-row.is-solo{grid-template-columns:minmax(0,1fr);}
+.xz-jjb-row.is-multi{overflow-y:auto;overscroll-behavior:contain;padding:0 4px 4px 0;}
+.xz-jjb-row.is-multi .xz-jjb-card{min-height:210px;}
+.xz-jjb-card{
+  min-width:0;min-height:0;display:grid;grid-template-columns:minmax(150px,36%) minmax(0,1fr);grid-template-rows:minmax(0,1fr);
+  border:1px solid rgba(218,222,211,.20);border-radius:14px;overflow:hidden;cursor:pointer;
+  background:linear-gradient(145deg,rgba(26,44,49,.96),rgba(9,20,25,.98));
+  box-shadow:0 14px 36px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.075);
+  transition:border-color .2s,transform .2s,box-shadow .2s;
+}
+.xz-jjb-card.ally{border-color:rgba(104,195,175,.35);}
+.xz-jjb-card.enemy{border-color:rgba(215,113,105,.34);}
+.xz-jjb-card::before{width:3px;opacity:1;background:linear-gradient(180deg,#88e1ca,rgba(89,176,155,.04) 90%);}
+.xz-jjb-card.enemy::before{background:linear-gradient(180deg,#f09082,rgba(197,80,76,.05) 90%);}
+.xz-jjb-card::after{height:2px;opacity:.92;background:linear-gradient(90deg,#88e1ca,rgba(89,176,155,.05) 75%);}
+.xz-jjb-card.enemy::after{background:linear-gradient(90deg,#f09082,rgba(197,80,76,.05) 75%);}
+.xz-jjb-card.active-turn{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(224,197,133,.40),0 18px 42px rgba(0,0,0,.44),0 0 30px rgba(224,197,133,.12);}
+.xz-jjb-card.active-turn::after{height:3px;}
+.xz-jjb-card.pick{border-color:#ef7b70;box-shadow:0 0 0 2px rgba(239,123,112,.2),0 0 24px rgba(239,123,112,.16);}
+.xz-jjb-card.dead{filter:grayscale(.9);opacity:.40;}
+.xz-jjb-u-art{
+  grid-column:1;grid-row:1;min-width:0;min-height:0;height:100%;position:relative;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 25%,rgba(86,158,148,.34),transparent 64%),linear-gradient(155deg,#1b3439,#0b171c);
+}
+.xz-jjb-card.enemy .xz-jjb-u-art{background:radial-gradient(ellipse at 50% 25%,rgba(164,76,69,.35),transparent 64%),linear-gradient(205deg,#3a2528,#171214);}
+.xz-jjb-u-art::after{height:34%;background:linear-gradient(180deg,transparent,rgba(7,15,19,.82));}
+.xz-jjb-u-pic{filter:brightness(.94) saturate(1.05) contrast(1.04);mask-image:linear-gradient(180deg,#000 66%,transparent 100%);-webkit-mask-image:linear-gradient(180deg,#000 66%,transparent 100%);}
+.xz-jjb-u-sil{opacity:.18;}
+.xz-jjb-u-core span{width:92px;height:92px;box-shadow:inset 0 0 42px rgba(255,120,120,.34),0 0 50px rgba(255,107,107,.24);}
+.xz-jjb-u-info{
+  grid-column:2;grid-row:1;min-width:0;margin:0;padding:16px 16px 14px;align-self:stretch;z-index:2;
+  display:flex;flex-direction:column;justify-content:center;
+  background:linear-gradient(90deg,rgba(7,16,20,.76),rgba(10,22,27,.94) 18%,rgba(10,22,27,.96));
+}
+.xz-jjb-top{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;margin:0 0 12px;min-width:0;}
+.xz-jjb-nm{font-size:17px;letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.65);}
+.xz-jjb-nm.enemy{color:#f1c2b9;}
+.xz-jjb-rlm{font-size:11px;color:#98aaa8;letter-spacing:.04em;}
+.xz-jjb-spd{font-size:10px;color:#829693;font-family:var(--xz-num);}
+.xz-jjb-ebadge{font-size:10px;padding:3px 7px;border-radius:999px;}
+.xz-jjb-look{font-size:10px;padding:5px 9px;margin-left:auto;border-radius:999px;color:#d8c99f;border-color:rgba(218,190,127,.32);background:rgba(218,190,127,.055);}
+.xz-jjb-hprow,.xz-jjb-mprow{gap:9px;margin-bottom:8px;}
+.xz-jjb-bar-lbl{width:20px;font-size:10px;color:#97a9a6;}
+.xz-jjb-hp,.xz-jjb-mp{height:13px;border-radius:4px;background:rgba(0,0,0,.42);box-shadow:inset 0 2px 4px rgba(0,0,0,.42),0 1px 0 rgba(255,255,255,.045);}
+.xz-jjb-hpf,.xz-jjb-mpf{border-radius:4px;transition:width .42s cubic-bezier(.2,.7,.2,1);}
+.xz-jjb-hpf{background:linear-gradient(90deg,#8e2630,#dd6c67);box-shadow:0 0 12px rgba(208,91,83,.22);}
+.xz-jjb-mpf{background:linear-gradient(90deg,#247b86,#61c7bd);box-shadow:0 0 12px rgba(69,182,172,.22);}
+.xz-jjb-bar-txt{right:8px;font-size:10px;color:#f5f0e5;text-shadow:0 1px 3px #000,0 0 5px #000;}
+.xz-jjb-bfs{margin-top:5px;gap:5px;height:28px;min-height:28px;max-height:28px;}
+.xz-jjb-bf{width:25px;height:25px;border-radius:7px;font-size:11px;background:rgba(8,16,19,.86);}
+.xz-jjb-bf svg{width:14px;height:14px;}
+.xz-jjb-bfn{background:#0b171b;border-radius:5px;}
+.xz-jjb-bf.good{color:#9ae3bc;background:rgba(68,146,105,.14);}
+.xz-jjb-bf.bad{color:#f0a09a;background:rgba(153,59,54,.16);}
+.xz-jjb-bf.neutral{color:#e2c983;background:rgba(160,128,60,.14);}
+#xz-jjb-log{
+  flex:0 0 clamp(128px,21vh,184px);min-height:96px;max-height:28vh;padding:0 20px 8px;
+  border-top:1px solid rgba(218,190,127,.20);border-bottom:1px solid rgba(255,255,255,.08);
+  background:linear-gradient(180deg,rgba(4,12,16,.80),rgba(6,13,17,.92));
+  scrollbar-color:rgba(201,168,106,.28) transparent;
+}
+#xz-jjb-log::before{content:"战况记录";position:sticky;top:0;display:block;z-index:2;padding:7px 0 5px;
+  color:#9aacaa;font-size:9px;letter-spacing:.2em;background:linear-gradient(180deg,#0b171c 75%,rgba(11,23,28,0));}
+.xz-jjb-lg{padding:7px 0 7px 19px;font-size:13px;line-height:1.58;color:#d1ddd7;}
+.xz-jjb-lgdline{color:#9eb0aa;font-size:11.5px;line-height:1.55;}
+.xz-jjb-lg::before{top:11px;width:7px;height:7px;background:#15272d;border-color:rgba(224,208,164,.38);}
+.xz-jjb-lg.a::before{border-color:#6ecbb7;box-shadow:0 0 8px rgba(110,203,183,.28);}
+.xz-jjb-lg.e::before{border-color:#dc786e;box-shadow:0 0 8px rgba(220,120,110,.25);}
+.xz-jjb-nmbox.ally{color:#86d8c6;}
+.xz-jjb-nmbox.enemy{color:#eaa098;}
+.xz-jjb-skn{color:#e2ca8e;border-bottom-color:rgba(226,202,142,.34);}
+.xz-jjb-lghp{color:#ef9b8e;}
+.xz-jjb-stbox{color:#a5ded3;border-color:rgba(122,205,185,.25);background:rgba(122,205,185,.07);}
+#xz-jjb-bar{
+  flex:none;height:96px;min-height:96px;max-height:96px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
+  gap:12px;align-items:center;background:linear-gradient(180deg,rgba(19,34,40,.97),rgba(8,18,22,.99));
+  border-top:1px solid rgba(210,181,117,.28);box-shadow:0 -12px 28px rgba(0,0,0,.24);
+}
+.xz-jjb-skwrap{gap:8px;}
+.xz-jjb-sknav{width:30px;height:42px;border-radius:9px;background:rgba(255,255,255,.045);color:#d3c28f;border-color:rgba(218,190,127,.20);}
+.xz-jjb-skrow{gap:8px;align-items:center;}
+.xz-jjb-skgrp{align-self:stretch;}
+.xz-jjb-sk{
+  min-height:60px;max-width:none;padding:8px 12px 8px 13px;gap:10px;border-radius:10px;
+  background:linear-gradient(145deg,rgba(35,55,59,.92),rgba(14,27,32,.96));border-color:rgba(222,210,174,.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.065),0 5px 12px rgba(0,0,0,.2);
+}
+.xz-jjb-sk::before{width:3px;}
+.xz-jjb-sk.on{background:linear-gradient(145deg,rgba(79,109,100,.72),rgba(20,38,39,.98));border-color:rgba(228,201,135,.62);box-shadow:0 0 0 1px rgba(228,201,135,.20),0 8px 18px rgba(0,0,0,.26);}
+.xz-jjb-sk:disabled{cursor:not-allowed;opacity:.57;filter:saturate(.58);}
+.xz-jjb-skname{font-size:13px;letter-spacing:.03em;}
+.xz-jjb-skpills{gap:4px;font-size:9.5px;}
+.xz-jjb-pill{padding:3px 6px;border-radius:5px;font-size:9px;background:rgba(255,255,255,.045);}
+.xz-jjb-pill-q{color:#e1c783;border-color:rgba(218,190,127,.28);background:rgba(218,190,127,.08);}
+.xz-jjb-pill-tgt{color:#c1cfca;}
+.xz-jjb-pill-cost{color:#8ed9d3;border-color:rgba(100,198,191,.28);background:rgba(100,198,191,.075);}
+.xz-jjb-pill-cd{color:#ffb5a6;border-color:rgba(239,123,112,.38);background:rgba(133,48,45,.25);font-weight:700;}
+.xz-jjb-see{right:4px;top:50%;transform:translateY(-50%);font-size:10px;color:#d6c48e;border-color:rgba(218,190,127,.30);background:rgba(218,190,127,.075);}
+.xz-jjb-fn{flex:0 0 176px;width:176px;gap:6px;}
+.xz-jjb-fn>.xz-jjb-mb,.xz-jjb-fn>#xz-jjb-endturn,.xz-jjb-fn>#xz-jjb-flee{
+  min-height:34px;border-radius:8px;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.035);
+  color:#d1dcd7;font-size:10px;letter-spacing:.025em;
+}
+.xz-jjb-fn>.xz-jjb-mb.on{color:#ead49a;border-color:rgba(218,190,127,.44);background:rgba(218,190,127,.10);}
+.xz-jjb-fn>#xz-jjb-flee{color:#efa49a;border-color:rgba(219,114,104,.30);}
+.xz-jjb-hint{font-size:12px;color:#a9bab4;}
+.xz-jjb-hint b{color:#e1cb8e;}
+.xz-jjb-startbtn{min-height:48px;padding:12px 44px;border-radius:12px;background:linear-gradient(180deg,#dec47f,#a27b3d);color:#171b19;box-shadow:0 8px 24px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.55);}
+.xz-jjb-starttip{color:#acbbb6;letter-spacing:.06em;}
+.xz-jjb-dechd b{color:#e0c783;}
+.xz-jjb-dec{min-height:38px;border-radius:8px;padding:8px 13px;background:rgba(255,255,255,.035);}
+.xz-jjb-dec.on,.xz-jjb-injbtn{background:linear-gradient(180deg,#dec47f,#a27b3d);color:#171b19;}
+.xz-jjb-injbtn{min-height:42px;}
+
+/* ── Phone HUD: same data, portrait-first composition, reachable controls ── */
+@media (max-width:700px){
+  #xz-jjb-overlay{padding:0;background:#071116;backdrop-filter:none;}
+  #xz-jjb-frame{left:0!important;top:0!important;width:100vw!important;height:100dvh!important;max-height:100dvh!important;transform:none!important;border:0;border-radius:0;}
+  #xz-jjb-head{min-height:48px;padding:7px 10px;gap:7px;}
+  #xz-jjb-seal{width:30px;height:30px;border-radius:8px;font-size:13px;}
+  #xz-jjb-title{font-size:12px;letter-spacing:.11em;}
+  #xz-jjb-caption::after{font-size:8px;padding-left:6px;letter-spacing:.04em;}
+  #xz-jjb-head>button{min-height:36px;padding:0 9px;font-size:10px;}
+  #xz-jjb-rail{height:34px;margin:0 10px;}
+  #xz-jjb-rail::before{font-size:8px;margin-right:8px;}
+  #xz-jjb-railline,#xz-jjb-railfill{left:54px;right:58px;}
+  #xz-jjb-railgrid,#xz-jjb-nodes{left:54px;right:58px;}
+  #xz-jjb-railtag{font-size:9px;padding:2px 6px;}
+  #xz-jjb-sides{display:flex;flex-direction:column;flex:1 1 0;min-height:0;}
+  #xz-jjb-sides::before{width:27px;height:27px;font-size:8px;top:50%;box-shadow:0 0 0 4px rgba(8,17,21,.75);}
+  .xz-jjb-side{flex:1 1 50%;padding:5px 8px 6px;min-height:0;}
+  .xz-jjb-side.foe{border-left:0;border-top:1px solid rgba(222,205,169,.16);}
+  .xz-jjb-lbl{margin:0 0 5px;padding:0 0 4px;font-size:8px;letter-spacing:.16em;}
+  .xz-jjb-lbl::before{width:12px;}
+  .xz-jjb-row{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:minmax(0,1fr);gap:5px;}
+  .xz-jjb-row.is-solo{grid-template-columns:minmax(0,1fr);}
+  .xz-jjb-row.is-multi{grid-auto-flow:column;grid-auto-columns:minmax(min(88vw,350px),88%);grid-template-rows:minmax(0,1fr);overflow-x:auto;overflow-y:hidden;padding:0 2px 3px;scroll-snap-type:x mandatory;}
+  .xz-jjb-row.is-multi .xz-jjb-card{min-height:0;scroll-snap-align:start;}
+  .xz-jjb-card,.xz-jjb-row.is-solo .xz-jjb-card,.xz-jjb-row.is-multi .xz-jjb-card{
+    display:grid;grid-template-columns:minmax(88px,28%) minmax(0,1fr);grid-template-rows:minmax(0,1fr);
+    min-height:0;height:100%;border-radius:10px;
+  }
+  .xz-jjb-u-art{grid-column:1;grid-row:1;min-height:0;height:100%;}
+  .xz-jjb-u-info{grid-column:2;grid-row:1;justify-content:center;padding:7px 8px 6px;margin:0;background:linear-gradient(90deg,rgba(9,20,24,.68),rgba(10,22,27,.96) 15%);}
+  .xz-jjb-top{gap:3px 5px;margin:0 0 5px;}
+  .xz-jjb-nm{font-size:12px;letter-spacing:.02em;}
+  .xz-jjb-rlm{font-size:8.5px;}
+  .xz-jjb-spd{font-size:8px;}
+  .xz-jjb-ebadge{font-size:8px;padding:1px 4px;}
+  .xz-jjb-look{padding:4px 7px;font-size:8px;}
+  .xz-jjb-hprow,.xz-jjb-mprow{gap:5px;margin-bottom:4px;}
+  .xz-jjb-bar-lbl{width:13px;font-size:8px;}
+  .xz-jjb-hp,.xz-jjb-mp{height:11px;}
+  .xz-jjb-bar-txt{font-size:8px;right:5px;}
+  .xz-jjb-bfs{height:21px;min-height:21px;max-height:21px;gap:3px;margin-top:3px;}
+  .xz-jjb-bf{width:18px;height:18px;border-radius:5px;font-size:9px;}
+  .xz-jjb-bf svg{width:11px;height:11px;}
+  #xz-jjb-log{flex:0 0 clamp(86px,15dvh,126px);min-height:82px;max-height:18dvh;padding:0 10px 4px;}
+  #xz-jjb-log::before{padding:5px 0 3px;font-size:8px;}
+  .xz-jjb-lg{font-size:10.5px;line-height:1.45;padding:4px 0 4px 15px;}
+  .xz-jjb-lg::before{top:8px;width:6px;height:6px;}
+  #xz-jjb-bar{
+    height:124px;min-height:124px;max-height:124px;padding:5px 8px calc(6px + env(safe-area-inset-bottom,0px));
+    display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) 44px;gap:5px;overflow:visible;
+  }
+  .xz-jjb-skwrap{grid-row:1;grid-column:1;gap:5px;min-height:0;}
+  .xz-jjb-sknav{width:24px;height:100%;min-height:44px;border-radius:8px;font-size:17px;}
+  .xz-jjb-skrow{min-height:0;gap:0;}
+  .xz-jjb-skgrp{min-height:0;width:100%;}
+  .xz-jjb-sk{min-height:54px;height:100%;max-width:none;padding:6px 24px 6px 8px;gap:7px;border-radius:9px;}
+  .xz-jjb-skname{font-size:11px;line-height:1.2;}
+  .xz-jjb-skpills{gap:3px;}
+  .xz-jjb-pill{font-size:8px;padding:2px 4px;}
+  .xz-jjb-see{right:3px;min-height:32px;min-width:30px;}
+  .xz-jjb-fn{grid-row:2;grid-column:1;width:100%;flex:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:1fr;gap:5px;}
+  .xz-jjb-fn>.xz-jjb-mb,.xz-jjb-fn>#xz-jjb-endturn,.xz-jjb-fn>#xz-jjb-flee{min-height:44px;height:44px;font-size:9px;white-space:nowrap;}
+  .xz-jjb-hint{grid-row:1;grid-column:1;font-size:10px;}
+  #xz-jjb-bar.is-over{height:auto;min-height:0;max-height:42dvh;display:flex;flex-direction:column;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));}
+  .xz-jjb-decrow{align-items:flex-start;flex-direction:column;gap:5px;}
+  .xz-jjb-declbl{width:auto;}
+  .xz-jjb-decbtns{width:100%;display:grid;grid-template-columns:1fr 1fr;}
+  .xz-jjb-dec{min-height:42px;}
+  .xz-jjb-injbtn{align-self:stretch;}
+}
+@media (max-width:700px) and (max-height:620px){
+  #xz-jjb-head{min-height:42px;padding:4px 8px;}
+  #xz-jjb-rail{height:28px;}
+  #xz-jjb-log{flex-basis:64px;min-height:58px;}
+  #xz-jjb-bar{height:102px;min-height:102px;max-height:102px;grid-template-rows:minmax(0,1fr) 40px;padding-top:4px;}
+  .xz-jjb-fn>.xz-jjb-mb,.xz-jjb-fn>#xz-jjb-endturn,.xz-jjb-fn>#xz-jjb-flee{min-height:40px;height:40px;}
+}
+
 @media (prefers-reduced-motion:reduce){
   #xz-jjb-overlay *{animation:none !important;transition:none !important;}
 }
@@ -27232,13 +27534,15 @@ var XZ_JJB_LEGACY = `
       try { if (window.top && window.top !== window) W = window.top; } catch (eT) {}
       var winW = Number(W.innerWidth) || 1080;
       var winH = Number(W.innerHeight) || 720;
-      var narrow = winW < 560;
+      var narrow = winW < 701;
       var sig = winW + 'x' + winH;
       if (sig === _lastPlace) return;                 /* 尺寸没变 → 不重写样式 */
       _lastPlace = sig;
-      var fw = Math.min(720, Math.round(winW * 0.94));
+      /* v651：桌面切到宽幅 RPG 控制台（最大 1180），手机真全屏。
+         设计与下面同源预览的 frame 尺寸一致：桌面留 24px 呼吸边，手机不留边。 */
+      var fw = narrow ? winW : Math.min(1180, Math.max(320, winW - 24));
       fr.style.transform = 'none';                    /* 清掉旧的 translate(-50%,-50%) 残留 */
-      fr.style.left = Math.max(8, Math.round((winW - fw) / 2)) + 'px';
+      fr.style.left = (narrow ? 0 : Math.max(12, Math.round((winW - fw) / 2))) + 'px';
       /* ★ v104：**贴顶 + 拉满**（用户原话：「电脑端的高度这么高，你根据屏幕尺寸自适应拉满高度啊」）。
          旧值 'winH/2 − 250 − 40' 是照抄斗法台的，而那个面板比现在矮得多 ——
          1080 屏算出 top=250，面板顶之上白留 250px，面板自身还矮着一大截。
@@ -27256,13 +27560,12 @@ var XZ_JJB_LEGACY = `
       var vvH = 0;
       try { if (W.visualViewport && W.visualViewport.height) vvH = Math.round(W.visualViewport.height); } catch (eVV) {}
       var useH = vvH || winH;
-      var H = Math.max(320, useH - 12);
+      var H = Math.max(320, useH - (narrow ? 0 : 24));
       fr.style.height = H + 'px';
-      fr.style.top = '6px';
+      fr.style.top = (narrow ? 0 : 12) + 'px';
       /* 高度上限与 height 同值（CSS 那层是 'calc(100vh - 16px)'，浏览器窗口比 iframe 大时它更宽松） */
       fr.style.maxHeight = H + 'px';
-      if (narrow) fr.style.width = fw + 'px';
-      else fr.style.width = '';                       /* 桌面交回 CSS 的 min(720px,94vw) */
+      fr.style.width = fw + 'px';                     /* CSS 与定位脚本共用同一实测宽度 */
     } catch (eP) {}
   }
   /* 转屏 / 改窗口大小 → 重新定位（只在浮层开着时动，省得白跑） */
@@ -28573,6 +28876,10 @@ function build() {
            用户报「放技能也不耗蓝」，根源是极简演武压根没扣；现在既扣，就得让它看得见。 */
         var cost = mpCostOf(sk);
         var lack = (cost > 0 && Number(f.mp || 0) < cost);
+        /* ★ v651：冷却是独立不可用原因，显示在招式卡上而不是只在 toast 里报。 */
+        var cdLeft = xzCdOf(f, sk);
+        var isCooling = cdLeft > 0;
+        var unavailable = lack || isCooling;
         /* ★ v156（用户三条口径，逐一照做）：
            ① 「技能图标不用有字」—— 图标是纯图形，不再压属性字；
            ② 「名字衔接着图标」—— 图标与名字之间只留 6px，读成一枚整体；
@@ -28599,8 +28906,9 @@ function build() {
         };
         return '<span class="' + PFX + '-skgrp">'
           + '<button type="button" class="' + PFX + '-sk' + (i === idx ? ' on' : '')
-          + (lack ? (' ' + PFX + '-sklack') : '') + '" data-jjbsk="' + i + '"'
-          + (lack ? ' title="灵力不足（需 ' + cost + '，现有 ' + Number(f.mp || 0) + '）"' : '')
+          + (unavailable ? (' ' + PFX + '-sklack') : '') + '" data-jjbsk="' + i + '"'
+          + (unavailable ? ' disabled' : '')
+          + (isCooling ? ' title="冷却中，还要 ' + cdLeft + ' 手"' : (lack ? ' title="灵力不足（需 ' + cost + '，现有 ' + Number(f.mp || 0) + '）"' : ''))
           + '>'
           + '<span class="' + PFX + '-skico" style="--ico:' + _icol + '"></span>'
           + '<span class="' + PFX + '-sktx">'
@@ -28609,6 +28917,7 @@ function build() {
           + pill('q', _q)
           + pill('tgt', _tgt)
           + pill('cost', cost > 0 ? (cost + '灵') : '无耗')
+          + (isCooling ? pill('cd', '冷却 ' + cdLeft) : '')
           + '</span>'
           + '</span></button>'
           + '<button type="button" class="' + PFX + '-see" data-jjblook="' + i + '" title="查看这门法术的效果">详</button>'

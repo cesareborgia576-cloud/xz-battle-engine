@@ -653,8 +653,12 @@ const HIT_HANDOFF_TO = '工具/_v228_hitroll.mjs';
      加了引号它会把引号当路径的一部分 ⇒ 报 MODULE_NOT_FOUND（实测踩过）。
      另外要转成正斜杠：Windows 上反斜杠在 NODE_OPTIONS 里会被当转义吃掉。 */
   const preloadPath = path.join(ROOT, '工具/_xz_preload.cjs').replace(/\\/g, '/');
+  /* Preserve the host-provided Node shim (WorkBuddy sandbox / Windows path routing).
+     Replacing NODE_OPTIONS used to drop that shim; in this environment the child then
+     exits via SIGTERM before the coverage gate can print anything. Append our preload. */
+  const inheritedNodeOptions = String(process.env.NODE_OPTIONS || '').trim();
   const env = Object.assign({}, process.env, {
-    NODE_OPTIONS: '--require ' + preloadPath,
+    NODE_OPTIONS: (inheritedNodeOptions ? inheritedNodeOptions + ' ' : '') + '--require ' + preloadPath,
   });
   let out = '', failMsg = null;
   try {

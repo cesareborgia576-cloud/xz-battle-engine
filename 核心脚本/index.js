@@ -28214,16 +28214,34 @@ var XZ_JJB_LEGACY = `
     } catch (e) {}
     try { return d0().body || d0().documentElement; } catch (e2) { return null; }
   }
+  /* ★★★ 2026-11-22：战斗界面打开期间，让**状态栏整块跳过渲染** ★★★
+     ── 量化（真 Chrome，04+05 同时跑，打 8 手）──
+       仅 04：57 FPS / P50 16.7 / P95 16.8 / >32ms 23 帧
+       04+05：37.6 FPS / P50 16.8 / P95 49.9 / >32ms 162 帧
+       + 05 的 `.xz-root` 设 `content-visibility:hidden`：58.5 FPS / P95 16.8 / >32ms 9 帧
+     ⇒ 卡的不是战斗引擎，是**盖在弹层底下、仍在布局/绘制/跑 CSS 动画的状态栏**。
+     标记挂 top 的 <html>，05 一条 CSS 吃掉；关面板就摘掉，不改变任何布局尺寸。 */
+  function xzBattleUiPause(on) {
+    try {
+      var w = (window.top && window.top.document) ? window.top : window;
+      var d = w.document;
+      if (!d || !d.documentElement) return;
+      if (on) d.documentElement.setAttribute('data-xz-battle', '1');
+      else d.documentElement.removeAttribute('data-xz-battle');
+    } catch (e) {}
+  }
   function xzOverlayShow(ov) {
     if (!ov) return;
     /* ★ v248：每次打开战斗界面都确保样式在位 —— 战报的小框、横幅的定位都靠它。 */
     try { if (typeof xzEnsureStyles === 'function') xzEnsureStyles(ov); } catch (eSt) {}
     try { ov.classList.add('on'); } catch (e) {}
+    try { xzBattleUiPause(true); } catch (eP1) {}
     try { if (!ov.open && typeof ov.showModal === 'function') ov.showModal(); } catch (e2) { try { ov.setAttribute('open', ''); } catch (e3) {} }
   }
   function xzOverlayHide(ov) {
     if (!ov) return;
     try { ov.classList.remove('on'); } catch (e) {}
+    try { xzBattleUiPause(false); } catch (eP2) {}
     try { if (ov.open && typeof ov.close === 'function') ov.close(); } catch (e2) {}
   }
 

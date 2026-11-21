@@ -1036,9 +1036,9 @@ var QUALITY_POWER = { '凡阶': 61, '黄阶': 74, '玄阶': 102, '地阶': 131, 
 /* ══════════════════════════════════════════════════════════════════════════
    ★ 2026-11-18 超级大更新：冷却 + 神通
    ──────────────────────────────────────────────────────────────────────────
-   一、冷却（作者原话：「冷却根据品级，冷却默认为2手」）
+   一、冷却（作者 2026-11-19 改口径：「法术的冷却太久了，统一改成 2，神通保持 6 不变」）
        单位是**手**（这个单位出一手 → 扣一条行动条），不是"回合"。
-       品阶越低冷却越短，神阶 4 手 —— 与耗蓝同向（越强的招越贵、越难连发）。
+       ★ 现在**所有品阶的法术一律 2 手**（原阶梯凡1/黄2/玄2/地3/天3/神4太长，高阶法术几乎放不出第二次）。神通仍 6 手。
        缺省值就在这里，**唯一真相源**。招式里写了 `冷却` 就以写的为准（白名单已搬进 cd）。
    二、神通（作者原话：「神通的伤害打出来是同级别法术的 3 倍；冷却改为开局可使用，
        使用后冷却 6 回合」）
@@ -1049,7 +1049,7 @@ var QUALITY_POWER = { '凡阶': 61, '黄阶': 74, '玄阶': 102, '地阶': 131, 
          一场常规斗法（十几二十手）里最多放两三次，是「底牌」而不是「平A」。
    ⚠ 改这两个数要同步改世界书《设定-效果表》与《设定-数值表》—— 两处口径必须一致。
    ══════════════════════════════════════════════════════════════════════════ */
-var XZ_CD_DEFAULT = { '凡阶': 1, '黄阶': 2, '玄阶': 2, '地阶': 3, '天阶': 3, '神阶': 4, '神通': 6 };
+var XZ_CD_DEFAULT = { '凡阶': 2, '黄阶': 2, '玄阶': 2, '地阶': 2, '天阶': 2, '神阶': 2, '神通': 6 };
 var XZ_DIVINE_DMG_MULT = 3.0;
 /* ══════════════════════════════════════════════════════════════
    【定档公式（v228 现行）】
@@ -2671,6 +2671,33 @@ function profLevelOf(v) {
 /* 已学本领（记录型：法术 / 心法）。
    ★ v77：原来硬编码走 '主角信息.' 一条路，NPC 传进来恒为空 —— 现在先认
    「该角色对象自身就有已学本领」，再回落到主角路径。两处调用点（主角 / NPC）共用。 */
+  /* ★★★ 2026-11-19（作者）：「给我战斗开场白写一个神通啊，不然我怎么测试」★★★
+     ── 查出来的真相 ──────────────────────────────────────────────────────────
+       主角/敌人的招式表只从 learnedMapOf(…, '法术') 取，**已学本领.神通 从来没被读**。
+       所以变量里明明写了 4 道神通，战斗里一门都看不到、也放不出来 —— 不是数据没写，
+       是这条路压根没接。作者要测神通特效，自然无从测起。
+     ── 做法 ──────────────────────────────────────────────────────────────────
+       把 已学本领.神通 并进同一张招式表，并打上 种类:'神通'：
+         · normalizeSkillItem 认 种类 ⇒ 伤害 ×3（XZ_DIVINE_DMG_MULT）、冷却缺省 6 手；
+         · 战斗技能坞与法术同一套按钮，点得出来、测得到。
+       ⚠ 只在**键名不冲突**时并入：同名神通与法术并存时保留法术那条（法术是主路径）。 */
+  function mergeDivineIntoSkills(map, root) {
+    try {
+      var dv = learnedMapOf(root, '神通');
+      for (var k in dv) {
+        if (!Object.prototype.hasOwnProperty.call(dv, k)) continue;
+        var it = dv[k];
+        if (!it || typeof it !== 'object' || Array.isArray(it)) continue;
+        if (Object.prototype.hasOwnProperty.call(map, k)) continue;
+        it.种类 = '神通';
+        if (!it.神通名) it.神通名 = k;
+        if (!it.法术名) it.法术名 = k;
+        map[k] = it;
+      }
+    } catch (eDv) {}
+    return map;
+  }
+
 function learnedMapOf(charRoot, kind) {
   var learned = (charRoot && charRoot.已学本领 && charRoot.已学本领[kind])
     || (charRoot && charRoot.主角信息 && charRoot.主角信息.已学本领 && charRoot.主角信息.已学本领[kind])
@@ -4672,6 +4699,18 @@ function xzSkillRole(type, pos) {
   return '进攻';
 }
 var SPIRIT_ROOT_EFFECT_KEYS = [
+    /* ★★★ 2026-11-20：`残血增伤` 补一条专属规则，必须排在**最前面** ★★★
+       ── 病历 ──
+         `残血增伤` 一直在 `XZ_PASSIVE_WORDS` 白名单里（白名单替它背书说"合法"），
+         但本表没有对应正则 ⇒ 它被下面那条宽泛的 `/增伤/` 抢先命中，读成 `amp`（常驻 +N%），
+         **零报错**。玩家写「血越低增伤越高」，拿到的是「一直 +N%」——
+         与 v581 清掉的那四个死词同一类病，只是这条更隐蔽：不是"没效果"，是"效果错成另一个"。
+       ── 为什么 key 用 lowHpAmpK ──
+         calcDamage 里 `a.lowHpAmpK` 早就有消费点（`min(lowHpAmpCap||0.50, K*(0.50-hp)*2)`），
+         缺的只是一个写入源。它与 lowHpDr 成对：一个管挨打、一个管出手。
+       ⚠ 必须排在 `残血减伤` 之前 —— 那条的正则里有**裸 `血越低`**，
+         排在它后面的话「血越低增伤」会先被它吃成减伤（方向完全反）。 */
+    { re: /(残血.{0,3}增伤|血越低.{0,3}增伤|垂危.{0,3}增伤)/,            key: 'lowHpAmpK',       cap: 0.30, txt: '血量越低增伤越高（满血为 0）' },
     /* ⚠ 顺序即优先级：**更具体的词必须排在更宽泛的词前面**（实测踩过的坑）。
        排错的后果是「残血减伤」被 '减伤' 抢先命中、错记成 dr。 */
     { re: /(残血.{0,3}减伤|血越低|垂危.{0,3}减伤|残血.{0,3}免伤)/,      key: 'lowHpDr',         cap: 0.30, txt: '血量越低减伤越高（满血为 0）' },
@@ -6016,6 +6055,13 @@ function _normalizeSkillItemCore(s, unit) {
        导致 calcDamage 的 v75 分支恒不进入（skill.效果 恒 undefined），
        玩家在「效果」里写的字面数值全部退化成 QUALITY_POWER × 境界系数 的 auto 兜底。
        （历史教训：v75 首次落地时只改了 calcDamage，漏了这里，整条链路是死代码。） */
+    /* ★★★ 2026-11-19：**种类必须过白名单** ★★★
+       这个 return 是白名单式字面量，不写就筛掉。而 种类 是区分神通与法术的**唯一标记**：
+         · calcDamage 读 skill.种类==='神通' ⇒ 伤害 ×3；
+         · 出招处读它 ⇒ 播全屏特效；
+         · 技能坞读它 ⇒ 打「神通」标。
+       漏了它，神通就与法术完全同形 —— 玩家看到的就是「神通被当成法术放了，没有特效」。 */
+    种类: (String(s.种类 || '') === '神通') ? '神通' : '',
     效果: (s.效果 && typeof s.效果 === 'object' && !Array.isArray(s.效果)) ? s.效果 : null,
     目标: s.目标 || s.攻击类型 || '单体',
     /* ★ v81：'origin'（这招是谁写的）**必须原样搬运**。
@@ -6038,7 +6084,7 @@ function _normalizeSkillItemCore(s, unit) {
        使用后冷却 6 回合」。
        ⇒ 口径两条，别混：
          · `冷却` 字段（招式里写的数）= 这一招**放完之后要等多少手**（手数，不是"回合"）；
-         · 缺省值按**品质**给：凡 1 / 黄 2 / 玄 2 / 地 3 / 天 3 / 神 4；
+         · 缺省值（2026-11-19 起）：**法术不分品阶一律 2 手**；
          · 神通（`种类: 神通` 或来自 已学本领.神通）缺省 **6**、且**开局即可用**。
        ⚠ 出厂时必须搬出**绝对数值**（不让下游再判断），否则「谁把默认值算进去」会变成
          三处各算一遍、答案不同 —— 这是本项目「两处实现只改一处」的老形状。
@@ -6602,6 +6648,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
        **让「旧字段还能救回来」看起来是真的**（用户口径：「不要兼容旧存档了，改的暴力点」）。
        现行唯一口径：'已学本领.法术' / '已学本领.心法'。没有就是没有。 */
     rawSkill = learnedMapOf(pData, '法术');
+    rawSkill = mergeDivineIntoSkills(rawSkill, pData);
     rawHeart = learnedMapOf(pData, '心法');
     /* ★ 2026-11-18：法宝从 '装备.法宝' 取（三槽结构）；
        '装备法宝' / '武器' 是老档写法，留在后面兜底。 */
@@ -6688,6 +6735,7 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
        而这两个字段在 21-变量结构 的 NPC schema 里同样不存在（v70 起）。
        保留它们只会让「旧字段还在」这件事看起来像真的。现行唯一口径：已学本领.法术/心法。 */
     rawSkill = learnedMapOf(charObj, '法术');
+    rawSkill = mergeDivineIntoSkills(rawSkill, charObj);
     rawHeart = learnedMapOf(charObj, '心法');
     rawArtifact = (charObj.装备 && charObj.装备.法宝) || charObj.装备法宝 || charObj.武器 || {};
   }
@@ -7113,6 +7161,19 @@ function buildFighterFromData(name, isPlayer, isTeammate, side, statData) {
         var _dTxt = String(xzSkillEffFieldOf(_dv2) || '').trim();
         if (!_dTxt) continue;
         var _dPs = (typeof parseSpiritRootEffect === 'function') ? (parseSpiritRootEffect(_dTxt) || []) : [];
+        /* ★★★ 2026-11-19：剧情破格气运「一气化三清」的暴击 30% 是作者明示的超格项。
+           通用被动词条表把暴击封在 20%；只对这一条命格按名字+原文双重匹配放宽到 30%，
+           不动灵根/装备/其它气运的平衡上限。分身召唤/灵力代价/境界延长写在长描写里，
+           交由叙事执行；战斗数值只兑现暴击 30%。 */
+        if (_dName === '一气化三清' && /暴击\s*[:：]\s*30(?:%|％)?/.test(_dTxt)) {
+          for (var _dpi = 0; _dpi < _dPs.length; _dpi++) {
+            if (_dPs[_dpi] && _dPs[_dpi].key === 'crit') {
+              _dPs[_dpi] = Object.assign({}, _dPs[_dpi], {
+                数值: 0.30, 数值Label: '+30%', txt: '暴击率提高30%（剧情破格：一气化三清）'
+              });
+            }
+          }
+        }
         destinyEffects.push({ 气运名: _dName, 品质: String(_dv2.品质 || '黄阶'), 原文: _dTxt, 解析: _dPs });
         destinyPassives.push('气运·' + _dName + '（' + String(_dv2.品质 || '黄阶') + '）：' + _dTxt);
         _dPs.forEach(function (pe) {
@@ -10625,8 +10686,11 @@ function popupDamageNumber(targetId, dmg, isCrit, isDodge, attackerSide, cut) {
     var NAME_FONT = 'font-family:var(--xz-font,"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif);font-weight:700;letter-spacing:.5px;';
 
     if (isDodge) {
-      pop.innerText = '残影闪避';
-      pop.setAttribute('style', 'position:absolute;top:-18px;left:50%;transform:translateX(-50%);color:#9aa4b0;font-size:calc(18px * var(--xz-fs, 1));' + NAME_FONT + 'pointer-events:none;z-index:9999;text-shadow:0 0 8px rgba(0,4,8,0.86), 0 0 14px rgba(154,164,176,0.5);animation:' + P + '-dmg-float 0.85s ease-out forwards;');
+      /* ★ 2026-11-19（作者）：「攻击打不到对方之后，在对方那浮现一个 MISS」。
+         原来写的是中文「残影闪避」，和伤害数字挤在同一条视觉通道里，玩家得读字才分得清；
+         改成英文 MISS 并放大加斜，一眼就认出「这一手空了」。 */
+      pop.innerText = 'MISS';
+      pop.setAttribute('style', 'position:absolute;top:-22px;left:50%;transform:translateX(-50%);color:#c9d6dc;font-size:calc(24px * var(--xz-fs, 1));font-style:italic;letter-spacing:1.5px;' + NAME_FONT + 'pointer-events:none;z-index:9999;text-shadow:0 0 10px rgba(0,4,8,0.92), 0 0 18px rgba(154,164,176,0.55);animation:' + P + '-dmg-float 0.9s ease-out forwards;');
     } else {
       /* ★★★ v365：被「承伤预算」削掉的那部分，必须印在飘字上 ★★★
          否则玩家看到的就是一个光秃秃的 -1，然后自己死了 —— 这正是用户报的
@@ -10862,9 +10926,14 @@ function showDivineFx(actor, skill, target) {
   var lite = fxLite();
   var isMobile = (doc.documentElement && doc.documentElement.clientWidth) && doc.documentElement.clientWidth < 560;
   // 数量：轻档只留一捧（节点数直接决定卡不卡）；淡化档保留少量粒子 + 一环，只是整体压暗
-  var count = lite ? (fxMin() ? 10 : 8) : (isMobile ? 120 : 180);
-  var cometN = lite ? 0 : 20;
-  var rayN = lite ? 0 : 12;
+  /* ★ 2026-11-19（作者：「神通检查一下，有全屏特效没有」+「变的更卡了」）：
+     有，而且很重 —— 原来手机 120 颗粒子、桌面 180 颗，外加 20 条彗尾、12 道光柱、3 圈冲击环，
+     全部是 DOM 节点 + 各自一条 animation，持续 1 秒左右。这就是神通一放就掉帧的来源。
+     粒子数对观感是**边际递减**的：40 颗已经铺满全屏，120 颗只是更密；但渲染成本是 3 倍。
+     ⇒ 手机 120→40、桌面 180→72、彗尾 20→8、光柱 12→6。 */
+  var count = lite ? (fxMin() ? 10 : 8) : (isMobile ? 40 : 72);
+  var cometN = lite ? 0 : 8;
+  var rayN = lite ? 0 : 6;
   var ringN = fxMin() ? 1 : (lite ? 2 : 3);
   var glow = lite ? '' : ';box-shadow:0 0 9px ' + color;
   var cometGlow = lite ? '' : ';box-shadow:0 0 12px ' + color;
@@ -10943,7 +11012,13 @@ function showDivineFx(actor, skill, target) {
   _fxLive++;
   // 招式大特效也挂在战斗面板里（以面板中心为中心）——不再依赖视口，手机上才看得见
   try {
-    var dvFrame = qs('#' + P + '-frame') || doc.body;
+    /* ★★★ 2026-11-19：**挂错容器** —— 全屏特效一直挂在 body 上，被战斗面板整个盖住 ★★★
+       病根：这里查的是 '#' + P + '-frame'，而 P 是**旧前缀** 'xiuxian_timeline_atb'，
+       极简演武的面板 id 是 'xz-jjb-frame'（PFX）⇒ 查不到 ⇒ 回退 doc.body。
+       而演武面板是 top-layer 的弹层，body 上的东西一律画在它后面 —— 玩家看到的就是「完全没有」。
+       旧版能看见，是因为那会儿打的是旧面板，'#xiuxian_timeline_atb-frame' 真的存在。
+       ⇒ 先认新面板，再退旧前缀，最后才 body。 */
+    var dvFrame = qs('#xz-jjb-frame') || qs('#' + P + '-frame') || doc.body;
     dvFrame.appendChild(host);
   } catch (eMount) {}
   setTimeout(function () {
@@ -20140,7 +20215,7 @@ var styles = '<style id="' + P + '-styles">' +
 '#' + P + '-trigger:hover { transform: scale(1.1); color: var(--accent-gold); }' +
 '#' + P + '-overlay {' +
 '  position: fixed !important; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; z-index: 2147483644 !important; display: none;' +
-'  background: rgba(3, 6, 15, 0.75); backdrop-filter: blur(6px);' +
+'  background: rgba(3, 6, 15, 0.92);' +
 '}' +
 '#' + P + '-overlay.active { display: block !important; }' +
 '.' + P + '-frame {' +
@@ -20211,7 +20286,7 @@ var styles = '<style id="' + P + '-styles">' +
 '.' + P + '-track-lane { position: relative; height: 18px; background: rgba(0,0,0,0.45); border-radius: 9px; border: 1px solid var(--glass-border-light); }' +
 '.' + P + '-track-line { position: absolute; top: 8px; left: 8px; right: 8px; height: 1.5px; background: rgba(255,255,255,0.10); }' +
 '.' + P + '-trigger-point { position: absolute; right: 0; top: -3px; bottom: -3px; width: 18px; background: rgba(245,158,11,0.22); border: 1px dashed var(--accent-gold); border-radius: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--accent-gold); font-size:calc(12px * var(--xz-fs, 1)); font-weight: 700; z-index: 5; }' +
-'.' + P + '-runner-node { position: absolute; top: 1px; left: 0; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size:calc(11px * var(--xz-fs, 1)); font-weight: 700; user-select: none; border: 1px solid #f1ede4; box-shadow: 0 1px 3px rgba(0,4,8,0.78); z-index: 10; will-change: transform; }' +
+'.' + P + '-runner-node { position: absolute; top: 1px; left: 0; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size:calc(11px * var(--xz-fs, 1)); font-weight: 700; user-select: none; border: 1px solid #f1ede4; box-shadow: 0 1px 3px rgba(0,4,8,0.78); z-index: 10; will-change: transform; transition: transform 52ms linear; }' +
 /* ★ v473：位移走外层 transform、放大走内层 span —— 两个属性不许抢同一个元素。
    原来 '.active-actor { transform: scale(1.2) }' 会把 JS 写进去的 translateX **整个覆盖掉**，
    出手那一刻节点先跳回轨道起点再被下一跳拉回来，就是用户看到的"抖"。 */
@@ -21753,6 +21828,11 @@ function xzJJChatKey() {
 
 var XZJJ = (function () {
   var PFX = 'xz-jjb';
+  /* ★★★ 2026-11-19 测试开关：把整条「先手轨道」关掉 ★★★
+     作者：「做个测试，把跑条暂时删了，我看看还会卡吗」。
+     置 true ⇒ 轨道整条不画、updateRail/renderRail 直接返回（连 JS 成本一起摘掉）。
+     ⚠ 测完改回 false 即可，别把这一行留成 true 发出去。 */
+  var XZ_RAIL_OFF = false;   /* 测试完毕：轨道恢复（作者确认关掉也卡 ⇒ 跑条不是元凶） */
   var GAP_TICK = 42;     // 走一息的间隔（毫秒）
   /* ★★ v108：**圆点的 CSS transition 必须等于 GAP_TICK，且必须是 linear**（见时序条 -node 样式）。
      原来是 ，而这里 42ms 就跳一次 ⇒ 每跳都打断上一段动画、
@@ -21769,9 +21849,15 @@ var XZJJ = (function () {
      只改一个没用：玩家仍会觉得「我一出手他就贴脸」。
      1 秒也远长于特效寿命（JJ_FX_LIFE = 260ms；最长的一条按 3 倍算也才 780ms）——
      上一手一定播完，才轮到下一手。 */
-  var GAP_AI = 1000;     // 每次出手后的间隔（毫秒）——用户口径：每下一个都隔 1 秒
+  /* ★ 2026-11-19（作者选 A）：1000 → 380。
+     1000ms 那版把**整条时钟**停了，跑条 90% 时间不动（实测 tick 间隔 1063/1065/48×8…）。
+     ── 实测（_v713，100ms 采样点里有位移的比例）────────────────────────────
+       GAP 1000 → 40%（停 1 秒、动 0.4 秒，就是作者说的「一卡一卡」）
+       GAP  380 → 40%　　GAP 200 → 64%　　GAP 180 → 76%（定这一档）
+     再往下（120）能到 85%+，但那是「秒放」，且普通命中特效 260ms 会明显叠到下一手。 */
+  var GAP_AI = 180;      // 每次出手后的间隔（毫秒）
   var GAP_ROUND = 260;   // 开局的间隔（面板刚弹出，不需要等）
-  var GAP_PLAYER = 1000; // 玩家出手后的间隔（原来 120，就是「秒放」的来源）
+  var GAP_PLAYER = 180;  // 玩家出手后的间隔（与 GAP_AI 同档）
   /* ★ v151：出手间隔 120/200ms，而特效寿命原为 620~980ms ⇒ 上一手还没擦掉下一手就来了，
      层里叠着 2~3 手未播完的元素（用户日志实测层内元素 117），停在动画中间帧上
      —— 那就是「一直杵在身上的竖线」。寿命统一由全局 'JJ_FX_LIFE'（04:12xxx）管控。 */
@@ -21995,7 +22081,7 @@ var XZJJ = (function () {
         var _tms = Array.isArray(_it.效果) ? _it.效果 : null;
         if (_tms) _slot.效果 = _tms.slice();
         装功['槽位' + (_sI + 1)] = _slot;
-        if (++_sI >= 12) break;
+        if (++_sI >= 16) break;   /* ★ 2026-11-19：12→16，法术 9 + 神通 4 要都装得下 */
       }
     }
     if (!Object.keys(装功).length) {
@@ -22327,7 +22413,31 @@ var XZJJ = (function () {
     try {
       if (typeof learnedMapOf === 'function') {
         var lm = learnedMapOf(obj, '法术');
-        return (lm && Object.keys(lm).length) ? lm : null;
+        if (!lm || !Object.keys(lm).length) return null;
+        /* ★★★ 2026-11-19：**神通在这里并入**（作者：「给我战斗开场白写一个神通啊，不然我怎么测试」）。
+           ── 真相 ──────────────────────────────────────────────────────────────
+             演武台的单位招式只从「已学本领.法术」取；「已学本领.神通」这条线**从来没接**。
+             变量里写着 4 道神通，战斗技能坞里一门都没有 —— 不是数据没写，是没读。
+           ── 做法 ──────────────────────────────────────────────────────────────
+             逐条**浅拷贝**再打上 种类:'神通'（不污染变量原对象），主键补 法术名，
+             buildUnit 那边 for-in 复制字段时会把它一起带过去。
+             normalizeSkillItem 认 种类 ⇒ 伤害 ×3、冷却缺省 6 手。 */
+        try {
+          var dv = learnedMapOf(obj, '神通');
+          for (var k in dv) {
+            if (!Object.prototype.hasOwnProperty.call(dv, k)) continue;
+            if (Object.prototype.hasOwnProperty.call(lm, k)) continue;
+            var src = dv[k];
+            if (!src || typeof src !== 'object' || Array.isArray(src)) continue;
+            var cp = {};
+            for (var f in src) cp[f] = src[f];
+            cp.种类 = '神通';
+            if (!cp.神通名) cp.神通名 = k;
+            if (!cp.法术名) cp.法术名 = k;
+            lm[k] = cp;
+          }
+        } catch (eDv2) {}
+        return lm;
       }
     } catch (e) {}
     return null;
@@ -22964,7 +23074,7 @@ var XZJJ = (function () {
     if (!S.started) {
       /* 给玩家一句"为什么停着"—— 卡片上的可击角标已经在了，
          但底栏是空的（只有一颗按钮），容易读成"界面坏了"。 */
-      try { push('演武台：对手已列阵，点下方「开始战斗」即可开打。', 'sys'); } catch (ePsWait) {}
+      /* 待命态不再向战报区添加重复提示，只保留按钮作为唯一操作入口。 */
       try { render(); } catch (eRw) {}
       return;
     }
@@ -23447,6 +23557,17 @@ var XZJJ = (function () {
         sk = _cdPick;                                  /* null = 本手普通攻击 */
       }
     }
+    /* ★★★ 2026-11-19：**神通走全屏特效**（作者：「神通检查一下，有全屏特效没有」）★★★
+       查下来：全屏那一套（逐字放大浮现的名号 + 满屏粒子 + 彗尾 + 光柱 + 冲击环 + 闪白 + 屏震）
+       只挂在 executeDivine（本命神通）那条路上；而「已学本领.神通」走的是普通出招，
+       一点特效都没有 —— 同一个「神通」，两条路两种观感。
+       这里补上：只要这一手用的是 种类==='神通' 的招，就播一次全屏。
+       ⚠ 用 try 包住：特效永远不许影响结算（v88 的老纪律）。
+       ⚠ 只在**真出手**时播，选招阶段不播（选招可能被取消）。 */
+    try {
+      if (sk && String(sk.种类 || '') === '神通') showDivineFx(actor, sk, target);
+    } catch (eDvFx) {}
+
     /* ★ 2026-11-18：本手**真的出了**（track 已核销、handTotal 已 +1）⇒ 冷却记账。
        ⚠ 位置：必须在 sk 定下来之后、召唤之前 —— 召唤是"这招的效果"，
          先记账再结算效果，即使效果抛错，这一手的冷却也算数（不记就变成能无限连放）。 */
@@ -24604,23 +24725,19 @@ var XZJJ = (function () {
 
   /* ── 小框的三种排版零件（统一分节样式，避免六源各自写一套） ── */
   function sec(title, inner) {
-    return '<div style="margin-top:5px;border-top:1px solid rgba(201,168,106,.22);padding-top:5px;">'
-      + '<div style="font-size:11px;color:#e8c98f;letter-spacing:.04em;margin-bottom:3px;">' + title + '</div>'
-      + '<div style="font-size:11px;line-height:1.5;">' + inner + '</div></div>';
+    return '<section class="' + PFX + '-up-sec">'
+      + '<div class="' + PFX + '-up-sec-head"><span>' + title + '</span></div>'
+      + '<div class="' + PFX + '-up-sec-body">' + inner + '</div></section>';
   }
   /* ★ v234（用户）：「点击查看之后的小框里面，所有信息（气血、蓝量、属性、速度…）全部都美化小框」。
      ⇒ 统一的一枚「标签 + 值」小框，供单位详情与六源共用（只此一份，别处只调用）。 */
   function chip(k, v, tone) {
-    return '<span style="display:inline-flex;align-items:baseline;gap:6px;margin:0 5px 5px 0;'
-      + 'padding:2px 8px;border-radius:6px;border:1px solid rgba(201,168,106,.30);'
-      + 'background:rgba(201,168,106,.08);font-size:11.5px;line-height:1.75;'
-      + 'font-variant-numeric:tabular-nums;white-space:nowrap;">'
-      + '<i style="font-style:normal;color:#9aa4b0;">' + k + '</i>'
-      + '<b style="color:' + (tone || '#e8e3d3') + ';">' + v + '</b></span>';
+    return '<span class="' + PFX + '-up-chip" data-k="' + esc(k) + '">'
+      + '<i>' + k + '</i><b style="color:' + (tone || '#e8e3d3') + ';">' + v + '</b></span>';
   }
   function sub(k, inner) {
-    return '<div style="display:flex;gap:5px;"><span style="color:#5f6873;flex:0 0 28px;">' + k + '</span>'
-      + '<span style="flex:1 1 auto;word-break:break-all;">' + inner + '</span></div>';
+    return '<div class="' + PFX + '-up-sub"><span class="' + PFX + '-up-subkey">' + k + '</span>'
+      + '<span class="' + PFX + '-up-subval">' + inner + '</span></div>';
   }
   /* ══════════ 一条 '效果' 条目的**唯一**渲染实现（v106 抽成共用）══════════
      ★ 为什么必须只有一份（bug ⑨ 手抄取法）：
@@ -24674,12 +24791,10 @@ var XZJJ = (function () {
     var _genericKey = _merged || /^(主击|增益|进攻|伤害|效果|攻击)$/.test(_nm);
     var _keyHtml = _genericKey ? '' :
         ('<b style="color:#e8c98f;font-size:11.5px;letter-spacing:.04em;">' + esc(name) + '</b><span style="color:#e8e3d3;font-size:11.5px;"> = </span>');
-    return '<div style="border:1px solid rgba(201,168,106,.42);border-radius:8px;'
-      + 'background:rgba(201,168,106,.045);padding:4px 8px;margin:3px 0;">'
-      + '<div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">'
-      + _keyHtml
-      + '<span style="color:#e8e3d3;font-size:11.5px;">' + esc(_full) + '</span></div>'
-      + (note ? ('<div style="font-size:10.5px;color:#a9a390;line-height:1.6;margin-top:2px;">└ ' + esc(note) + '</div>') : '')
+    return '<div class="' + PFX + '-up-eff">'
+      + '<div class="' + PFX + '-up-eff-line">' + _keyHtml
+      + '<span>' + esc(_full) + '</span></div>'
+      + (note ? ('<div class="' + PFX + '-up-eff-note">└ ' + esc(note) + '</div>') : '')
       + '</div>';
   }
   /* 一个 '效果' 集 → 若干枚小框（两处共用；空集给一句「还没写效果」） */
@@ -24821,11 +24936,12 @@ var XZJJ = (function () {
       var q = sk.quality || sk.品质 || '';
       var cur = myTurn && skIndexOf(f) === si;
       /* ⚠ 小框挂在 body 上，取不到 '#xz-jjb-overlay' 那份 CSS 令牌 ⇒ 一律写实色 */
-      return '<div style="margin-bottom:8px;' + (cur ? 'background:rgba(201,168,106,.10);border-left:2px solid rgba(242,194,111,.72);padding-left:5px;' : '') + '">'
-        + '<span style="font-size:12.5px;color:#e8e3d3;">' + (cur ? '▸ ' : '') + esc(sk.name) + '</span>'
-        + '<span style="color:#8a8578;font-size:11px;">' + (q ? '　' + esc(q) : '')
-        + (cur ? '　（已选）' : '') + '</span>'
-        + '<div style="padding-left:8px;">' + line + '</div></div>';
+      return '<div class="' + PFX + '-up-skill' + (cur ? ' is-current' : '') + '">'
+        + '<div class="' + PFX + '-up-skill-head">'
+        + '<span class="' + PFX + '-up-skill-name">' + (cur ? '▸ ' : '') + esc(sk.name) + '</span>'
+        + '<span class="' + PFX + '-up-skill-q">' + (q ? esc(q) : '')
+        + (cur ? ' · 已选' : '') + '</span></div>'
+        + '<div class="' + PFX + '-up-skill-effects">' + line + '</div></div>';
     }).join('');
     return sec('法术', body);
   }
@@ -25034,16 +25150,20 @@ var XZJJ = (function () {
     /* ★ v324（用户：「灵根这里删了，下面有了就不要重复显示」）：
        头部的 '_bl' 只服务于那枚 chip，chip 已删，定义一并撤掉。
        灵根改由下方 'sixSourceHtml' 的「灵根」那一段**唯一一处**输出。 */
-    return '<div style="border:1px solid rgba(201,168,106,0.28);border-radius:8px;padding:7px 9px;background:rgba(3,13,20,0.45);">' + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;'
-      + 'border-bottom:1px solid rgba(201,168,106,.28);padding-bottom:5px;">'
-      + '<b style="font-size:13px;color:#e8c98f;letter-spacing:.06em;">' + esc(f.name) + '</b>'
-      + '<span data-upop-close="1" title="收起" style="cursor:pointer;font-size:15px;line-height:1;opacity:.7;padding:1px 6px;">✕</span></div>'
+    return '<div class="' + PFX + '-upop-shell">'
+      + '<div class="' + PFX + '-upop-head">'
+      + '<span class="' + PFX + '-upop-seal" aria-hidden="true">照</span>'
+      + '<b class="' + PFX + '-upop-name">' + esc(f.name) + '</b>'
+      + '<span data-upop-close="1" class="' + PFX + '-upop-close" title="收起" role="button" aria-label="收起">✕</span></div>'
+      + '<div class="' + PFX + '-upop-content">'
       /* ★ v324（用户：「『我方 · 练气中期 · 在场』这一行整行删掉，无论敌方我方」）：
          阵营、境界、在场状态三样本来就在**卡片本体**上写着（名字色 + 血条 + 卡片状态），
          这份弹层只是「看细节」，不该再复读一遍身份。 */
-      + '<div style="display:flex;flex-wrap:wrap;">'
+      + '<div class="' + PFX + '-upop-stats">'
+      + '<div class="' + PFX + '-upop-vitals">'
       + chip('气血', f.hp + ' / ' + f.maxHp, '#f0a6a0')
       + chip('灵力', (f.mp || 0) + ' / ' + (f.maxMp || 0), '#7fa8d9')
+      + '</div><div class="' + PFX + '-upop-core">'
       /* ★ v235（用户）：「最底下的四维，挪到上面，并且使用美化小框」——
          四维是面板的**输入**，与气血/灵力同级；放在最底部反而像附录。 */
       + (function () {
@@ -25063,7 +25183,7 @@ var XZJJ = (function () {
          玩家看防 39、真打出来却一点没少，纯噪音且误导。
          速度照留（速度是真乘区：进条涨速）。 */
       + chip('速度', String(f.spd), '#7fd2c1')
-      
+      + '</div><div class="' + PFX + '-upop-combat">'
       + (function () {
           var _cr = xzCritRateOf(f, null, { isSkill: true });
           var _pc = xzPierceOf(f);
@@ -25087,6 +25207,7 @@ var XZJJ = (function () {
           _s += chip('闪避值', (Math.round(_ev * 10) / 10) + '%', _ev > 0 ? '#7fd2c1' : '#8a949e');
           return _s;
         })()
+      + '</div><div class="' + PFX + '-upop-identity">'
       /* ★ v324（用户：「卡片的查看弹层的…暴击率按出法术计…闪避值＝d20 上的点数（封顶 15）给我删了」）：
          整段口径脚注删除。五项标签本身已足够自解释，这四行只是写给写代码的人看的边界说明。 */
       /* ★ v324（用户：「玄元属性记得补上美化」）：原来这枚 chip 只有暖白。
@@ -25097,7 +25218,7 @@ var XZJJ = (function () {
       + chip('境界', esc(f.realm || ''))
       + chip('玄元属性', esc(f.element || '无'),
              ELEMENT_COLORS[String(f.element || '').trim()] || '#e8e3d3')
-      + '</div>'
+      + '</div></div>'
       /* ★ v43：**增益／状态完整清单**（卡片上那条 -bfs 有高度封顶、只给个概览，
          这里给全的）。用户原话：「增益 buff 全部在外面显示，过长的话就滑轮，
          或者点击增益按钮查看」—— 卡片滑轮 + 这份完整清单，两种路径都给到。 */
@@ -25118,7 +25239,7 @@ var XZJJ = (function () {
             保留一条与引擎同源的说明，且只说真话。 */
       /* ★★ v234（用户）：「结算口径删除」。这一节本来就在解释公式，而公式已经写在
          《骰子战斗系统》与《数值表》里；查看面板只该给「这个人现在什么状态」。 */
-      + '</div>';
+      + '</div></div>';
   }
 
   
@@ -25201,34 +25322,30 @@ var XZJJ = (function () {
     var bagList = miscBagList();
     var box = d.createElement('div');
     box.id = PFX + '-miscpop';
-    /* ★ v69【用户第 3 项「杂项按不了，没反应」的真因】——
-       这里原来**压根没算 left/top**：'position:fixed' 又不给坐标时，浏览器把它按
-       「静态位置」摆，而本元素是 'body.appendChild' 的最后一个孩子 ⇒ 静态位置在**聊天记录之后**，
-       面板就开在可视区外面。玩家的体感正是「按了，没反应」（面板其实开了，只是不在屏幕上）。
-       现在按主战斗 buff 小框的老规矩定位：贴着按钮、优先弹在按钮**上方**（底栏按钮在屏幕下沿），
-       上方放不下就翻到下方，左右一律夹进可视区。 */
-    box.style.cssText = 'position:fixed;z-index:2147483647;left:8px;top:8px;width:250px;padding:11px 13px;border-radius:10px;'
-      + 'box-sizing:border-box;display:flex;flex-direction:column;gap:8px;'
-      + 'background:linear-gradient(180deg,rgba(14,27,32,.98),rgba(3,13,20,.985));'
-      + 'border:1px solid rgba(242,194,111,.62);box-shadow:0 14px 34px rgba(0,4,8,.8);'
-      + 'color:#e8e3d3;font:13px/1.55 var(--xz-font,"Microsoft YaHei","PingFang SC",sans-serif);';
-    box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;'
-      + 'border-bottom:1px solid rgba(201,168,106,.28);padding-bottom:5px;">'
-      + '<b style="font-size:13px;color:#e8c98f;letter-spacing:.06em;">杂项</b>'
-      + '<span data-misc-close="1" title="收起" style="cursor:pointer;font-size:15px;line-height:1;opacity:.7;padding:1px 6px;">✕</span></div>'
+    box.className = PFX + '-miscpop';
+    /* 位置仍由下面的 anchor 几何计算；视觉材质/内边距统一交给固定玄青 HUD 样式。 */
+    box.style.cssText = 'position:fixed;z-index:2147483647;left:8px;top:8px;';
+    box.innerHTML = '<div class="' + PFX + '-misc-head">'
+      + '<span class="' + PFX + '-misc-title">杂项</span>'
+      + '<span data-misc-close="1" class="' + PFX + '-misc-close" title="收起" role="button" aria-label="收起">✕</span></div>'
       + (bagList.length
-        ? ('<div style="display:flex;flex-direction:column;gap:6px;max-height:34vh;overflow-y:auto;'
-          + 'overscroll-behavior:contain;">'
+        ? ('<div class="' + PFX + '-misc-list">'
           + bagList.map(function (r, i) {
               return '<button type="button" class="' + PFX + '-miscitem" data-misc="pill" data-misc-i="' + i + '">'
-                + '服用「' + esc(r.name) + '」 ×' + r.qty + '</button>';
+                + '<span class="' + PFX + '-misc-ico" aria-hidden="true">丹</span>'
+                + '<span class="' + PFX + '-misc-label">服用「' + esc(r.name) + '」</span>'
+                + '<span class="' + PFX + '-misc-count">×' + r.qty + '</span></button>';
             }).join('')
           + '</div>')
-        : '<div style="font-size:11.5px;color:#8a8578;line-height:1.5;">行囊里没有可用的丹药。</div>')
-      + '<button type="button" class="' + PFX + '-miscitem" data-misc="atk">普通攻击</button>'
-      + '<button type="button" class="' + PFX + '-miscitem' + (petMode ? '' : ' off') + '" data-misc="catch"'
-      + (petMode ? '' : ' disabled') + '>捕捉' + (petMode ? '' : '（灵宠模式专属）') + '</button>'
-      + '<div style="font-size:11.5px;color:#8a8578;line-height:1.5;">'
+        : '<div class="' + PFX + '-misc-empty">行囊里没有可用的丹药。</div>')
+      + '<div class="' + PFX + '-misc-section">行动</div>'
+      + '<button type="button" class="' + PFX + '-miscitem is-attack" data-misc="atk">'
+      + '<span class="' + PFX + '-misc-ico" aria-hidden="true">⚔</span><span class="' + PFX + '-misc-label">普通攻击</span><span class="' + PFX + '-misc-arrow">›</span></button>'
+      + '<button type="button" class="' + PFX + '-miscitem is-catch' + (petMode ? '' : ' off') + '" data-misc="catch"'
+      + (petMode ? '' : ' disabled') + '><span class="' + PFX + '-misc-ico" aria-hidden="true">灵</span>'
+      + '<span class="' + PFX + '-misc-label">捕捉' + (petMode ? '' : '（灵宠模式专属）') + '</span>'
+      + '<span class="' + PFX + '-misc-arrow">›</span></button>'
+      + '<div class="' + PFX + '-misc-hint">'
       + (petMode ? '捕捉：对当前目标尝试收服。' : '捕捉只在灵宠模式下开放，本局未开启。') + '</div>';
     box.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -25538,31 +25655,63 @@ var XZJJ = (function () {
 
     var box = d.createElement('div');
     box.id = PFX + '-upop';
+    box.className = PFX + '-upop';
     box.setAttribute('data-upop', f.name);
-    box.style.cssText = 'position:fixed;z-index:2147483647;width:268px;max-height:74vh;overflow-y:auto;'
-      + 'padding:10px 12px;border-radius:10px;'
-      + 'box-sizing:border-box;display:flex;flex-direction:column;gap:1px;'
-      + 'background:linear-gradient(180deg,rgba(14,27,32,.98),rgba(3,13,20,.985));'
-      + 'border:1px solid rgba(242,194,111,.62);box-shadow:0 14px 34px rgba(0,4,8,.8);'
-      + 'color:#e8e3d3;font:12.5px/1.5 "PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Source Han Sans SC","Hiragino Sans GB","WenQuanYi Micro Hei",sans-serif;';
+    /* 坐标由后面的卡片锚点计算；所有视觉样式统一由 XZ_JJB_SKIN 的玄青 popup 皮肤负责。 */
+    box.style.cssText = 'position:fixed;z-index:2147483647;';
     box.innerHTML = unitPopHtml(f);
-    
+
     box.addEventListener('click', function (e) { e.stopPropagation(); onAtomChipClick(e); });
     var xb = box.querySelector('[data-upop-close]');
     if (xb) xb.addEventListener('click', function (e) { e.stopPropagation(); closeUnitPop(); });
-    xzOverlayHost().appendChild(box);                        /* 先入 DOM 才量得到高度 */
 
-    /* 贴着那张卡：优先卡右侧；右边放不下翻左侧；最后夹进视口 */
+    /* ★★★ 2026-11-19（作者）：「查看的弹层超出屏幕了，无法显示全，改为只显示在战斗脚本的界面内，不能出去」★★★
+       ── 原来 ──────────────────────────────────────────────────────────────
+         挂在 body（xzOverlayHost）、position:fixed、夹的是**视口**。
+         可战斗面板本身不是满屏（居中 + 12px 边距），夹进视口 ≠ 夹进面板 ⇒
+         框会跑到面板外面、甚至被屏幕边裁掉。
+       ── 现在 ──────────────────────────────────────────────────────────────
+         有面板就挂进 #xz-jjb-frame、改 absolute，坐标按**面板内框**算，
+         并且 max-height 锁死面板高度（超出内部滚动）⇒ 永远出不去。
+         没有面板（旧界面）仍退回原来的 body + fixed 方案，一行不差。 */
+    var _frEl = null;
+    try { _frEl = qs('#xz-jjb-frame'); } catch (eF0) {}
+    var _fr = null;
+    try { _fr = _frEl ? _frEl.getBoundingClientRect() : null; } catch (eF1) {}
+    if (_frEl && _fr && _fr.width > 80 && _fr.height > 80) {
+      box.style.position = 'absolute';
+      box.style.zIndex = '2147483002';
+      _frEl.appendChild(box);
+    } else {
+      _frEl = null;
+      xzOverlayHost().appendChild(box);
+    }
+
+    /* 贴着那张卡：优先卡右侧；右边放不下翻左侧；最后夹进**面板**（没有面板就夹视口） */
     var r = null;
     try { r = host ? host.getBoundingClientRect() : null; } catch (eR) {}
     var W = d.defaultView || window;
     var vw = W.innerWidth || 1080, vh = W.innerHeight || 720;
     var bw = box.offsetWidth || 268, bh = box.offsetHeight || 300;
-    var L = r ? (r.right + 8) : (vw - bw - 12);
-    if (r && L + bw > vw - 8) L = r.left - bw - 8;
-    var T = r ? r.top : 60;
-    L = Math.max(8, Math.min(L, Math.max(8, vw - bw - 8)));
-    T = Math.max(8, Math.min(T, Math.max(8, vh - bh - 8)));
+    /* 边界：有面板就用面板内框（局部坐标），否则用视口 */
+    var bx0 = 8, by0 = 8, bx1 = vw - 8, by1 = vh - 8;
+    if (_frEl) { bx0 = 8; by0 = 8; bx1 = _fr.width - 8; by1 = _fr.height - 8; }
+    /* 高度先锁：面板装不下就在框内滚，绝不让框顶出面板 */
+    var _maxH = Math.max(160, by1 - by0);
+    if (bh > _maxH) { box.style.maxHeight = Math.round(_maxH) + 'px'; box.style.overflowY = 'auto'; bh = _maxH; }
+    var L, T;
+    if (_frEl) {
+      /* 卡片矩形也是视口坐标 ⇒ 减面板原点换成面板内坐标 */
+      L = r ? (r.right - _fr.left + 8) : (bx1 - bw);
+      if (r && L + bw > bx1) L = (r.left - _fr.left) - bw - 8;
+      T = r ? (r.top - _fr.top) : 8;
+    } else {
+      L = r ? (r.right + 8) : (bx1 - bw);
+      if (r && L + bw > bx1) L = r.left - bw - 8;
+      T = r ? r.top : 60;
+    }
+    L = Math.max(bx0, Math.min(L, Math.max(bx0, bx1 - bw)));
+    T = Math.max(by0, Math.min(T, Math.max(by0, by1 - bh)));
     box.style.left = Math.round(L) + 'px';
     box.style.top = Math.round(T) + 'px';
 
@@ -25806,13 +25955,18 @@ var XZ_JJB_SKIN = `
 }
 #xz-jjb-atmo{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
 #xz-jjb-atmo::before{
+  /* ★ 2026-11-19：底部的 filter:blur(.5px) 已删（见下方那条注释）。 */
   content:"";position:absolute;left:0;right:0;bottom:0;height:44%;
   background:
     radial-gradient(70% 120% at 26% 108%,rgba(96,120,132,.13),transparent 62%),
     radial-gradient(56% 100% at 62% 112%,rgba(96,120,132,.10),transparent 60%),
     radial-gradient(44% 80% at 86% 110%,rgba(96,120,132,.08),transparent 58%),
     linear-gradient(180deg,transparent,rgba(6,9,13,.55));
-  filter:blur(.5px);
+  /* ★ 2026-11-19：filter:blur(.5px) 已删 —— 它把整块 44% 屏高的氛围层变成
+     一个**滤镜层**，时序条每动一次就要重算一次全屏模糊。实测（_v707）：
+       有它：p95 13.9ms / 最大 90.3ms / 1 次 102ms 长任务
+       去掉：p95 7.0ms / 最大 7.2ms / 0 长任务
+     0.5px 的模糊肉眼几乎看不出来，代价却是整场战斗掉帧 —— 不值。 */
 }
 
 /* ── 顶栏 ─────────────────────────────────────────────────────────────── */
@@ -25875,25 +26029,37 @@ var XZ_JJB_SKIN = `
   display:grid;place-items:center;border-radius:50%;background:#0d1117;
   font-size:9.5px;line-height:1;letter-spacing:0;color:var(--xz-ink-2);
   border:1px solid rgba(255,255,255,.22);
-  /* ★★★ v452 修（用户 2026-10-29）：「时序条一直在瞬移，总是一瞬间就闪现了」★★★
-     这一行原来是 left .55s cubic-bezier(.4,0,.2,1) —— 就是"瞬移"的全部原因。
-     力学：GAP_TICK = 42（见 XZJJ 开头），引擎**每 42ms** 调一次 updateRail 改 left。
-        · 过渡时长 550ms **远长于**步进间隔 42ms ⇒ 每 42ms 就有一个新目标，
-          上一段动画永远走不完就被打断 ⇒ 圆点**永远停在起点附近**，
-          只在某次更新"走得够远"时才突然落到新位置 ⇒ 肉眼看到的就是闪现，不是滑动。
-        · 而且 cubic-bezier(.4,0,.2,1) 是**缓动**：两端慢中间快，
-          42ms 的短步被缓动压成"几乎不动"，累积到一定量再一次弹出 ⇒ 一顿一顿的。
-     这**不是新问题**，v108 就定过口径（见 GAP_TICK 那段注释，原文留着）：
-        过渡时长必须 = GAP_TICK，且必须 linear。
-     后来换美化时这条被整体覆盖成 .55s + cubic-bezier ⇒ 回归。
-     ⚠ 改这里必须与 GAP_TICK 同步：42ms。写成别的值就再坏一次。
-     ⚠ 只把 left 那条改掉，box-shadow / transform 保留 .3s ——
-       它们是"状态变化"（成为当前行动者时放大发光），不是逐帧位移，慢一点才对。 */
-  transition:left 42ms linear,box-shadow .3s,transform .3s;
+  /* ★★★ 2026-11-19 再修：从 left 换成 transform，并让过渡略长于步进 ★★★
+     用户：「战斗界面的那个时序条，不够丝滑，很卡，卡顿都是这个跑条造成的」。
+     上一版已经把时长调成 42ms linear，可**位移属性还是 left** —— 那是布局属性，
+     每 42ms 改一次就要重排一次轨道（24 次/秒），节点越多越卡。
+     这一版三条一起改：
+       ① 位移走 'transform: translate3d()' ⇒ 只走合成层，不碰布局；
+       ② 过渡时长 68ms（≈ GAP_TICK 42ms 的 1.6 倍）⇒ 每一步都在追上一步，
+          即使定时器抖动也不会出现「动画被下一跳打断 → 原地弹一下」；
+       ③ 放大发光改用独立的 'scale' 属性，不再和 translate 抢 transform。
+     ⚠ GAP_TICK 若再改，这里的 68ms 一起看（保持在 1.5~1.8 倍之间）。 */
+  /* ★ 2026-11-19：提成独立合成层。不给 will-change 时，改 transform 会让浏览器
+     重绘它所在的整层 —— 而这一层里就压着氛围层那几块大面积径向渐变，
+     于是每 42ms 一次全屏重绘（_v707 实测：A 原样 p95 13.9ms / 90ms 卡顿）。 */
+  left:0;will-change:transform;
+  /* ★ 2026-11-19：过渡 = GAP_TICK(42ms) 且 linear —— v108 定下的口径。
+     每一步刚好在下一次更新时走完，速度连续；写长了会被下一跳打断，看起来就是一顿一顿。 */
+  /* ★★★ v662：**transform 不再挂 CSS 过渡** ★★★
+     作者 2026-11-21：「继续解决战斗界面跑条卡顿的问题」。
+     沙箱实测（4v4、10s）主线程根本不忙：p50 6.9ms、long task 0 —— 也就是说
+     「算得慢」这条早就不是问题了，剩下的是**动画节拍和屏幕刷新对不上**：
+       · 逻辑每 42ms 走一息（24 次/秒），屏幕 60Hz（16.7ms 一帧）；
+       · 每次 setTransform 都开一段 42ms 的过渡，而 42ms 里只跑得完 2~3 帧，
+         下一跳一到就把上一步的过渡**打断重开** ⇒ 速度曲线是锯齿，看着就是一顿一顿。
+     现在改成 railRafLoop() 逐帧插值（见 updateRail 上方），transform 由 rAF 独占写，
+     这里只留发光/放大这两条非位移过渡。
+     ⚠ 本段在 XZ_JJB_SKIN 模板字符串里，注释中不能出现反引号与美元大括号，否则整段被截断。 */
+  transition:box-shadow .3s,scale .3s;
 }
 .xz-jjb-node.ally{color:#9fe8dc;border-color:rgba(94,234,212,.45);}
 .xz-jjb-node.enemy{color:#f4b8b3;border-color:rgba(255,107,107,.45);}
-.xz-jjb-node.now{transform:scale(1.08);background:var(--xz-me);border-color:var(--xz-me);
+.xz-jjb-node.now{scale:1.08;background:var(--xz-me);border-color:var(--xz-me);
   color:#062a26;font-weight:700;
   box-shadow:0 0 0 3px rgba(94,234,212,.14),0 0 12px rgba(94,234,212,.7);}
 .xz-jjb-node.enemy.now{background:var(--xz-foe);border-color:var(--xz-foe);color:#2a0808;
@@ -26438,6 +26604,8 @@ var XZ_JJB_SKIN = `
   white-space:nowrap;
 }
 .xz-jjb-pill-q{color:#e0c07a;border-color:rgba(201,168,106,.34);background:rgba(201,168,106,.10);}
+/* ★ 2026-11-19：神通标 —— 朱红实描边 + 深底，和品阶/目标/耗蓝三枚一眼分开 */
+.xz-jjb-pill-dv{color:#ffb4a2;border-color:rgba(255,120,96,.72);background:rgba(160,32,24,.42);font-weight:700;letter-spacing:.06em;}
 /* 目标**不截断**：它是玩家判断"这一招打谁"的唯一依据，截成「敌方…」等于没说 */
 .xz-jjb-pill-tgt{color:var(--xz-ink-2);white-space:nowrap;}
 .xz-jjb-pill-cost{color:var(--xz-mp-a);border-color:rgba(90,170,240,.30);background:rgba(90,170,240,.09);
@@ -26576,11 +26744,7 @@ var XZ_JJB_SKIN = `
      通栏白条正是 .xz-jjb-mb 那条病历里玩家看不懂的东西。 */
 .xz-jjb-startbox{
   width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:9px;padding:4px 0;
-}
-.xz-jjb-starttip{
-  font-size:11px;color:var(--xz-ink-3);letter-spacing:.08em;text-align:center;
-  line-height:1.5;
+  padding:4px 0;
 }
 .xz-jjb-startbtn{
   font-family:var(--xz-font);font-size:14px;font-weight:700;letter-spacing:.16em;
@@ -26597,7 +26761,7 @@ var XZ_JJB_SKIN = `
   #xz-jjb-overlay{padding:0;}
   #xz-jjb-frame{left:0;top:0;width:100%;border:0;border-radius:0;}
   #xz-jjb-head{padding:10px 12px 9px;gap:9px;}
-  #xz-jjb-seal{width:26px;height:26px;font-size:13px;}
+  #xz-jjb-seal{width:auto;min-width:26px;height:26px;padding:0 7px;font-size:11px;letter-spacing:.06em;}
   #xz-jjb-title{font-size:13px;letter-spacing:.16em;}
   #xz-jjb-head > button{padding:4px 9px;font-size:11px;}
   #xz-jjb-rail{margin:0 12px;height:34px;}
@@ -26812,8 +26976,11 @@ var XZ_JJB_SKIN = `
    ══════════════════════════════════════════════════════════════════════════ */
 #xz-jjb-overlay{
   padding:12px;
-  background:radial-gradient(ellipse at 50% 0%,rgba(36,71,81,.56),transparent 48%),rgba(2,7,10,.90);
-  backdrop-filter:blur(8px) saturate(1.12);
+  /* ★ 2026-11-19：backdrop-filter 删除。
+     它每帧都要把**身后整页聊天记录**采样再模糊一次，是全屏最贵的一条；
+     而底色本来就是 rgba(2,7,10,.90)（90% 不透明），模糊效果肉眼几乎看不见。
+     去掉后底色补到 .94，观感不变、成本归零。 */
+  background:radial-gradient(ellipse at 50% 0%,rgba(36,71,81,.56),transparent 48%),rgba(2,7,10,.94);
 }
 #xz-jjb-frame{
   left:50%;top:12px;width:min(1180px,calc(100vw - 32px));
@@ -26821,11 +26988,21 @@ var XZ_JJB_SKIN = `
   transform:translateX(-50%);
   border:1px solid rgba(199,164,99,.52);border-radius:18px;
   background:linear-gradient(180deg,#101c23 0%,#071117 100%);
-  box-shadow:0 30px 100px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.025);
+  /* ★ 2026-11-19：contain:layout paint —— 时序条每 42ms 改一次 transform，
+     没有它时任何子元素重绘都可能把整块外框（含大阴影）一起重栅格化。
+     阴影 100px → 56px：视觉只差边缘一点点，栅格化面积小一截。 */
+  contain:layout paint;
+  box-shadow:0 22px 56px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.025);
 }
 #xz-jjb-atmo{opacity:.72;}
+/* ★ 2026-11-19：手机档不画氛围层。
+   那几块径向渐变要铺满 54% 屏高、DPR2 下就是上百万像素的栅格化；
+   桌面独显无感，手机/集显上只要有任意一次重绘就拖一帧。
+   它在 .72 透明度下本来就极淡 —— 关掉换帧率，值。 */
+@media (max-width:700px){#xz-jjb-atmo{display:none;}}
 #xz-jjb-atmo::before{
-  height:54%;filter:blur(1px);
+  /* ★ 2026-11-19：filter:blur(1px) 删除（同上，实测就是它在拖帧）。 */
+  height:54%;
   background:radial-gradient(70% 120% at 22% 110%,rgba(60,119,126,.17),transparent 65%),
     radial-gradient(55% 90% at 78% 110%,rgba(137,88,50,.13),transparent 62%),
     linear-gradient(180deg,transparent,rgba(1,5,8,.78));
@@ -26837,16 +27014,14 @@ var XZ_JJB_SKIN = `
   box-shadow:0 8px 24px rgba(0,0,0,.22);
 }
 #xz-jjb-seal{
-  width:36px;height:36px;border-radius:10px;
+  width:auto;min-width:36px;height:36px;padding:0 12px;border-radius:10px;
+  display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;
   background:linear-gradient(145deg,#d0aa63,#80612f);
   border:1px solid rgba(255,230,174,.72);color:#10171a;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 4px 14px rgba(0,0,0,.32);
+  font-size:12px;font-weight:800;letter-spacing:.08em;
 }
-#xz-jjb-title{font-size:15px;letter-spacing:.18em;color:#f2eee5;}
-#xz-jjb-caption::after{
-  content:"天元 · 战术演武";font-size:10px;letter-spacing:.12em;color:#93a8a8;
-  padding-left:9px;border-left:1px solid rgba(255,255,255,.12);
-}
+/* v1.204：重复标题/副标题已从 DOM 删除；不再从伪元素生成「天元·战术演武」。 */
 #xz-jjb-head > button{min-height:36px;padding:0 13px;border-radius:8px;background:rgba(255,255,255,.035);}
 #xz-jjb-head > button:hover{background:rgba(255,255,255,.09);}
 #xz-jjb-restart{margin-left:auto;}
@@ -26999,7 +27174,6 @@ var XZ_JJB_SKIN = `
 .xz-jjb-hint{font-size:12px;color:#a9bab4;}
 .xz-jjb-hint b{color:#e1cb8e;}
 .xz-jjb-startbtn{min-height:48px;padding:12px 44px;border-radius:12px;background:linear-gradient(180deg,#dec47f,#a27b3d);color:#171b19;box-shadow:0 8px 24px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.55);}
-.xz-jjb-starttip{color:#acbbb6;letter-spacing:.06em;}
 .xz-jjb-dechd b{color:#e0c783;}
 .xz-jjb-dec{min-height:38px;border-radius:8px;padding:8px 13px;background:rgba(255,255,255,.035);}
 .xz-jjb-dec.on,.xz-jjb-injbtn{background:linear-gradient(180deg,#dec47f,#a27b3d);color:#171b19;}
@@ -27010,7 +27184,7 @@ var XZ_JJB_SKIN = `
   #xz-jjb-overlay{padding:0;background:#071116;backdrop-filter:none;}
   #xz-jjb-frame{left:0!important;top:0!important;width:100vw!important;height:100dvh!important;max-height:100dvh!important;transform:none!important;border:0;border-radius:0;}
   #xz-jjb-head{min-height:48px;padding:7px 10px;gap:7px;}
-  #xz-jjb-seal{width:30px;height:30px;border-radius:8px;font-size:13px;}
+  #xz-jjb-seal{width:auto;min-width:30px;height:30px;padding:0 8px;border-radius:8px;font-size:11px;letter-spacing:.06em;}
   #xz-jjb-title{font-size:12px;letter-spacing:.11em;}
   #xz-jjb-caption::after{font-size:8px;padding-left:6px;letter-spacing:.04em;}
   #xz-jjb-head>button{min-height:36px;padding:0 9px;font-size:10px;}
@@ -27428,13 +27602,13 @@ var XZ_JJB_LEGACY = `
 #xz-jjb-teamcard::before,
 #xz-jjb-trwrap::before,
 #xz-jjb-trcard::before{
+  /* ★ 2026-11-19：同款 0.5px 模糊删除（理由见 #xz-jjb-atmo::before）。 */
   content:"";position:absolute;left:0;right:0;bottom:0;height:44%;z-index:0;
   pointer-events:none;
   background:
     radial-gradient(70% 120% at 26% 108%,rgba(96,120,132,.13),transparent 62%),
     radial-gradient(56% 100% at 62% 112%,rgba(96,120,132,.10),transparent 60%),
     linear-gradient(180deg,transparent,rgba(6,9,13,.55));
-  filter:blur(.5px);
 }
 /* 内容压在氛围层之上 */
 #xz-jjb-teamhead,#xz-jjb-teambody,
@@ -27674,6 +27848,210 @@ var XZ_JJB_LEGACY = `
   .xz-jjb-trgrid{grid-template-columns:1fr !important;}
   .xz-jjb-trtext,.xz-jjb-trta{height:96px !important;max-height:96px !important;}
 }
+/* ★★★ 2026-11-19：战前点将弹层与玄青战斗 HUD 同步重做 ★★★
+   布局保留原来的候选、记住偏好、三颗动作与取消逻辑；这里只强化材质层级与触控手感。 */
+#xz-jjb-teamcard{
+  position:relative !important;isolation:isolate !important;overflow:hidden !important;
+  width:min(520px,calc(100vw - 24px)) !important;max-height:min(84dvh,680px) !important;
+  border:1px solid rgba(202,171,112,.54) !important;border-top:2px solid rgba(232,203,146,.88) !important;
+  border-radius:18px !important;
+  /* ★ 2026-11-19：与外框（#xz-jjb-frame）同一条渐变、同一个圆角。
+     原来这里是「径向光晕 + 三段线性渐变」，单看有层次，但和战斗外框并排就是两块料 ——
+     作者要的是「同步战斗脚本的美化」，弹层属于战斗界面的一部分，不该自成一套。 */
+  background:linear-gradient(180deg,#101c23 0%,#071117 100%) !important;
+  box-shadow:0 26px 78px rgba(0,0,0,.76),0 0 0 1px rgba(8,27,33,.88),inset 0 1px 0 rgba(255,255,255,.08) !important;
+  animation:xz-jjb-team-arrive .28s cubic-bezier(.18,.78,.2,1) both;
+}
+#xz-jjb-teamcard::after{
+  content:"";position:absolute;inset:5px;z-index:0;pointer-events:none;border-radius:11px;
+  border:1px solid rgba(213,180,121,.12);
+  background:linear-gradient(90deg,rgba(213,180,121,.32) 0 12px,transparent 12px calc(100% - 12px),rgba(213,180,121,.32) calc(100% - 12px) 100%) top/100% 1px no-repeat,
+    linear-gradient(90deg,rgba(213,180,121,.20) 0 12px,transparent 12px calc(100% - 12px),rgba(213,180,121,.20) calc(100% - 12px) 100%) bottom/100% 1px no-repeat;
+}
+#xz-jjb-teamhead{
+  min-height:56px;padding:12px 16px !important;gap:11px !important;
+  background:linear-gradient(180deg,rgba(25,48,55,.96),rgba(12,29,35,.96)) !important;
+  border-bottom:1px solid rgba(202,171,112,.26) !important;box-shadow:0 8px 22px rgba(0,0,0,.23) !important;
+}
+#xz-jjb-teamseal{
+  width:34px !important;height:34px !important;border-radius:9px !important;box-sizing:border-box !important;
+  background:linear-gradient(145deg,#d0aa63,#80612f) !important;border:1px solid rgba(255,230,174,.72) !important;
+  color:#10171a !important;font-size:15px !important;font-weight:800 !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 4px 14px rgba(0,0,0,.32) !important;
+}
+#xz-jjb-teamtitle{font-size:15px !important;letter-spacing:.22em !important;font-weight:800 !important;color:#f2eee5 !important;}
+#xz-jjb-teambody{padding:13px 16px 16px !important;min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+#xz-jjb-teamhint{
+  margin:0 0 12px !important;padding:8px 10px !important;border-left:2px solid rgba(110,207,189,.56);
+  border-radius:0 7px 7px 0;background:linear-gradient(90deg,rgba(82,174,161,.10),rgba(82,174,161,.015));
+  color:#c7d7d3 !important;font-size:12px !important;line-height:1.65 !important;text-align:left !important;letter-spacing:.02em;
+}
+#xz-jjb-teamlist{display:flex;flex-direction:column;gap:7px;margin:0 0 11px !important;max-height:min(30vh,240px);overflow-y:auto;overscroll-behavior:contain;padding:1px 4px 2px 1px;}
+#xz-jjb-teamlist::-webkit-scrollbar{width:5px;}
+#xz-jjb-teamlist::-webkit-scrollbar-thumb{background:rgba(213,180,121,.40);border-radius:99px;}
+#xz-jjb-teamlist::-webkit-scrollbar-track{background:transparent;}
+.xz-jjb-tp-row{
+  min-height:48px !important;margin:0 !important;padding:8px 10px !important;gap:9px !important;
+  border:1px solid rgba(112,174,169,.24) !important;border-radius:10px !important;
+  background:linear-gradient(115deg,rgba(68,125,129,.12),rgba(255,255,255,.025) 56%,rgba(0,0,0,.10)) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 3px 10px rgba(0,0,0,.18) !important;
+  transition:transform .16s,border-color .16s,background .16s,box-shadow .16s !important;
+}
+.xz-jjb-tp-row:hover{transform:translateY(-1px) !important;border-color:rgba(232,203,146,.55) !important;background:linear-gradient(115deg,rgba(80,149,144,.18),rgba(255,255,255,.04) 56%,rgba(0,0,0,.08)) !important;box-shadow:0 7px 18px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.07) !important;}
+.xz-jjb-tp-ck{
+  appearance:none !important;-webkit-appearance:none !important;width:19px !important;height:19px !important;flex:none !important;
+  margin:0 !important;border:1px solid rgba(213,180,121,.58) !important;border-radius:5px !important;
+  background:linear-gradient(180deg,#14252b,#09151a) !important;accent-color:#d0aa63;cursor:pointer;position:relative;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.4),0 1px 0 rgba(255,255,255,.05) !important;
+}
+.xz-jjb-tp-ck:checked{border-color:#e8cb92 !important;background:linear-gradient(145deg,#d0aa63,#80612f) !important;}
+.xz-jjb-tp-ck:checked::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#0c171a;font-size:13px;font-weight:900;line-height:1;}
+.xz-jjb-tp-mark{
+  width:30px;height:30px;display:grid;place-items:center;border-radius:8px;flex:none;
+  background:linear-gradient(145deg,rgba(103,176,166,.15),rgba(0,0,0,.18));
+  border:1px solid rgba(116,186,175,.25);filter:saturate(.85);
+}
+.xz-jjb-tp-nm{font-size:13.5px !important;font-weight:700 !important;color:#f0eee6 !important;letter-spacing:.03em !important;}
+.xz-jjb-tp-rl{padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.025);border:1px solid rgba(213,180,121,.22);color:#aebfbc !important;font-size:10.5px !important;white-space:nowrap;}
+.xz-jjb-tp-empty{
+  min-height:64px;display:flex;align-items:center;justify-content:center;gap:9px;padding:14px 10px !important;
+  border:1px dashed rgba(112,174,169,.32);border-radius:9px;background:rgba(6,18,23,.28);
+  color:#b9c9c5 !important;font-size:12.5px !important;letter-spacing:.04em !important;
+}
+.xz-jjb-tp-empty::before{content:"友";display:inline-grid;place-items:center;width:26px;height:26px;border:1px solid rgba(213,180,121,.34);border-radius:7px;color:#d9bf83;background:rgba(213,180,121,.06);font-size:12px;}
+.xz-jjb-tp-rem{
+  min-height:46px;margin:0 0 12px !important;padding:8px 11px !important;gap:9px !important;
+  background:linear-gradient(100deg,rgba(64,126,127,.105),rgba(255,255,255,.018)) !important;
+  border:1px solid rgba(112,174,169,.24) !important;border-radius:9px !important;
+  color:#c4d0cc !important;font-size:11.5px !important;line-height:1.45;
+}
+.xz-jjb-tp-main{
+  min-height:46px !important;padding:10px 12px !important;border-radius:9px !important;
+  background:linear-gradient(180deg,#e0c47e,#a47b3e) !important;border:1px solid rgba(255,229,172,.76) !important;
+  color:#10171a !important;font-size:13px !important;font-weight:800 !important;letter-spacing:.08em !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.48),0 7px 18px rgba(0,0,0,.32),0 0 18px rgba(196,158,83,.12) !important;
+}
+.xz-jjb-tp-main:hover{background:linear-gradient(180deg,#f0d797,#be9754) !important;border-color:#fff0c6 !important;color:#081114 !important;transform:translateY(-1px);}
+.xz-jjb-tp-sub{
+  min-height:46px !important;padding:9px 8px !important;border-radius:9px !important;
+  background:linear-gradient(180deg,rgba(32,54,60,.75),rgba(11,25,31,.72)) !important;
+  border:1px solid rgba(121,171,168,.34) !important;color:#d1ddda !important;font-size:12px !important;font-weight:700 !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 12px rgba(0,0,0,.22) !important;
+}
+.xz-jjb-tp-sub:hover{background:linear-gradient(180deg,rgba(54,92,97,.72),rgba(16,38,43,.86)) !important;border-color:rgba(232,203,146,.55) !important;color:#fff0c6 !important;}
+.xz-jjb-tp-cancel{
+  min-height:44px !important;margin-top:10px !important;padding:8px 12px !important;border-radius:9px !important;
+  background:linear-gradient(180deg,rgba(117,54,52,.20),rgba(14,25,29,.84)) !important;
+  border:1px solid rgba(211,121,108,.38) !important;color:#e4aaa0 !important;font-size:11.5px !important;font-weight:700 !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04) !important;
+}
+.xz-jjb-tp-cancel:hover{background:linear-gradient(180deg,rgba(150,65,59,.26),rgba(16,26,29,.92)) !important;border-color:rgba(255,151,135,.66) !important;color:#ffd0c5 !important;}
+@keyframes xz-jjb-team-arrive{from{opacity:0;transform:translateY(12px) scale(.985);}to{opacity:1;transform:translateY(0) scale(1);}}
+@media(max-width:560px){
+  #xz-jjb-teamcard{width:100% !important;max-height:calc(100dvh - 16px) !important;border-radius:14px !important;}
+  #xz-jjb-trwrap,#xz-jjb-trcard{width:100% !important;max-height:calc(100vh - 16px) !important;}
+  #xz-jjb-teamhead,.xz-jjb-trhd{padding:10px 13px !important;}
+  #xz-jjb-teamtitle,.xz-jjb-trtitle{font-size:14px !important;letter-spacing:.16em !important;}
+  #xz-jjb-teambody,#xz-jjb-trbody{padding:11px 12px 13px !important;}
+  .xz-jjb-trgrid{grid-template-columns:1fr !important;}
+  .xz-jjb-trtext,.xz-jjb-trta{height:96px !important;max-height:96px !important;}
+  #xz-jjb-teamlist{max-height:min(26vh,200px);}
+  #xz-jjb-teambtns{display:grid !important;grid-template-columns:1fr 1fr;gap:7px !important;}
+  .xz-jjb-tp-main{grid-column:1/-1;}
+  .xz-jjb-tp-sub{min-width:0;}
+}
+@media(prefers-reduced-motion:reduce){#xz-jjb-teamcard{animation:none !important;}}
+
+/* ★★★ 2026-11-19：杂项与查看浮层统一回玄青战斗 HUD 语汇 ★★★ */
+#xz-jjb-miscpop,#xz-jjb-upop{
+  box-sizing:border-box !important;position:fixed;z-index:2147483647;
+  border:1px solid rgba(202,171,112,.48) !important;border-top:2px solid rgba(232,203,146,.78) !important;
+  border-radius:13px !important;color:var(--xz-ink,#e9e5dc) !important;
+  background:radial-gradient(ellipse at 50% 0%,rgba(51,94,99,.19),transparent 55%),linear-gradient(180deg,#102129 0%,#08151b 100%) !important;
+  box-shadow:0 20px 58px rgba(0,0,0,.74),inset 0 1px 0 rgba(255,255,255,.065) !important;
+  font-family:var(--xz-font,"Noto Sans SC","Microsoft YaHei",sans-serif) !important;
+  animation:xz-jjb-popup-arrive .22s cubic-bezier(.18,.78,.2,1) both;
+}
+#xz-jjb-miscpop{width:min(316px,calc(100vw - 16px)) !important;max-height:min(78dvh,560px);overflow:hidden;display:flex;flex-direction:column;gap:8px;padding:10px !important;font-size:12px;line-height:1.5;}
+#xz-jjb-upop{width:min(460px,calc(100vw - 16px)) !important;max-height:min(82dvh,700px);overflow:hidden;display:flex;flex-direction:column;}
+.xz-jjb-misc-head{display:flex;align-items:center;gap:9px;padding:2px 2px 8px;border-bottom:1px solid rgba(202,171,112,.26);}
+.xz-jjb-misc-title{font-size:14px;font-weight:800;letter-spacing:.12em;color:#f1e8d1;}
+.xz-jjb-misc-title::before{content:"";display:inline-block;width:3px;height:14px;margin-right:8px;border-radius:2px;vertical-align:-2px;background:linear-gradient(180deg,#e8cb92,#6ecfbd);box-shadow:0 0 9px rgba(110,207,189,.24);}
+.xz-jjb-misc-close{margin-left:auto;display:grid;place-items:center;width:30px;height:30px;border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#b5c4c1;cursor:pointer;background:rgba(255,255,255,.025);}
+.xz-jjb-misc-close:hover{border-color:rgba(232,203,146,.55);color:#fff0c6;background:rgba(232,203,146,.08);}
+.xz-jjb-misc-list{display:flex;flex-direction:column;gap:6px;max-height:min(34vh,230px);overflow-y:auto;overscroll-behavior:contain;padding:1px 3px 2px 1px;}
+.xz-jjb-misc-list::-webkit-scrollbar{width:5px;}
+.xz-jjb-misc-list::-webkit-scrollbar-thumb{background:rgba(213,180,121,.38);border-radius:99px;}
+.xz-jjb-misc-section{display:flex;align-items:center;gap:8px;color:#9fb6b5;font-size:10px;letter-spacing:.16em;margin:1px 1px 0;}
+.xz-jjb-misc-section::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,rgba(110,207,189,.25),transparent);}
+.xz-jjb-miscitem,.xz-jjb-miscpop button.xz-jjb-miscitem{
+  width:100%;min-height:42px;box-sizing:border-box;display:flex;align-items:center;gap:9px;text-align:left;
+  margin:0;padding:6px 9px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;
+  color:#e5ece8;background:linear-gradient(110deg,rgba(65,127,128,.15),rgba(255,255,255,.025) 65%,rgba(0,0,0,.1));
+  border:1px solid rgba(116,176,171,.25);box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 3px 9px rgba(0,0,0,.2);
+  transition:transform .14s,border-color .14s,background .14s,box-shadow .14s;
+}
+.xz-jjb-miscitem:hover:not(:disabled){transform:translateY(-1px);border-color:rgba(232,203,146,.58);background:linear-gradient(110deg,rgba(85,157,148,.2),rgba(255,255,255,.045));box-shadow:0 7px 16px rgba(0,0,0,.26);}
+.xz-jjb-miscitem:active:not(:disabled){transform:scale(.985);}
+.xz-jjb-misc-ico{flex:none;width:27px;height:27px;display:grid;place-items:center;border-radius:7px;border:1px solid rgba(213,180,121,.28);background:linear-gradient(145deg,rgba(213,180,121,.14),rgba(4,18,24,.55));color:#e2c881;font-size:12px;}
+.xz-jjb-misc-label{flex:1 1 auto;min-width:0;}
+.xz-jjb-misc-count,.xz-jjb-misc-arrow{flex:none;padding:2px 7px;border:1px solid rgba(213,180,121,.21);border-radius:5px;background:rgba(213,180,121,.065);color:#e4c987;font-size:10.5px;font-variant-numeric:tabular-nums;}
+.xz-jjb-misc-arrow{padding:0 6px;font-size:17px;line-height:20px;}
+.xz-jjb-miscitem.is-attack{border-color:rgba(232,203,146,.42);background:linear-gradient(110deg,rgba(207,169,94,.16),rgba(14,34,40,.76));}
+.xz-jjb-miscitem.off,.xz-jjb-miscitem:disabled{opacity:.52;cursor:not-allowed;filter:saturate(.5);}
+.xz-jjb-misc-empty,.xz-jjb-misc-hint{padding:8px 9px;border:1px solid rgba(116,176,171,.17);border-radius:7px;background:rgba(0,0,0,.15);color:#c0cfca;font-size:11px;line-height:1.55;}
+.xz-jjb-misc-hint{border-style:dashed;color:#9eb1ad;}
+.xz-jjb-upop-shell{height:100%;max-height:inherit;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.xz-jjb-upop-head{flex:none;display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid rgba(202,171,112,.25);background:linear-gradient(180deg,rgba(24,45,51,.92),rgba(10,26,32,.72));}
+.xz-jjb-upop-seal{flex:none;width:28px;height:28px;display:grid;place-items:center;border:1px solid rgba(232,203,146,.52);border-radius:7px;background:linear-gradient(145deg,rgba(208,170,99,.16),rgba(7,21,26,.6));color:#e8cb92;font-size:12px;font-weight:800;}
+.xz-jjb-upop-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f1e8d1;font-size:14px;font-weight:800;letter-spacing:.06em;}
+.xz-jjb-upop-close{flex:none;display:grid;place-items:center;width:30px;height:30px;border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#bdcbc7;cursor:pointer;background:rgba(255,255,255,.025);}
+.xz-jjb-upop-close:hover{border-color:rgba(232,203,146,.55);color:#fff0c6;background:rgba(232,203,146,.08);}
+.xz-jjb-upop-content{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:11px 12px 14px;}
+.xz-jjb-upop-content::-webkit-scrollbar{width:6px;}
+.xz-jjb-upop-content::-webkit-scrollbar-thumb{background:rgba(213,180,121,.38);border-radius:99px;}
+.xz-jjb-upop-content::-webkit-scrollbar-track{background:transparent;}
+.xz-jjb-upop-stats{display:flex;flex-direction:column;gap:6px;margin-bottom:9px;}
+.xz-jjb-upop-vitals,.xz-jjb-upop-core,.xz-jjb-upop-combat,.xz-jjb-upop-identity{display:grid;gap:5px;}
+.xz-jjb-upop-vitals{grid-template-columns:repeat(2,minmax(0,1fr));}
+.xz-jjb-upop-core{grid-template-columns:repeat(5,minmax(0,1fr));}
+.xz-jjb-upop-combat{grid-template-columns:repeat(5,minmax(0,1fr));}
+.xz-jjb-upop-identity{grid-template-columns:repeat(2,minmax(0,1fr));}
+.xz-jjb-up-chip{box-sizing:border-box;min-width:0;display:flex !important;align-items:center;justify-content:space-between;gap:5px !important;margin:0 !important;padding:5px 7px !important;border-radius:7px !important;border:1px solid rgba(120,173,169,.26) !important;background:linear-gradient(145deg,rgba(58,111,119,.14),rgba(5,19,24,.24)) !important;font-size:10.5px !important;line-height:1.3 !important;white-space:normal !important;}
+.xz-jjb-up-chip i{font-size:9.5px;color:#9bb4b2 !important;white-space:nowrap;}
+.xz-jjb-up-chip b{font-size:11px;color:#e9eee8;white-space:nowrap;}
+.xz-jjb-up-chip[data-k="气血"]{border-color:rgba(240,138,132,.40) !important;background:linear-gradient(120deg,rgba(170,61,61,.17),rgba(9,21,26,.3)) !important;}
+.xz-jjb-up-chip[data-k="灵力"]{border-color:rgba(110,170,218,.38) !important;background:linear-gradient(120deg,rgba(54,98,155,.18),rgba(9,21,26,.3)) !important;}
+.xz-jjb-up-chip[data-k="力"],.xz-jjb-up-chip[data-k="敏"],.xz-jjb-up-chip[data-k="体"],.xz-jjb-up-chip[data-k="智"]{flex-direction:column !important;align-items:flex-start !important;min-height:44px;justify-content:center;}
+.xz-jjb-up-chip[data-k="境界"],.xz-jjb-up-chip[data-k="玄元属性"]{background:rgba(255,255,255,.025) !important;}
+.xz-jjb-up-sec{margin:8px 0 0;padding:8px 9px 9px;border:1px solid rgba(119,171,169,.22);border-radius:10px;background:linear-gradient(150deg,rgba(21,47,53,.34),rgba(5,18,23,.20));}
+.xz-jjb-up-sec-head{display:flex;align-items:center;gap:8px;margin:0 0 7px;color:#d7c083;font-size:10.5px;font-weight:800;letter-spacing:.12em;}
+.xz-jjb-up-sec-head::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,rgba(213,180,121,.32),transparent);}
+.xz-jjb-up-sec-body{font-size:11.5px;line-height:1.55;color:#e2e9e5;}
+.xz-jjb-up-sub{display:grid;grid-template-columns:40px minmax(0,1fr);gap:7px;margin-top:6px;align-items:start;}
+.xz-jjb-up-subkey{color:#9bb4b2;font-size:10px;letter-spacing:.08em;}
+.xz-jjb-up-subval{min-width:0;word-break:break-word;color:#e2e9e5;}
+.xz-jjb-up-eff{margin:4px 0 0;padding:6px 8px;border:1px solid rgba(120,173,169,.22);border-radius:7px;background:rgba(4,16,21,.44);}
+.xz-jjb-up-eff-line{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap;}
+.xz-jjb-up-eff-line>b{font-size:10.5px;color:#e5c980 !important;}
+.xz-jjb-up-eff-line>span{font-size:11px;color:#e2e9e5 !important;word-break:break-word;}
+.xz-jjb-up-eff-note{margin-top:3px;padding-left:8px;border-left:1px solid rgba(110,207,189,.35);font-size:10px;color:#9fb6b5;line-height:1.5;}
+.xz-jjb-up-skill{margin:5px 0 7px;padding:7px 8px;border:1px solid rgba(120,173,169,.22);border-radius:8px;background:rgba(5,18,23,.27);}
+.xz-jjb-up-skill.is-current{border-color:rgba(232,203,146,.60);background:linear-gradient(100deg,rgba(201,168,106,.14),rgba(7,21,26,.36));}
+.xz-jjb-up-skill-head{display:flex;align-items:center;gap:5px;margin-bottom:3px;}
+.xz-jjb-up-skill-name{color:#e9eee8;font-size:11.5px;font-weight:700;}
+.xz-jjb-up-skill-q{margin-left:auto;color:#a9bfba;font-size:9.5px;white-space:nowrap;}
+.xz-jjb-up-skill-effects{padding-left:3px;}
+.xz-jjb-upop-empty{padding:8px;color:#c4d2ce;font-size:11px;}
+@media(max-width:560px){
+  #xz-jjb-upop{width:min(420px,calc(100vw - 16px)) !important;max-height:82dvh;}
+  .xz-jjb-upop-content{padding:9px 9px 12px;}
+  .xz-jjb-upop-core{grid-template-columns:repeat(4,minmax(0,1fr));}
+  .xz-jjb-upop-combat{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .xz-jjb-up-chip{padding:5px 6px !important;}
+}
+@keyframes xz-jjb-popup-arrive{from{opacity:0;transform:translateY(7px) scale(.985);}to{opacity:1;transform:translateY(0) scale(1);}}
+@media(prefers-reduced-motion:reduce){#xz-jjb-teamcard,#xz-jjb-miscpop,#xz-jjb-upop{animation:none !important;}}
 `;
 
   function ensureStyle() {
@@ -27864,15 +28242,11 @@ function build() {
          z-index:0，内容统一抬到 2（见样式），它只负责「氛围」，不接任何事件。 */
       + '<div id="' + PFX + '-atmo"></div>'
       + '<div id="' + PFX + '-head">'
-      + '<span id="' + PFX + '-seal">演</span>'
-      /* ★ v68：标题与「第 N 息」收进**一枚小框**（用户原话：「斗法 · 时序制 第 19 息，
-         改成战斗界面，用小框框住就行」）—— 两个散着的文字各占一块宽度，手机上把
-         重开/关闭两个按钮挤没了；收成一枚胶囊后头部只剩「印玺 + 一枚小框 + 两个按钮」。 */
-      + '<span id="' + PFX + '-caption">'
-      /* ★ v234（用户）：「标题的『斗法 · 时序条 · 第xx息』改为『战斗界面』」——
-         标题就一件事：这是什么界面。息数由轨道与卡面表达，不再挤进标题。 */
-      + '<span id="' + PFX + '-title">战斗界面</span>'
-      + '</span>'
+      /* ★ 2026-11-19：标题收敛为唯一名称。
+         用户：「最上面的演改成战斗界面，然后外面的战斗界面和天元·战术演武删了」。
+         原 seal 写「演」、右侧又重复「战斗界面」，CSS ::after 再补一行「天元·战术演武」；
+         现在把名称放进这枚主标，其余两份重复标题彻底删除。 */
+      + '<span id="' + PFX + '-seal">战斗界面</span>'
       + '<button id="' + PFX + '-restart">重开</button>'
       + '<button id="' + PFX + '-close">关闭</button>'
       + '</div>'
@@ -29090,9 +29464,6 @@ function build() {
        界面不动、玩家一眼知道该点哪里。 */
     if (S && !S.started && !S.over) {
       return '<div class="' + PFX + '-startbox">'
-        + '<div class="' + PFX + '-starttip">'
-        + '对手已列阵 · 血条与行动条已就位，点下方按钮开打'
-        + '</div>'
         + '<button type="button" class="' + PFX + '-startbtn" data-jjbstart="1">'
         + '⚔ 开始战斗'
         + '</button>'
@@ -29193,6 +29564,7 @@ function build() {
           + '<span class="' + PFX + '-sktx">'
           + '<span class="' + PFX + '-skname">' + esc(sk.name) + '</span>'
           + '<span class="' + PFX + '-skpills">'
+          + (String((sk && sk.种类) || '') === '神通' ? pill('dv', '神通') : '')
           + pill('q', _q)
           + pill('tgt', _tgt)
           + pill('cost', cost > 0 ? (cost + '灵') : '无耗')
@@ -29636,40 +30008,129 @@ function build() {
            紧随其后的 note 小字（引擎播报、【v75 结算】、括号明细）与行尾 'x.n'
            全部收进 '.lgd' 折叠区，**默认不显示**，点这一条才展开。
            分组还顺带解决「一行主记录后面拖着三四行长括号」的糊墙观感。 */
-        var _items = [];
+        var _itemsAll = [];
         S.log.forEach(function (x) {
-          if (x.k === 'note' && _items.length) _items[_items.length - 1].notes.push(x);
-          else _items.push({ main: x, notes: [] });
+          if (x.k === 'note' && _itemsAll.length) _itemsAll[_itemsAll.length - 1].notes.push(x);
+          else _itemsAll.push({ main: x, notes: [] });
         });
-        /* v1.3.72：三版式渲染。结构化解析一次（jjbParseLogEntry），渲染器只管排版；
-           签名机制、折叠细节（data-jjblg）与贴底平滑跟随全部保留。 */
+        /* ★★★ 2026-11-19：**只渲染最近 48 组**（作者：「变的更卡了」）★★★
+           ── 为什么 ────────────────────────────────────────────────────────────
+             日志签名一变就整段 innerHTML 重建；签名含最后一条 ⇒ **每次出手都重建**。
+             S.log 上限 120 条、每组 6~10 个元素 ⇒ 单次重建近千个节点。
+             出手间隔从 1000ms 降到 180ms 后，这件事从 1 次/秒变成 5.5 次/秒。
+             CPU 降频 6× 模拟中端机实测（_v715）：p95 145ms；把战报区一关 → **27.8ms**。
+             战报区就是真凶，跑条只是背锅。
+           ── 为什么是 48 ───────────────────────────────────────────────────────
+             手机上一条战报约 30~40px，48 组够滚两屏半；S.log 仍保留 120 条
+             （keyEvents / 战后注入正文照旧读全量），只是**画**最近 48 组。
+           ⚠ 动作序号 _actionNo 是「第几手」，切了尾巴必须补上前面被跳过的计数，
+             否则第 49 组开始序号会从 1 重新数 —— 玩家看到「第 1 手」出现两次。 */
+        /* ★ 2026-11-19 二次收紧：48 → 24。战报是整块重绘改成增量追加之后，剩下的成本在**画**：
+           48 行富文本约占 570 个节点、每帧都要参与合成。24 行足够看（手机上约两屏），
+           要往上翻更早的记录，S.log 里还有 120 条（战后注入正文也读全量）。 */
+        var _LG_CAP = 16;
+        var _items = _itemsAll.length > _LG_CAP ? _itemsAll.slice(_itemsAll.length - _LG_CAP) : _itemsAll;
+        /* v1.3.72：三版式渲染。结构化解析一次（jjbParseLogEntry），渲染器只管排版。 */
         var _logStyle = jjbLogStyleOf();
         lg.setAttribute('data-logstyle', _logStyle);
+
+        /* ★★★ 2026-11-19：**增量追加**，不再每次整段 innerHTML 重建 ★★★
+           ── 病历 ──────────────────────────────────────────────────────────────
+             签名含"最后一条" ⇒ 每次出手都重建；S.log 120 条、每组 6~10 个元素，
+             单次近千节点。出手间隔从 1000ms 降到 180ms 后变成 5.5 次/秒。
+             CPU 降频 6× 实测：战报区可见时 p95 145ms，一关掉 → 27.8ms。真凶就是它。
+           ── 做法 ──────────────────────────────────────────────────────────────
+             记住"已经画出来的那批组的指纹"（__xzKeys）。新的一批若与旧的**尾部**对齐，
+             就只删掉尾部对不上的那几组、再追加新的几组；对不上才整体重建。
+             绝大多数时候只追加 1 组（就是刚打的那一手）。
+           ⚠ 动作序号（第几手）必须连续：追加前先数一遍 _items[0..p) 里的出手行，
+             拿它当起点。解析结果有缓存（__pd），这一步很便宜。
+           ⚠ 任何一步抛错都退回整体重建 —— 增量渲染坏了不能连累整局战斗。 */
+        var _keys = _items.map(function (it) {
+          return (it.main && it.main.t ? it.main.t : '') + '\u0001'
+            + ((it.main && it.main.k) || '') + '\u0001' + it.notes.length;
+        });
+        var _stream = lg.querySelector('.' + PFX + '-logstream');
+        var _oldKeys = lg.__xzKeys || null;
+        var _oldStyle = lg.__xzOldStyle || '';
+        var _p = 0;
+        if (_stream && _oldKeys && _oldStyle === _logStyle) {
+          var _cand = Math.min(_oldKeys.length, _keys.length);
+          for (; _cand > 0; _cand--) {
+            var _ok = true;
+            for (var _q = 0; _q < _cand; _q++) {
+              if (_oldKeys[_oldKeys.length - _cand + _q] !== _keys[_q]) { _ok = false; break; }
+            }
+            if (_ok) { _p = _cand; break; }
+          }
+        }
+        /* 起点动作序号：数 _items[0.._p) 里的出手行 */
         var _actionNo = 0;
-        lg.innerHTML = jjbLogHeadHtml(_logStyle)
-          + '<div class="' + PFX + '-logstream">'
-          + _items.map(function (it) {
-              var x = it.main;
-              var _pd = jjbParseLogEntry(x);
-              if (_pd.kind === 'atk' || _pd.kind === 'buff-cast') _actionNo++;
-              var _details = it.notes.map(function (nt) { return nt.t; });
-              if (x.n) _details.unshift(x.n);
-              var _hasD = _details.length > 0;
-              var dHtml = _hasD
-                ? ('<div class="' + PFX + '-lgd">'
-                    + _details.map(function (t2) {
-                        return '<div class="' + PFX + '-lgdline">' + esc(t2) + '</div>';
-                      }).join('')
-                    + '</div>')
-                : '';
-              return jjbRenderLogRow(_pd, x, _logStyle, _actionNo, dHtml, _hasD);
-            }).join('')
-          + '</div>';
+        for (var _ai = 0; _ai < _p; _ai++) {
+          try {
+            var _pdA = _items[_ai].main.__pd || (_items[_ai].main.__pd = jjbParseLogEntry(_items[_ai].main));
+            if (_pdA.kind === 'atk' || _pdA.kind === 'buff-cast') _actionNo++;
+          } catch (eAi) {}
+        }
+        try {
+          if (!_stream || !_oldKeys || _oldStyle !== _logStyle) {
+            lg.innerHTML = jjbLogHeadHtml(_logStyle)
+              + '<div class="' + PFX + '-logstream"></div>';
+            _stream = lg.querySelector('.' + PFX + '-logstream');
+            _p = 0;
+          }
+          /* 尾部对不上的整段删掉（含"上一组又多了 note"的情况） */
+          while (_stream.children.length > _p) _stream.removeChild(_stream.lastElementChild);
+          var _addHtml = '';
+          for (var _ii = _p; _ii < _items.length; _ii++) {
+            var it = _items[_ii];
+            var x = it.main;
+            var _pd = x.__pd || (x.__pd = jjbParseLogEntry(x));
+            if (_pd.kind === 'atk' || _pd.kind === 'buff-cast') _actionNo++;
+            var _details = it.notes.map(function (nt) { return nt.t; });
+            if (x.n) _details.unshift(x.n);
+            var _hasD = _details.length > 0;
+            var dHtml = _hasD
+              ? ('<div class="' + PFX + '-lgd">'
+                  + _details.map(function (t2) {
+                      return '<div class="' + PFX + '-lgdline">' + esc(t2) + '</div>';
+                    }).join('')
+                  + '</div>')
+              : '';
+            _addHtml += jjbRenderLogRow(_pd, x, _logStyle, _actionNo, dHtml, _hasD);
+          }
+          if (_addHtml) _stream.insertAdjacentHTML('beforeend', _addHtml);
+          lg.__xzKeys = _keys;
+          lg.__xzOldStyle = _logStyle;
+        } catch (eInc) {
+          /* 兜底：增量失败就整体重建（一次全量，绝不会画错） */
+          try {
+            var _all = '';
+            var _an2 = 0;
+            _items.forEach(function (it2) {
+              var x2 = it2.main;
+              var _pd2 = x2.__pd || (x2.__pd = jjbParseLogEntry(x2));
+              if (_pd2.kind === 'atk' || _pd2.kind === 'buff-cast') _an2++;
+              var _d2 = it2.notes.map(function (nt2) { return nt2.t; });
+              if (x2.n) _d2.unshift(x2.n);
+              var _hd2 = _d2.length > 0;
+              var _dh2 = _hd2 ? ('<div class="' + PFX + '-lgd">' + _d2.map(function (t3) {
+                return '<div class="' + PFX + '-lgdline">' + esc(t3) + '</div>';
+              }).join('') + '</div>') : '';
+              _all += jjbRenderLogRow(_pd2, x2, _logStyle, _an2, _dh2, _hd2);
+            });
+            lg.innerHTML = jjbLogHeadHtml(_logStyle) + '<div class="' + PFX + '-logstream">' + _all + '</div>';
+            lg.__xzKeys = _keys;
+            lg.__xzOldStyle = _logStyle;
+          } catch (eFull) {}
+        }
         if (_atBottom) {
           /* v1.3.71：只在读者原本贴底时平滑跟随新战报；手动往上翻时仍不抢滚轮。 */
           var _reduceScroll = false;
           try { _reduceScroll = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (eRm) {}
-          try { lg.scrollTo({ top: lg.scrollHeight, behavior: _reduceScroll ? 'auto' : 'smooth' }); }
+          /* ★ 2026-11-19：改成**瞬时**贴底。出手间隔 180ms 时，每 180ms 起一次 smooth 滚动，
+             上一次还没滚完就被下一次打断 —— 在低端机上这是纯开销（实测关掉战报区 p95 145→28ms）。 */
+          try { lg.scrollTo({ top: lg.scrollHeight, behavior: 'auto' }); }
           catch (eScroll) { lg.scrollTop = lg.scrollHeight; }
         }
       }
@@ -29892,6 +30353,7 @@ function build() {
      ★ 走一息时只调 left（updateRail），不重建 DOM —— 重建会把 transition 打断，
        位置就会「跳」而不是「走」。只有回合切换 / 出手 / 重开才整块重建。 */
   function renderRail() {
+    if (XZ_RAIL_OFF) { try { var _hR = q("nodes"); if (_hR) _hR.innerHTML = ""; } catch (eRO) {} return; }
     if (!S) return;
     /* ★ v234（用户）：「时序条里的『第xx息·条满即出手』删掉」。
        这类说明性文字每息都在变，压在轨道右下角反而抢位置 —— 轨道本身就是进度，
@@ -29925,32 +30387,127 @@ function build() {
       return;
     }
     host.setAttribute('data-rail-sig', sig);
+    /* ★ 2026-11-19：重建时**一次性量好轨道宽度**，新节点直接出现在正确位置。
+       原来写的是 'left:pct%' —— 布局属性，且每 42ms 改一次会重排整条轨道；
+       现在改成 'transform:translate3d(px)'，宽度在这里量一次并缓存。 */
+    var laneW = _railLaneWidth(host, true);
     host.innerHTML = live.map(function (f) {
       var pct = Math.min(100, Math.max(0, (f.track / TRACK_MAX) * 100));
       var cls = PFX + '-node ' + f.side + (f.track >= TRACK_MAX ? ' now' : '');
-      return '<span class="' + cls + '" data-node="' + esc(f.name) + '" style="left:' + pct.toFixed(1) + '%" title="'
+      var x = laneW > 0 ? (laneW * pct / 100) : 0;
+      return '<span class="' + cls + '" data-node="' + esc(f.name) + '" style="transform:translate3d(' + x.toFixed(1) + 'px,0,0)" title="'
         + esc(f.name) + ' · ' + esc(f.realm) + ' · ' + handsOf(f) + ' 手 · 条 ' + Math.round(f.track) + '/' + TRACK_MAX
         + '">' + esc(String(f.name).charAt(0)) + '</span>';
     }).join('');
   }
+  /* 轨道宽度缓存：clientWidth 是布局量，读一次会强制同步布局 ——
+     每 42ms 读一次等于把省下的重排又赚回来。600ms 或容器变了才重量。
+     ⚠ force=true 用在「刚重建完节点」那一帧（必须拿到真宽度）。 */
+  var _railW = { w: 0, at: 0 };
+  try {
+    if (!window.__xzRailResize__) {
+      window.__xzRailResize__ = 1;
+      window.addEventListener("resize", function () { try { _railW.w = 0; } catch (eRw) {} });
+    }
+  } catch (eRz) {}
+  /* ★★★ 2026-11-19：**不再每 600ms 读一次 clientWidth** ★★★
+     作者：「一进场就卡」。读 clientWidth 是**强制同步布局**：面板里上千个节点，
+     而战报每出一手就追加一行（布局脏），于是每 600ms 就逼浏览器把整个面板重排一遍 ——
+     一进场就开始，跟战报多少、跟放没放技能都无关。这正是「要么战报要么跑条」的真身：
+     是跑条这条链上的一次强制重排，不是跑条本身在画。
+     ⇒ 只在「重建轨道」时量一次（renderRail 传 force），之后一直用缓存；
+       窗口尺寸变了由 resize 清缓存重测。 */
+  function _railLaneWidth(host, force) {
+    if (!force && _railW.w) return _railW.w;
+    var w = 0;
+    try { w = host.clientWidth || 0; } catch (eW) {}
+    if (w > 0) _railW.w = w;
+    return w || _railW.w;
+  }
+  /* ══════════════════════════════════════════════════════════════════════
+     v662 · 跑条改成 **rAF 逐帧插值**（作者：「继续解决跑条卡顿」）
+     ── 为什么不是继续调 CSS 过渡时长 ────────────────────────────────────
+       过渡时长无论写 42 / 68 / 90，只要它和刷新率不同步，就一定是"追上一步、
+       又被下一步打断"。24Hz 的定时器喂 60Hz 的屏幕，锯齿是数学必然，
+       不是调参能消的（v108、2026-11-19 两轮都是在这个方向上打转）。
+     ── 现在的口径 ──────────────────────────────────────────────────────
+       · **逻辑**仍按 GAP_TICK(42ms) 走，不动战斗节奏（改节奏就是改数值公平）；
+       · **画面**由 rAF 按帧率追目标值：`cur += (target-cur) * (1-e^(-dt/τ))`，
+         τ=70ms ⇒ 每个屏幕帧都前进一小段、速度连续；
+       · 回跳（出手后 track 归零）直接吸附，不滑回去 —— 那是"归位"不是"移动"。
+     ── 什么时候不跑 ────────────────────────────────────────────────────
+       面板一关（q('nodes') 为空）或战斗结束就自动停，不空转烧电。
+       ⚠ 别改成 setInterval：那又回到"和刷新率不同步"的老路。
+     ══════════════════════════════════════════════════════════════════════ */
+  var _xzRailRaf = 0, _xzRailTs = 0;
+  function railRafLoop(ts) {
+    var host = null;
+    try { host = q('nodes'); } catch (eH) { host = null; }
+    if (!host || !S || S.over || XZ_RAIL_OFF) { _xzRailRaf = 0; return; }
+    var dt = _xzRailTs ? Math.min(64, ts - _xzRailTs) : 16.7;
+    _xzRailTs = ts;
+    /* τ=70ms：比一息(42ms)略长 ⇒ 一息之内走完 8 成，跨息之间不断线 */
+    var k = 1 - Math.exp(-dt / 70);
+    var laneW = _railLaneWidth(host, false);
+    var nodes = host.querySelectorAll('.' + PFX + '-node');
+    /* 名字 → 单位 的映射**每帧建一次**（8 个节点 × 8 个单位 = 64 次比较，
+       比"每个节点再线性扫一遍"省一半；且避免 getAttribute 被调两次）。 */
+    var byName = {};
+    for (var j = 0; j < S.fighters.length; j++) byName[S.fighters[j].name] = S.fighters[j];
+    for (var i = 0; i < nodes.length; i++) {
+      var u = byName[nodes[i].getAttribute('data-node')];
+      if (!u) continue;
+      var pct = Math.min(100, Math.max(0, (u.track / TRACK_MAX) * 100));
+      var target = laneW * pct / 100;
+      var cur = nodes[i]._xzCur;
+      if (cur === undefined || cur === null || Math.abs(target - cur) > laneW * 0.25) {
+        cur = target;                       /* 首次 / 大跨度回跳 ⇒ 吸附 */
+      } else {
+        cur = cur + (target - cur) * k;
+        if (Math.abs(target - cur) < 0.25) cur = target;
+      }
+      nodes[i]._xzCur = cur;
+      /* 亚像素级变化不写 —— 0.1px 看不出来，但写一次就是一次样式失效。 */
+      if (nodes[i]._xzDraw === undefined || Math.abs(cur - nodes[i]._xzDraw) >= 0.1) {
+        nodes[i]._xzDraw = cur;
+        nodes[i].style.transform = 'translate3d(' + cur.toFixed(1) + 'px,0,0)';
+      }
+    }
+    _xzRailRaf = requestAnimationFrame(railRafLoop);
+  }
   function updateRail() {
+    if (XZ_RAIL_OFF) return;
     try {
       if (!S) return;
-      var nodes = d0().querySelectorAll('.' + PFX + '-node');
+      var host = q('nodes');
+      if (!host) return;
+      /* ★ 2026-11-19：位移从 left 换成 transform（合成层），宽度 600ms 缓存一次。
+         逐帧只写一个 px 值，不再让浏览器重排轨道。 */
+      /* ★ v662：位移交给 railRafLoop 逐帧插值，这里**不再写 transform**
+         （两处都写 = 一个值被两个节拍抢，正是之前"抖一下"的来源之一）。 */
+      if (!_xzRailRaf) { _xzRailTs = 0; _xzRailRaf = requestAnimationFrame(railRafLoop); }
+      var nodes = host.querySelectorAll('.' + PFX + '-node');
+      /* 名字 → 单位 的映射只建一次（原来每个节点都线性扫一遍 fighters）。 */
+      var byName = {};
+      for (var j = 0; j < S.fighters.length; j++) { byName[S.fighters[j].name] = S.fighters[j]; }
       for (var i = 0; i < nodes.length; i++) {
-        var nm = nodes[i].getAttribute('data-node');
-        var f = null;
-        for (var j = 0; j < S.fighters.length; j++) { if (S.fighters[j].name === nm) { f = S.fighters[j]; break; } }
+        var f = byName[nodes[i].getAttribute('data-node')];
         if (!f) continue;
-        var pct = Math.min(100, Math.max(0, (f.track / TRACK_MAX) * 100));
-        nodes[i].style.left = pct.toFixed(1) + '%';
-        if (f.track >= TRACK_MAX) nodes[i].classList.add('now'); else nodes[i].classList.remove('now');
-        /* ★ v452：title 也在这里刷 —— 既然不重建 DOM 了，行内 title 就会变旧。
-           它是悬停提示里唯一能看「条 xx/100、还剩几手」的地方，不能停在开局那一刻。 */
-        try {
-          nodes[i].setAttribute('title', f.name + ' · ' + (f.realm || '') + ' · ' + handsOf(f)
-            + ' 手 · 条 ' + Math.round(f.track) + '/' + TRACK_MAX);
-        } catch (eT) {}
+        var isNow = f.track >= TRACK_MAX;
+        if (nodes[i]._xzNow !== isNow) {
+          nodes[i].classList.toggle('now', isNow);
+          nodes[i]._xzNow = isNow;
+        }
+        /* ★ v452：title 也要跟着刷，但只在「条数取整」真的变了才写 ——
+           每 42ms 写一次属性属于白给的 DOM 变更，玩家也看不出 0.4 的差别。 */
+        var tk = Math.round(f.track);
+        if (nodes[i]._xzTk !== tk) {
+          nodes[i]._xzTk = tk;
+          try {
+            nodes[i].setAttribute('title', f.name + ' · ' + (f.realm || '') + ' · ' + handsOf(f)
+              + ' 手 · 条 ' + tk + '/' + TRACK_MAX);
+          } catch (eT) {}
+        }
       }
     } catch (e) {}
   }
@@ -30111,6 +30668,16 @@ function build() {
       if (cv && cv.parentNode) return;
       var d = d0();
       try { DPR = (typeof devicePixelRatio === 'number' && devicePixelRatio > 0) ? devicePixelRatio : 1; } catch (e) { DPR = 1; }
+      /* ★★★ 2026-11-22：DPR 封顶（用户：「战斗脚本还是很卡」）★★★
+         实测：DPR=3 的手机上，这块全屏画布是 3912×2232 ≈ 870 万像素，
+         每帧一次 clearRect + 整层合成 —— 光这两步就吃掉移动端大半帧预算。
+         特效是全屏覆盖层，2x 与 3x 肉眼几乎分不出；轻档/极简档再降到 1.5x。
+         ⚠ 别删这条去"追画质"：画质差一点没人报，掉帧是玩家直接骂的。 */
+      try {
+        var _capDpr = 2;
+        if (typeof jjFxLite === 'function' && jjFxLite()) _capDpr = 1.5;
+        if (DPR > _capDpr) DPR = _capDpr;
+      } catch (eCap) {}
       cv = d.createElement('canvas');
       cv.id = PFX + '-fx2';
       cv.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:2147483646;';
@@ -30227,7 +30794,7 @@ function build() {
        而飞行+爆炸要 800ms ⇒ 上一手永远播不完就被切掉。
        ⇒ 改成**多手并存**：新特效只 push，不清场；只加一道总量上限防异常堆积。 */
     function trimObjs() {
-      var MAX = 320;                 /* 约 3~4 手同屏；超了踢最老的，不整屏清 */
+      var MAX = 200;                 /* 2026-11-22：320 → 200（GAP 180ms 下同屏叠 5 手就爆；200 ≈ 3 手） */
       if (objs.length > MAX) objs.splice(0, objs.length - MAX);
     }
     function easeOut(p) { return 1 - Math.pow(1 - p, 3); }
@@ -30248,16 +30815,20 @@ function build() {
         var alpha = Math.max(0, 1 - p);
         var w = Math.max(0.5, o.width * (1 - p * 0.5));
         ctx.globalAlpha = alpha;
-        /* 外晕：宽 + 大模糊，把环「亮出来」 */
-        glowOn(o.color, 18 * (1 - p * 0.4));
-        ctx.lineWidth = w * 2.2;
+        /* ★ 2026-11-22：环不再逐帧 shadowBlur（每帧一次高斯模糊 = 移动端大头）。
+           改成「宽而淡 + 细而亮」两层描边，观感几乎一样，开销是纯填充。 */
+        ctx.globalAlpha = alpha * 0.30;
+        ctx.lineWidth = w * 3.4;
+        ctx.strokeStyle = o.color;
+        ctx.beginPath(); ctx.arc(o.x, o.y, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = w * 1.15;
         ctx.strokeStyle = o.color;
         ctx.beginPath(); ctx.arc(o.x, o.y, r, 0, Math.PI * 2); ctx.stroke();
         /* 内亮：细 + 白，压出金属锐边 */
         ctx.lineWidth = Math.max(0.6, w * 0.7);
         ctx.strokeStyle = 'rgba(255,255,255,.85)';
         ctx.beginPath(); ctx.arc(o.x, o.y, r, 0, Math.PI * 2); ctx.stroke();
-        glowOff();
         ctx.globalAlpha = 1;
       } else if (o.type === 'flash') {
         /* 中心爆闪：白核 → 属性色 → 透明 的径向渐变，命中瞬间的「一亮」 */
@@ -30268,9 +30839,8 @@ function build() {
         g2.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.globalAlpha = Math.max(0, 1 - p) * 0.95;
         ctx.fillStyle = g2;
-        glowOn(o.color, 26);
+        /* 2026-11-22：爆闪不再挂 shadowBlur —— 径向渐变本身就有柔边，模糊是白付的钱 */
         ctx.beginPath(); ctx.arc(o.x, o.y, r2, 0, Math.PI * 2); ctx.fill();
-        glowOff();
         ctx.globalAlpha = 1;
       } else if (o.type === 'dot') {
         /* v154：粒子**不再逐颗 shadowBlur**（34 颗 × 每帧一次高斯模糊 = 卡顿主因）。
@@ -30424,51 +30994,62 @@ function build() {
              · 头部 **3 颗小粒子**（实心 + 一层轻晕），是真正飞过去的那几颗；
              · 尾迹 **8 段虚烟**：沿走过的路径越远越淡、越大、越散开 —— 像尾气，
                每帧只 8 个极淡的圆，比原来省一大半。 */
-        var dots = o.dots || 3;
+        /* ★★★ 2026-11-22 重做（用户：「弧形轨迹跟丢药瓶一样，不像放法术」）★★★
+           旧版 = 3 颗圆点 + 8 团「尾气虚烟」沿一条 bow=d*0.09 的抛物线走
+           ⇒ 圆点 + 烟雾 + 大弧，读起来就是「丢药瓶」。
+           现在改成「能量弹」：
+             · 弹道近乎直线（bow 在 playAttack 里压到 0.02，只留一点点弧）；
+             · 头部拖一条**收尖的光带**（沿路径往回 6 段，越远越细越淡），不是圆点堆叠；
+             · 白热核 + 属性色光晕，用 'lighter' 加法混合提亮 ⇒ 发光感不靠 shadowBlur；
+             · 起手点留一小段余辉（head<0.55），给"施法"一个起手交代。
+           ⚠ 全程不用 shadowBlur / filter：移动端的帧率就是被这两样吃掉的。 */
+        var _boltPt = function (qq) {
+          qq = Math.max(0, Math.min(1, qq));
+          var ff = 4 * qq * (1 - qq) * (o.bow || 0);
+          return { x: o.x0 + (o.x1 - o.x0) * qq + o.nx * ff,
+                   y: o.y0 + (o.y1 - o.y0) * qq + o.ny * ff };
+        };
+        var _hp = _boltPt(head);
+        var _sz0 = o.size || 3.4;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        /* ① 光带：沿走过的路径往回画 4~6 段，越远越细越淡 */
+        var _segN = (typeof jjFxLite === 'function' && jjFxLite()) ? 4 : 6;
+        var _tailQ = 0.20;
+        var _prevP = _hp;
+        for (var _si2 = 1; _si2 <= _segN; _si2++) {
+          var _tr2 = _si2 / _segN;
+          var _q2 = head - _tr2 * _tailQ;
+          if (_q2 <= 0) break;
+          var _pp2 = _boltPt(_q2);
+          /* 外鞘：宽而淡的一层，让光带在深底上"发出来"（纯填充，不用模糊） */
+          ctx.globalAlpha = fade * (1 - _tr2) * 0.16;
+          ctx.strokeStyle = o.color;
+          ctx.lineCap = 'round';
+          ctx.lineWidth = Math.max(1, _sz0 * (1 - _tr2) * 3.2);
+          ctx.beginPath(); ctx.moveTo(_prevP.x, _prevP.y); ctx.lineTo(_pp2.x, _pp2.y); ctx.stroke();
+          /* 芯：亮而细 */
+          ctx.globalAlpha = fade * (1 - _tr2) * 0.62;
+          ctx.lineWidth = Math.max(0.8, _sz0 * (1 - _tr2) * 2.0);
+          ctx.beginPath(); ctx.moveTo(_prevP.x, _prevP.y); ctx.lineTo(_pp2.x, _pp2.y); ctx.stroke();
+          _prevP = _pp2;
+        }
+        /* ② 头部：外晕 + 实心 + 白热核 */
+        ctx.globalAlpha = fade * 0.26;
         ctx.fillStyle = o.color;
-        /* ① 尾气的虚烟（先画，压在头部下面） */
-        var tailN = o.tail || 0;
-        if (tailN > 0) {
-          var tailLen = 0.36;
-          for (var si = 1; si <= tailN; si++) {
-            var tr = si / tailN;                       /* 0→1：越靠后越远 */
-            var tq = head - tr * tailLen;
-            if (tq <= 0) continue;
-            tq = Math.min(1, Math.max(0, tq));
-            var tf = 4 * tq * (1 - tq) * (o.bow || 0);
-            var tx = o.x0 + (o.x1 - o.x0) * tq + o.nx * tf;
-            var ty = o.y0 + (o.y1 - o.y0) * tq + o.ny * tf;
-            var ta = fade * (1 - tr) * 0.22;           /* 越远越淡 */
-            /* 侧移：让烟往两侧散开一点（用 si 做确定性偏移，不用随机数，免得每帧抖） */
-            var spread = (o.size || 3.4) * tr * 0.9;
-            var sway = ((si % 2) ? 1 : -1) * spread * 0.8;
-            ctx.globalAlpha = ta;
-            ctx.beginPath();
-            ctx.arc(tx + o.nx * sway, ty + o.ny * sway,
-              (o.size || 3.4) * (0.6 + tr * 1.5), 0, Math.PI * 2);
-            ctx.fill();
-          }
+        ctx.beginPath(); ctx.arc(_hp.x, _hp.y, _sz0 * 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = fade * 0.92;
+        ctx.beginPath(); ctx.arc(_hp.x, _hp.y, _sz0 * 0.9, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(_hp.x, _hp.y, Math.max(1, _sz0 * 0.4), 0, Math.PI * 2); ctx.fill();
+        /* ③ 起手余辉 */
+        if (head < 0.55) {
+          ctx.globalAlpha = fade * (1 - head / 0.55) * 0.45;
+          ctx.fillStyle = o.color;
+          ctx.beginPath(); ctx.arc(o.x0, o.y0, Math.max(2, _sz0 * 1.6), 0, Math.PI * 2); ctx.fill();
         }
-        /* ② 头部：真正飞过去的 3 颗小粒子 */
-        for (var di = 0; di < dots; di++) {
-          var q = head - di * 0.10;
-          if (q <= 0) continue;
-          q = Math.min(1, q);
-          var f = 4 * q * (1 - q) * (o.bow || 0);
-          var sx = o.x0 + (o.x1 - o.x0) * q + o.nx * f;
-          var sy = o.y0 + (o.y1 - o.y0) * q + o.ny * f;
-          var k = 1 - di / Math.max(1, dots);          /* 越靠后越小越淡 */
-          var sz = Math.max(0.8, (o.size || 3.4) * (0.7 + k * 0.3));
-          ctx.globalAlpha = fade * (0.16 + k * 0.5);
-          ctx.beginPath(); ctx.arc(sx, sy, sz * 1.7, 0, Math.PI * 2); ctx.fill();
-          ctx.globalAlpha = fade * (0.55 + k * 0.45);
-          ctx.beginPath(); ctx.arc(sx, sy, sz, 0, Math.PI * 2); ctx.fill();
-          if (di < 3) {
-            ctx.fillStyle = 'rgba(255,255,255,.9)';
-            ctx.beginPath(); ctx.arc(sx, sy, Math.max(0.5, sz * 0.45), 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = o.color;
-          }
-        }
+        ctx.restore();
         ctx.globalAlpha = 1;
       } else if (o.type === 'wash') {
         /* ★ v163 新增：**属性色蔓延整卡**（用户：「增益的特效…一股自己属性的特效，
@@ -30586,13 +31167,17 @@ function build() {
       /* v298：剑系的道数（凡2…神7）。非剑系恒 0，后面所有剑系分支都靠它判。 */
       var _blades = o.isSword ? xzSwordBlades(o.quality) : 0;
       /* ★ v232f：剑系下架 —— 飞行段一律走粒子串，不再有「三股剑弧」的专属弹道。 */
-      var flight = 0.32;
+      /* ★ 2026-11-22：非剑系 0.32s → 0.22s（法术弹比"抛掷物"快、更利落，
+         也少和下一手特效叠在一起）；剑弧保留一点滞空，斩击要有"划过去"的过程。 */
+      var flight = o.isSword ? 0.34 : 0.22;
       /* ── 飞行段 ── */
       {
         var dx = b.x - a.x, dy = b.y - a.y;
         var d = Math.sqrt(dx * dx + dy * dy) || 1;
         var nx = -dy / d, ny = dx / d;
-        var bow = d * 0.09 * (Math.random() < 0.5 ? -1 : 1);
+        /* ★ 2026-11-22：0.09 → 0.02。旧的大弧是"丢药瓶"观感的主因；
+           法术弹只需要一点点弧度（直射 + 极轻的漂移），方向感才像"打出去"。 */
+        var bow = d * 0.02 * (Math.random() < 0.5 ? -1 : 1);
         /* ★★ v247（用户：「别用一堆粒子叠在一起伪造拖尾感，卡死老子了。
            我要就一颗大粒子或者几颗粒子真正撞过去，而不是一堆粒子叠加在一起拖」）：
            原来是 14 颗小粒子（size 3.4）沿弹道铺开，靠密集度伪造拖尾 ——
@@ -30614,7 +31199,8 @@ function build() {
              0.13 + 上限 30px：七道总共铺 180px，画布上看得清、又不至于打到别家卡片。 */
           var _spread = Math.min(d * 0.13, 30);
           var _ext = d * 0.12;
-          var _bow0 = d * 0.16 * (Math.random() < 0.5 ? -1 : 1);
+          /* ★ 2026-11-22：大弧收小（0.16 → 0.12）—— 剑弧要"划"不要"抛" */
+          var _bow0 = d * 0.12 * (Math.random() < 0.5 ? -1 : 1);
           for (var _bi = 0; _bi < _blades; _bi++) {
             var _off = (_bi - (_blades - 1) / 2) * _spread;
             objs.push({
@@ -30635,9 +31221,9 @@ function build() {
           }
         } else {
           objs.push({ type: 'stream', x0: a.x, y0: a.y, x1: b.x, y1: b.y, nx: nx, ny: ny, bow: bow,
-            dots: min ? 1 : (lite ? 2 : 3), size: d > 260 ? 4.0 : 3.4,
-            /* 尾迹：像尾气的虚烟 —— 越远越淡、越大、越散，不是靠叠粒子。 */
-            tail: min ? 0 : (lite ? 5 : 8),
+            dots: 1, size: d > 260 ? 4.2 : 3.6,
+            /* 2026-11-22：tail 字段保留但不再使用（光带按路径现算，不再铺烟雾团） */
+            tail: 0,
             dur: flight, color: col, t: 0, life: flight + 0.2 });
         }
       }
@@ -30738,13 +31324,29 @@ function build() {
         objs.push({ type: 'ring', x: b.x, y: b.y, r0: 14, r1: 260, dur: 0.62, width: 2.4,
           delay: D + 0.04, color: '#ffd27a', t: 0, life: D + 0.66 });
       }
-      var n = min ? 12 : (lite ? 20 : 30);
+      /* 2026-11-22：命中粒子 30 → 22（轻档 14 / 极简 8）。
+         每颗要画三次圆（晕/实心/白核），30 颗就是 90 次 fill/帧 —— 减量直接换帧率。 */
+      var n = min ? 8 : (lite ? 14 : 22);
       for (var i = 0; i < n; i++) {
         var ang = Math.random() * Math.PI * 2;
         var dist = (o.isAoe ? 108 : 84) + Math.random() * (o.isAoe ? 96 : 80);
         objs.push({ type: 'dot', x: b.x, y: b.y, dx: Math.cos(ang) * dist, dy: Math.sin(ang) * dist,
           size: 3.2 + Math.random() * 4.2, dur: 0.34 + Math.random() * 0.26,
           delay: D, color: col, t: 0, life: D + 0.70 });
+      }
+      /* ★ 2026-11-22：命中再补几道向外炸开的**细亮碎光**（线）——
+         圆点读起来是"光球"，碎光才有"法术打穿"的锐利感；
+         每道只是一次 stroke，比多撒 10 颗圆点便宜得多。 */
+      var nS2 = min ? 4 : (lite ? 6 : 10);
+      for (var si3 = 0; si3 < nS2; si3++) {
+        var a3 = Math.random() * Math.PI * 2;
+        var d3 = (o.isAoe ? 110 : 86) + Math.random() * (o.isAoe ? 90 : 76);
+        objs.push({ type: 'spark', x: b.x, y: b.y,
+          dx: Math.cos(a3) * d3, dy: Math.sin(a3) * d3,
+          ux: Math.cos(a3), uy: Math.sin(a3),
+          len: 10 + Math.random() * 14, wid: 1.4 + Math.random() * 1.2,
+          dur: 0.26 + Math.random() * 0.18, delay: D,
+          color: col, t: 0, life: D + 0.48 });
       }
       boot();
     }

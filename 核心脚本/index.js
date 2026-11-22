@@ -13516,13 +13516,18 @@ function xzAutoFillEffects(effObj, quality, unit, where) {
 
 /* ① 淬晶档位：conf 是内部代号，name 是背包里那一条的 '物品名称'（玩家看到的字）。 */
 var XZ_TEMPER_TIERS = [
-  { conf: 0, key: '粗', name: '淬晶·粗', q: ['凡阶', '黄阶'], why: '凡、黄二档法术' },
-  { conf: 1, key: '凝', name: '淬晶·凝', q: ['玄阶', '地阶'], why: '玄、地二档法术' },
-  { conf: 2, key: '髓', name: '淬晶·髓', q: ['天阶', '神阶'], why: '天、神二档法术' }
+  /* 2026-11-22（作者：「淬炼机制也重做，改为灵石就能重做」）：
+     不再分三种淬晶，三档只决定**要多少灵石**。
+     数量级按《物价与兑换体系》：练气一年 2000 下品灵石——
+     洗一次黄阶 15、升一次 30，是"能常做但心疼"的价位。 */
+  { conf: 0, key: '粗', name: '灵石', q: ['凡阶', '黄阶'], costUp: 30, costRe: 15, why: '凡、黄二档法术' },
+  { conf: 1, key: '凝', name: '灵石', q: ['玄阶', '地阶'], costUp: 80, costRe: 40, why: '玄、地二档法术' },
+  { conf: 2, key: '髓', name: '灵石', q: ['天阶', '神阶'], costUp: 200, costRe: 100, why: '天、神二档法术' }
 ];
 /* 每档品质要几份 —— 升级贵、洗练便宜：洗练是常态操作（可能洗十几次才满意），
    升级是一次性投入。写成同一个数会让玩家不敢洗，那整套系统就等于没有。 */
-var XZ_TEMPER_COST = { upgrade: 2, reforge: 1 };
+/* 兼容字段（旧读方拿它当"份数"）：真值按档取 tinfo.costUp / tinfo.costRe。 */
+var XZ_TEMPER_COST = { upgrade: 30, reforge: 15 };
 
 /* 品质 → 淬晶档位（认不出返回 -1，**不许兜底成 0**：兜底会让神阶招吃凡阶料）。 */
 function xzTemperTierOf(quality) {
@@ -13694,6 +13699,76 @@ function xzTemperUpgrade(effObj, quality, realm) {
      整条删掉（'数量: 0' 留在变量里会让背包页显示一行 ×0 的死条目，
      而且下次再给玩家发同样的料时还要判断"是新增还是加数"）。
      这与 05 的 'del-bag' 是同一个口径。 */
+/* ── 灵石计价（2026-11-22：淬炼改吃灵石）────────────────────────────────
+   背包里灵石的写法不统一：'下品灵石' / '中品灵石' / '上品灵石' / '灵石' 都出现过
+   （AI 照《物价与兑换体系》发奖，粒度随境界走）。⇒ 按名字里含「灵石」认，
+   按品阶折算：上品 100、中品 10、下品/未标 1（1 上品 = 10 中品 = 100 下品）。
+   ── 扣款口径 ──
+     从小到大扣（先花零钱），扣完一整块有富余时**把差价找成下品灵石**加回背包 ——
+     否则拿一块上品灵石洗个 15 块的黄阶招，等于凭空烧掉 85。 */
+function xzStoneUnitOf(name) {
+  var n = String(name || '');
+  if (n.indexOf('灵石') < 0) return 0;
+  if (n.indexOf('上品') >= 0) return 100;
+  if (n.indexOf('中品') >= 0) return 10;
+  return 1;
+}
+function xzTemperStoneBalance(vars) {
+  var bag = (vars && vars.背包 && typeof vars.背包 === 'object') ? vars.背包 : null;
+  if (!bag) return 0;
+  var total = 0;
+  Object.keys(bag).forEach(function (k) {
+    var e = bag[k];
+    if (!e || typeof e !== 'object') return;
+    var u = xzStoneUnitOf(e.物品名称 || k);
+    if (!u) return;
+    total += u * Math.max(0, Math.floor(Number(e.数量) || 0));
+  });
+  return total;
+}
+function xzStoneAddLow(vars, n) {
+  if (!(n > 0)) return;
+  var bag = (vars.背包 && typeof vars.背包 === 'object') ? vars.背包 : (vars.背包 = {});
+  var hit = null;
+  Object.keys(bag).forEach(function (k) {
+    var e = bag[k];
+    if (hit || !e || typeof e !== 'object') return;
+    if (xzStoneUnitOf(e.物品名称 || k) === 1) hit = { key: k, entry: e };
+  });
+  if (hit) hit.entry.数量 = Math.max(0, Math.floor(Number(hit.entry.数量) || 0)) + n;
+  else bag['下品灵石'] = { 物品名称: '下品灵石', 数量: n, 品质: '凡阶', 类型: '材料', 效果: '', 描述: '淬炼与交易的通货' };
+}
+function xzTemperSpendStones(vars, need) {
+  try {
+    var have = xzTemperStoneBalance(vars);
+    if (have < need) return { ok: false, msg: '灵石不够：要 ' + need + '，只有 ' + have };
+    var bag = vars.背包;
+    var list = [];
+    Object.keys(bag).forEach(function (k) {
+      var e = bag[k];
+      if (!e || typeof e !== 'object') return;
+      var u = xzStoneUnitOf(e.物品名称 || k);
+      if (!u) return;
+      list.push({ key: k, entry: e, unit: u, qty: Math.max(0, Math.floor(Number(e.数量) || 0)) });
+    });
+    list.sort(function (a, b) { return a.unit - b.unit; });
+    var left = need, spent = 0;
+    for (var i = 0; i < list.length && left > 0; i++) {
+      var it = list[i];
+      while (it.qty > 0 && left > 0) {
+        it.qty -= 1;
+        spent += it.unit;
+        left -= it.unit;
+      }
+      if (it.qty <= 0) { try { delete bag[it.key]; } catch (eD) {} }
+      else it.entry.数量 = it.qty;
+    }
+    var change = spent - need;
+    if (change > 0) xzStoneAddLow(vars, change);
+    return { ok: true, left: xzTemperStoneBalance(vars), spent: spent, change: change };
+  } catch (e) { return { ok: false, msg: '扣灵石失败：' + String(e) }; }
+}
+
 function xzTemperFindInBag(vars, itemName) {
   var bag = (vars && vars.背包 && typeof vars.背包 === 'object') ? vars.背包 : null;
   if (!bag) return null;
@@ -13744,7 +13819,7 @@ function xzTemperApply(action, kind, name, opts) {
     var tier = xzTemperTierOf(quality);
     if (tier < 0) return { ok: false, msg: '品质「' + quality + '」认不出，不敢动' };
     var tinfo = XZ_TEMPER_TIERS[tier];
-    var need = XZ_TEMPER_COST[action] || 1;
+    var need = (action === 'upgrade') ? tinfo.costUp : tinfo.costRe;
 
     /* ① 先算结果，**再**扣材料 —— 顺序反过来的话，算的时候抛错就把料白扣了 */
     var realm = o.realm || z.境界 || '';
@@ -13760,9 +13835,9 @@ function xzTemperApply(action, kind, name, opts) {
                                       : '『' + name + '』没有可升级的数值：' + (res.blocked.join('、') || '这一招只有百分比效果')) };
     }
 
-    /* ③ 扣料 */
-    var take = xzTemperTakeFromBag(vars, tinfo.name, need);
-    if (!take.ok) return { ok: false, msg: take.msg + '（' + tinfo.why + '都吃「' + tinfo.name + '」）' };
+    /* ③ 扣灵石（按档定价；从小面额扣、差价找零） */
+    var take = xzTemperSpendStones(vars, need);
+    if (!take.ok) return { ok: false, msg: take.msg + '（' + tinfo.why + '按此档收费）' };
 
     /* ④ 写招式 */
     item.效果 = res.effects;
@@ -13777,8 +13852,7 @@ function xzTemperApply(action, kind, name, opts) {
     var wantKeys = Object.keys(want).sort().join('|');
     var gotKeys = Object.keys(bEff).sort().join('|');
     if (wantKeys !== gotKeys) throw new Error('回读校验失败：效果键没写进去（期望 ' + wantKeys + '，实得 ' + gotKeys + '）');
-    var bBag = xzTemperFindInBag(back, tinfo.name);
-    var bQty = bBag ? bBag.qty : 0;
+    var bQty = xzTemperStoneBalance(back);
     var wantQty = take.left;
     if (bQty !== wantQty) throw new Error('回读校验失败：材料没扣对（期望剩 ' + wantQty + '，实得 ' + bQty + '）');
 
@@ -13786,9 +13860,9 @@ function xzTemperApply(action, kind, name, opts) {
       ok: true, action: action, name: name, quality: quality,
       res: res, cost: need, item: tinfo.name, left: take.left,
       msg: (action === 'upgrade')
-        ? ('『' + name + '』升级：' + res.moved.join('、') + '（耗 ' + need + ' 份' + tinfo.name + '，剩 ' + take.left + '）')
+        ? ('『' + name + '』升级：' + res.moved.join('、') + '（耗 ' + need + ' 灵石，余 ' + take.left + '）')
         : ('『' + name + '』洗练完成：' + (res.rolled.length ? res.rolled.join('、') : '（只剩伤害类效果）') +
-           '（耗 ' + need + ' 份' + tinfo.name + '，剩 ' + take.left + '）')
+           '（耗 ' + need + ' 灵石，余 ' + take.left + '）')
     };
   } catch (e) {
     log('淬炼失败', e);
@@ -13836,7 +13910,7 @@ function xzTemperInfoIn(vars, kind, name, opts) {
     });
     return { kind: kind, name: name, quality: quality, realm: xzBigRealmOf(realm) || String(realm || ''),
              tier: tier, item: XZ_TEMPER_TIERS[tier].name,
-             costUp: XZ_TEMPER_COST.upgrade, costRe: XZ_TEMPER_COST.reforge,
+             costUp: XZ_TEMPER_TIERS[tier].costUp, costRe: XZ_TEMPER_TIERS[tier].costRe,
              rows: rows, canUp: rows.some(function (r) { return r.cap > 0 && r.cur < r.cap; }) };
   } catch (e) { return null; }
 }
@@ -13847,13 +13921,9 @@ function xzTemperInfoOf(kind, name, opts) {
    不然玩家点下去才知道不够（那是最没必要的失败）。
    同样拆两层：面板一轮要问三档，只读一次变量。 */
 function xzTemperHaveIn(vars, tier) {
-  try {
-    if (!(tier >= 0)) return 0;
-    var t = XZ_TEMPER_TIERS[tier];
-    if (!t) return 0;
-    var f = xzTemperFindInBag(vars || {}, t.name);
-    return f ? f.qty : 0;
-  } catch (e) { return 0; }
+  /* 2026-11-22：三档吃的是同一种灵石 ⇒ 不再按档查，直接给余额。
+     保留 tier 参数只是不让旧调用方炸（它已经不影响结果）。 */
+  try { return xzTemperStoneBalance(vars || {}); } catch (e) { return 0; }
 }
 function xzTemperHaveOf(tier) {
   try { return xzTemperHaveIn(readMvuVars(), tier); } catch (e) { return 0; }

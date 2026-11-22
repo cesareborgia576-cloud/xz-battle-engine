@@ -13498,11 +13498,8 @@ function xzAutoFillEffects(effObj, quality, unit, where) {
       低品质招式再怎么洗也只有 1 条，让「换更高品质功法」保持是唯一的上限出口。
 
    ── 消耗：三材制 ───────────────────────────────────────────────────
-   每一档品质对应一种「淬晶」，**只能用在同档或更低档**（防止拿凡阶料刷神阶招）。
-    · 凡/黄 → '淬晶·粗'
-    · 玄/地 → '淬晶·凝'
-    · 天/神 → '淬晶·髓'
-   升级消耗 **2 份**同档淬晶；洗练消耗 **1 份**。
+   2026-11-22 起改收**灵石**：三档只决定工价（凡/黄 15·30、玄/地 40·80、天/神 100·200），
+   洗练便宜、锻打贵 —— 洗练是日常，锻打是一次性投入。
    为什么三材而不是六材：玩家要记的是「我手上是什么档的料」，不是六种名字；
    档位与品质两两合并（凡黄同料、玄地同料、天神同料）之后，
    低档料永远不会变成废纸 —— 而六材制下凡阶料在玩家到玄阶那天就彻底没用了。
@@ -13514,10 +13511,10 @@ function xzAutoFillEffects(effObj, quality, unit, where) {
    ⇒ 真身是 'xzTemperApply'，05 只负责点按钮然后重画。
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* ① 淬晶档位：conf 是内部代号，name 是背包里那一条的 '物品名称'（玩家看到的字）。 */
+/* ① 淬炼档位：conf 是内部代号；三档同收灵石，costUp/costRe 是各自工价。 */
 var XZ_TEMPER_TIERS = [
   /* 2026-11-22（作者：「淬炼机制也重做，改为灵石就能重做」）：
-     不再分三种淬晶，三档只决定**要多少灵石**。
+     三档只决定**要多少灵石**。
      数量级按《物价与兑换体系》：练气一年 2000 下品灵石——
      洗一次黄阶 15、升一次 30，是"能常做但心疼"的价位。 */
   { conf: 0, key: '粗', name: '灵石', q: ['凡阶', '黄阶'], costUp: 30, costRe: 15, why: '凡、黄二档法术' },
@@ -13529,7 +13526,7 @@ var XZ_TEMPER_TIERS = [
 /* 兼容字段（旧读方拿它当"份数"）：真值按档取 tinfo.costUp / tinfo.costRe。 */
 var XZ_TEMPER_COST = { upgrade: 30, reforge: 15 };
 
-/* 品质 → 淬晶档位（认不出返回 -1，**不许兜底成 0**：兜底会让神阶招吃凡阶料）。 */
+/* 品质 → 淬炼档位（认不出返回 -1，**不许兜底成 0**：兜底会让神阶招按凡阶工价收费）。 */
 function xzTemperTierOf(quality) {
   var qk = xzNormQualityKey(quality);
   for (var i = 0; i < XZ_TEMPER_TIERS.length; i++) {
@@ -13691,7 +13688,7 @@ function xzTemperUpgrade(effObj, quality, realm) {
            cap: caps, quality: qk, realm: xzBigRealmOf(realm) || String(realm || '') };
 }
 
-/* ⑥ 查背包里某档淬晶有多少份 + 扣掉 n 份
+/* ⑥ 查背包里某类材料有多少份 + 扣掉 n 份（灵石扣款走 xzTemperSpendStones）
    ── 为什么按 '物品名称' 找、而不是按 '类型' ──
      '类型:材料' 底下还有玄币、功勋、灵石、灵草…全部混在一起。
      按类型扣 = 扣到哪条看运气。名字是唯一且玩家看得见的那个键。
@@ -13917,7 +13914,7 @@ function xzTemperInfoIn(vars, kind, name, opts) {
 function xzTemperInfoOf(kind, name, opts) {
   try { return xzTemperInfoIn(readMvuVars(), kind, name, opts); } catch (e) { return null; }
 }
-/* 背包里某档淬晶还有几份 —— 界面要显示「需 2 份 · 有 5 份」，
+/* 灵石余额 —— 界面要显示「工价 30 · 现有 800」，
    不然玩家点下去才知道不够（那是最没必要的失败）。
    同样拆两层：面板一轮要问三档，只读一次变量。 */
 function xzTemperHaveIn(vars, tier) {

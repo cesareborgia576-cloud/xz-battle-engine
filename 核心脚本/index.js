@@ -30215,7 +30215,7 @@ function build() {
           try { _reduceScroll = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (eRm) {}
           /* ★ 2026-11-19：改成**瞬时**贴底。出手间隔 180ms 时，每 180ms 起一次 smooth 滚动，
              上一次还没滚完就被下一次打断 —— 在低端机上这是纯开销（实测关掉战报区 p95 145→28ms）。 */
-          try { lg.scrollTo({ top: lg.scrollHeight, behavior: 'auto' }); }
+          try { lg.scrollTo({ top: lg.scrollHeight, behavior: _reduceScroll ? 'auto' : 'smooth' }); }
           catch (eScroll) { lg.scrollTop = lg.scrollHeight; }
         }
       }
@@ -32378,8 +32378,20 @@ function build() {
      ⚠ 包名集合必须**从磁盘/世界书现取**，不许在代码里写死 '['斗罗','斗破']'
        —— 写死的话以后加第三个包要改代码，而漏改是安静的（新包永远开不起来）。
        闸＝'工具/_v352_dlc_gate.mjs'。 */
+  /* ★ 2026-11-23：已下架 / 已转原创的旧名录。
+     老世界书里这些条目还在（作者要求"不要动、不显示就行"），
+     ⇒ 统计、包名清单、整包开关**一律不再认**；不删书、不改玩家数据。 */
+  function xzDlcRetiredTitle(t) {
+    t = String(t || '');
+    return /^dlc-(?:武动少|武动终)-/.test(t)
+      || /^dlc-大主宰(?:少|终)-人物-九幽$/.test(t);
+  }
+  function xzDlcRetired(e) {
+    return xzDlcRetiredTitle(e && (e.comment || e.name));
+  }
   function xzDlcPackOf(e) {
     if (!e) return '';
+    if (xzDlcRetired(e)) return '';
     var t = String(e.comment || e.name || '');
     if (t.indexOf(XZ_DLC_PREFIX) !== 0) return '';
     var rest = t.slice(XZ_DLC_PREFIX.length);
@@ -32389,6 +32401,7 @@ function build() {
   /* DLC 开关的**唯一**判据。给 04 内部、07 开局脚本、闸三方共用。 */
   function xzIsDlcEntry(e) {
     if (!e) return false;
+    if (xzDlcRetired(e)) return false;
     return String(e.comment || e.name || '').indexOf(XZ_DLC_PREFIX) === 0;
   }
   /* 指定包的判据。'pack' 空 ⇒ 等价于「任一 DLC 条目」（向后兼容旧调用）。 */
@@ -32529,10 +32542,9 @@ function build() {
     '斗罗': 46,
     '斗破': 12,
     '斗破少': 10,
-    '大主宰终': 7,
-    '大主宰少': 5,
-    '武动终': 5,
-    '武动少': 7
+    '大主宰终': 6,
+    '大主宰少': 4
+    /* 2026-11-23：武动终/武动少 整包下架；大主宰两期各去掉已转原创的九幽。 */
   };
 
   /* 不带包读时的基线 = 各包之和。**从上面那张表算出来**，不许再手写一个 26 ——
@@ -32571,6 +32583,7 @@ function build() {
       (flat || []).forEach(function (x) {
         var t = String(x.title || '');
         if (t.indexOf(XZ_DLC_PREFIX) !== 0) return;
+        if (xzDlcRetiredTitle(t)) return;      /* 已下架名录：不算进 seen/on，也不出包名 */
         /* ★ v376：只收本包的条目（'PK' 空 ⇒ 收全部，与旧行为一致） */
         if (PK) {
           var rest = t.slice(XZ_DLC_PREFIX.length);
